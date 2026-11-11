@@ -205,8 +205,13 @@ export function validatePlacement(state, structId, slotOrCell) {
   const src = (map.rings && map.rings.length)
     ? map.rings[Math.max(1, Math.min((state.waves && state.waves.current) || 1, map.rings.length)) - 1].spawns.ground
     : map.spawnGround;
-  const path = findWalkerPath(nav, { x: src.x, y: src.y }, { x: map.base.x, y: map.base.y });
-  if (!path) return { ok: false, reason: 'blocksPath' };
+  const from = { x: src.x, y: src.y }, to = { x: map.base.x, y: map.base.y };
+  const path = findWalkerPath(nav, from, to);
+  // Refuse only a placement that CLOSES the last open lane [MM-task_mwcdvk4o_2s]. A battle's lane is always open
+  // before a placement (every earlier one passed this check), so a battle refuses exactly as before; an outpost whose
+  // kit seals the mesa ramps with walls on purpose (raiders break through) is already closed, and building elsewhere
+  // there must not be refused for a seal it did not make. The "before" grid is only built when the "after" one fails.
+  if (!path && findWalkerPath(buildNavGrid(map, liveStructures(state)), from, to)) return { ok: false, reason: 'blocksPath' };
 
   return { ok: true, reason: '' };
 }

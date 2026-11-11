@@ -149,6 +149,22 @@ Existing saves: each pad building becomes a structure at its pad's centre; if th
 to the nearest legal cell (deterministic). Maps: `pads[]` and `conduits[]` are removed from outpost maps (hub spot
 and deposits stay); the Terrain Forge stops authoring pads.
 
+## 5b. Outpost battles (owner direction 2026-11-11)
+
+Owner: "the battles at the outpost are very simple .. low level raids that started 1 to 2 minutes after you visit and
+get simulated when you are offline. The player should be able to see their defenses hold up, and do repairs or upgrades
+before they go. The bigger the base the more frequent attacks. Players collect gold on outpost kills just like battle,
+but defenses are more expensive because the collective does not subsidize the defense costs."
+
+| rule | today (origin/main 108a5bc) | how it lands |
+|---|---|---|
+| small raids start 1–2 min after you arrive | visit probes: first at 45–75 s, then every 100–180 s (`outpost/view/visitProbe.js`) | ✔ — under S2 they are WAVES of the live outpost SimState, not a separate stepper |
+| simulated while offline | away raids run headless (`raid.js runRaid` from `model.advance`) | ✔ |
+| see defenses hold; repair / upgrade before leaving | probes are visible; repair + upgrade exist in the outpost's own UI | ✔ — S2/S3 move them onto the battle's selection panel and commands |
+| bigger base → more frequent attacks | fixed chance per window (`raidSchedule`: Raid_Min_Gap_Hours / Raid_Mean_Hours) | ✘ — story_mwcfrtu4_2w: raid frequency scales with base size (a workbook dial) |
+| gold on kills, just like battle | raids run with `economy.money = 0`; no bounty reaches the save | ✘ — live visit: the battle economy pays the bounty for free (S2.2); away raids: the same bounty banked into the save (story_mwcfruz3_2x) |
+| defenses cost more (no Collective subsidy) | `Defense_Price_Mult` 4 × the battle price (Outpost_Structures costs) | ✔ — S2.1 keeps the outpost's prices on the battle path |
+
 ## 6. Stories (in order; each deletes the copy it replaces)
 
 Board ids: S1 story_mwc9p7al_2e · S2a story_mwc9p8ee_2f · S2 story_mwc9pkcd_2g · S2b story_mwc9plas_2h · S2c story_mwc9pmbn_2i · S3 story_mwc9pynw_2k · S4 story_mwc9pzyd_2l · S5 story_mwc9q0yy_2m · S6 story_mwc9q1y6_2n · S7 story_mwc9pneu_2j
