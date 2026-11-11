@@ -2,7 +2,7 @@
  * src/battle/session.js — the battle session: the view, the input and the clock every mode shares
  * [MM-story_mwc9p7al_2e] [MM-task_mwcbd4sk_2o] [MM-task_mwcbd61h_2p].
  *
- * Tech plan docs/tech-plan/One-Battle-UX.md §4. Owner 2026-11-11: "users are trained to work with camera, characters,
+ * Tech plan: MetaMax TECH_PLAN::One-Battle-UX.md §4 (epic [MM-epic_mwc8zv0b_2c]). Owner 2026-11-11: "users are trained to work with camera, characters,
  * and structure in one pattern … we should never have to change UX in two places to update one common UX function."
  *
  * This code was MOVED here from main.js boot() unchanged — it is not a second copy. A session owns:

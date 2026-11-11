@@ -79,7 +79,7 @@ export function boot(mountEl, seed) {
   let ui = createUiState();
 
   // THE BATTLE SESSION [MM-story_mwc9p7al_2e]: the view (2D board + 3D view), the HUD, the input and the clock —
-  // src/battle/session.js, shared by every mode (docs/tech-plan/One-Battle-UX.md). The campaign below owns the sim,
+  // src/battle/session.js, shared by every mode (MetaMax TECH_PLAN::One-Battle-UX.md). The campaign below owns the sim,
   // the UI state and what a battle does with its events; the session reads them through these getters.
   const session = createBattleSession(mountEl, {
     getSim: () => sim, getUi: () => ui, submit: (cmd) => submit(cmd), mapId: currentMapId,

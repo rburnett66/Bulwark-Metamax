@@ -1,5 +1,5 @@
 // The battle session is the ONE place the battle view, input and clock live [MM-story_mwc9p7al_2e]
-// (docs/tech-plan/One-Battle-UX.md). Owner 2026-11-11: "utilize existing systems, DO NOT DUPLICATE".
+// (MetaMax TECH_PLAN::One-Battle-UX.md). Owner 2026-11-11: "utilize existing systems, DO NOT DUPLICATE".
 // These checks fail if the code moved into src/battle/session.js grows a second copy back in main.js.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
