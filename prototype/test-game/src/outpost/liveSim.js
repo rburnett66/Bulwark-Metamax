@@ -141,10 +141,19 @@ export function fromLiveSim(state, link, now) {
   let nextDefense = Math.max(0, ...before.defenses.map((d) => +String(d.id).slice(1) || 0)) + 1;
 
   for (const s of state.structures.values()) {
-    if (s.lifecycle === 'Destroyed') continue;
     const def = getStructureDef(s.structId), kind = def.outpostKind;
     if (!kind) continue;                       // not an outpost structure
     const e = ids.get(s.id) || null;
+    if (s.lifecycle === 'Destroyed') {
+      // a defense a raid destroyed stays in the save as a WRECK at 0 HP — repaired, it fights again (as in a raid);
+      // a sold one is gone from the sim altogether (structures.js deletes it) [MM-subtask_mwcij14c_33]
+      if (!isBuilding(kind)) {
+        const id = e ? e.defense : `d${nextDefense++}`;
+        const wreck = { id, kind, tier: s.tier, cell: [s.pos.x, s.pos.y], hp: 0, ...(e ? e.extra : {}) };
+        if (e) defenses.set(id, wreck); else newDefenses.push(wreck);
+      }
+      continue;
+    }
     if (isBuilding(kind)) {
       if (s.lifecycle === 'Selling') continue;  // buildings sell at once
       const where = e ? { pad: e.pad, extra: e.extra } : placeOf(s, def);

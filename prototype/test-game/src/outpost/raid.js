@@ -268,6 +268,62 @@ const toRect = (p) => ({ x0: p.x - 0.5, y0: p.y - 0.5, x1: p.x + p.w - 0.5, y1: 
 const rectDist = (r, x, y) => Math.hypot(Math.max(r.x0 - x, 0, x - r.x1), Math.max(r.y0 - y, 0, y - r.y1));
 
 /**
+ * The outpost's raider rules, applied once to each new attacker on `state` [MM-subtask_mwcij14c_33]: raid-only strength
+ * (HP × hpMult, damage × dmgMult; the breacher its own HP and its troops' reach), range capped at RAID_RANGE_CAP, fire
+ * while advancing, swimmers walk. Moved out of createRaid so the live visit's raids (visitRaids.js) use the same rules.
+ * opts: { hpMult, dmgMult, breacherId, breacherHp, breacherReach, probing }.
+ */
+export function raiderRules(state, { hpMult = 1, dmgMult = 1, breacherId = null, breacherHp = 1, breacherReach = null, probing = false } = {}) {
+  for (const u of state.units.values()) {
+    if (u._raider || u.side !== 'attacker') continue;
+    u._raider = true;
+    const hm = breacherId && u.unitId === breacherId ? breacherHp : hpMult;
+    u.hp *= hm; u.maxHp *= hm;
+    u.dps *= dmgMult;
+    if (u.detonate) u.detonate = { ...u.detonate, burst: u.detonate.burst * dmgMult };
+    u.range = Math.min(u.range, RAID_RANGE_CAP);
+    // the breacher closes in like a trooper: its reach is its faction's troops' (measured on the own maps: at the
+    // outposts' 5 it shot walls from below the cliff, out of every gun's reach, and no strength could hold it)
+    if (breacherReach != null && u.unitId === breacherId) u.range = Math.min(u.range, breacherReach);
+    u.engagesStructuresWhileAdvancing = true;   // fire on the defenses passed, keep marching
+    if (u.domain !== 'Walker') {                // swimmers walk on an outpost's dry ground
+      u.domain = 'Walker'; u.altitude = 0; u.path = []; u.pathIdx = 0; u.routeIdx = null;
+    }
+    if (probing) u._probe = true;
+  }
+}
+
+/**
+ * Walls may seal the hub (an outpost, unlike a battle, may close its ramps): a raider the battle router leaves idle (no
+ * open route) marches on the hub as if the defenses were not there, but only up to the first one in its way; there it
+ * stands and shoots it (the nearest structure in range) until it falls and the router reopens [MM-subtask_mwcij14c_33].
+ * openGrid: buildNavGrid(state.map, []); base: { x, y } (the hub). Moved out of createRaid for the live visit's raids.
+ */
+export function siegeRoutes(state, openGrid, base) {
+  const g = state.navGrid;
+  for (const u of state.units.values()) {
+    if (u.side !== 'attacker' || u.hp <= 0 || u.state !== 'idle') continue;
+    if (u.path && u.pathIdx < u.path.length) continue;
+    const p = findWalkerPath(openGrid, { x: Math.round(u.pos.x), y: Math.round(u.pos.y) }, base) || [];
+    // the cells of the open path up to the first one a defense blocks (a smoothed path skips cells, so walk the
+    // straight segments between its waypoints cell by cell)
+    const out = [];
+    let at = { x: Math.round(u.pos.x), y: Math.round(u.pos.y) }, blocked = false;
+    for (const w of p) {
+      const n = Math.max(Math.abs(w.x - at.x), Math.abs(w.y - at.y));
+      for (let k = 1; k <= n && !blocked; k++) {
+        const c = { x: Math.round(at.x + ((w.x - at.x) * k) / n), y: Math.round(at.y + ((w.y - at.y) * k) / n) };
+        if (!g.passable[c.y * g.cols + c.x] && !(Math.abs(c.x - base.x) <= 1 && Math.abs(c.y - base.y) <= 1)) blocked = true;
+        else out.push(c);
+      }
+      if (blocked) break;
+      at = w;
+    }
+    if (out.length) { u.path = out; u.pathIdx = 0; u.state = 'moving'; }
+  }
+}
+
+/**
  * Build a raid ready to tick. See the API at the top of the file.
  * opts: { map (the outpost map), step (contract step, default 1), seed (overrides raidSeed), units (overrides the
  * measured raid: an array of unit ids, used by the measurement tool) }.
@@ -348,23 +404,7 @@ export function createRaid(outpost, raid = {}, opts = {}) {
   let outcome = null, acc = 0, timedOut = false, breachBy = null;
 
   const raidify = () => {
-    for (const u of state.units.values()) {
-      if (u._raider || u.side !== 'attacker') continue;
-      u._raider = true;
-      const hm = breacherId && u.unitId === breacherId ? breacherHp : hpMult;
-      u.hp *= hm; u.maxHp *= hm;
-      u.dps *= dmgMult;
-      if (u.detonate) u.detonate = { ...u.detonate, burst: u.detonate.burst * dmgMult };
-      u.range = Math.min(u.range, RAID_RANGE_CAP);
-      // the breacher closes in like a trooper: its reach is its faction's troops' (measured on the own maps: at the
-      // outposts' 5 it shot walls from below the cliff, out of every gun's reach, and no strength could hold it)
-      if (breacherReach != null && u.unitId === breacherId) u.range = Math.min(u.range, breacherReach);
-      u.engagesStructuresWhileAdvancing = true;   // fire on the defenses passed, keep marching
-      if (u.domain !== 'Walker') {                // swimmers walk on an outpost's dry ground
-        u.domain = 'Walker'; u.altitude = 0; u.path = []; u.pathIdx = 0; u.routeIdx = null;
-      }
-      if (probing) u._probe = true;
-    }
+    raiderRules(state, { hpMult, dmgMult, breacherId, breacherHp, breacherReach, probing });
     if (probing) probe();
   };
   // the scripted first raid probes the guns: its raider marches on the nearest armed defense (on the open board, up to
@@ -404,29 +444,7 @@ export function createRaid(outpost, raid = {}, opts = {}) {
   // way; there it stands and shoots it (the nearest structure in range) until it falls and the router reopens.
   const openGrid = buildNavGrid(state.map, []);
   const base = { x: simMap.base.x, y: simMap.base.y };
-  const siege = () => {
-    const g = state.navGrid;
-    for (const u of state.units.values()) {
-      if (u.side !== 'attacker' || u.hp <= 0 || u.state !== 'idle') continue;
-      if (u.path && u.pathIdx < u.path.length) continue;
-      const p = findWalkerPath(openGrid, { x: Math.round(u.pos.x), y: Math.round(u.pos.y) }, base) || [];
-      // the cells of the open path up to the first one a defense blocks (a smoothed path skips cells, so walk the
-      // straight segments between its waypoints cell by cell)
-      const out = [];
-      let at = { x: Math.round(u.pos.x), y: Math.round(u.pos.y) }, blocked = false;
-      for (const w of p) {
-        const n = Math.max(Math.abs(w.x - at.x), Math.abs(w.y - at.y));
-        for (let k = 1; k <= n && !blocked; k++) {
-          const c = { x: Math.round(at.x + ((w.x - at.x) * k) / n), y: Math.round(at.y + ((w.y - at.y) * k) / n) };
-          if (!g.passable[c.y * g.cols + c.x] && !(Math.abs(c.x - base.x) <= 1 && Math.abs(c.y - base.y) <= 1)) blocked = true;
-          else out.push(c);
-        }
-        if (blocked) break;
-        at = w;
-      }
-      if (out.length) { u.path = out; u.pathIdx = 0; u.state = 'moving'; }
-    }
-  };
+  const siege = () => siegeRoutes(state, openGrid, base);
   const decide = () => {
     for (const u of state.units.values()) {
       if (u.side !== 'attacker' || u.hp <= 0) continue;

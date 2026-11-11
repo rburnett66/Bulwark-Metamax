@@ -125,3 +125,16 @@ test('the outpost rules read a free building where it stands: power reach, raid 
   const blocked = new Set(simMap.blockedCells.map((c) => `${c.x},${c.y}`));
   assert.ok(blocked.has(`${at.x},${at.y}`) && blocked.has(`${at.x + 1},${at.y + 1}`), 'a raid treats its cells as solid');
 });
+
+test('a defense a raid destroys is saved as a wreck at 0 HP (repairable), a sold one is gone', () => {
+  const o = referenceOutpost('ground', { seed: 7, map, now: T0 });
+  const { state, link } = toLiveSim(o, { map, now: T0, gold: 1e6 });
+  const guns = [...state.structures.values()].filter((s) => s.structId === 'OUT-mg' || s.structId === 'OUT-cannon');
+  const [dead, sold] = guns;
+  dead.hp = 0; dead.lifecycle = 'Destroyed';                 // as combat.js leaves a structure it destroyed
+  if (sold) state.structures.delete(sold.id);                 // as structures.js removes a sold one
+  const back = fromLiveSim(state, link, T0).outpost;
+  const deadId = link.ids.get(dead.id).defense;
+  assert.equal(back.defenses.find((d) => d.id === deadId).hp, 0, 'the wreck stays, at 0 HP');
+  if (sold) assert.equal(back.defenses.find((d) => d.id === link.ids.get(sold.id).defense), undefined, 'the sold one is gone');
+});

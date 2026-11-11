@@ -27,6 +27,7 @@ import { applyCommand } from '../../sim/core.js';
 import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../../data/outpostStructures.js';
 import { DEFENSE_KINDS } from '../../data/outpost.js';
 import { toLiveSim, fromLiveSim } from '../liveSim.js';
+import { createVisitRaids } from '../visitRaids.js';
 import { outpostMapFor } from '../outpostMap.js';
 import { outpostBattleMap, bakedSlugFor } from './outpostBoard.js';
 import { createOutpostScene } from './outpostScene.js';
@@ -84,12 +85,16 @@ export async function openOutpostSessionView(opts = {}) {
   // the OUTPOST catalogue on the battle rail; a lock is refused by the sim too
   const catalogue = createCatalogue(outpostCatalogueIds());
   // the live state, (re)built from the save — on arrival and after an outpost-economy action (actOnSave below)
-  let t0 = 0, live = null, sim = null;
+  let t0 = 0, live = null, sim = null, raids = null;
   function rebuild(outpost, gold) {
+    // visit raids (S2.4c): the probe count and the countdown carry over a mid-visit rebuild (a sale, going online)
+    const carry = raids ? { probes: raids.probes, nextIn: Math.max(0, raids.nextAt - sim.time) } : {};
     t0 = clockNow();
     live = toLiveSim(outpost, { map, now: t0, gold });
     sim = live.state;
     sim.placementRules = [...(sim.placementRules || []), lockRule(catalogue)];
+    // small raids come while the player is here, once the outpost is online (owner rules §5b) — waves of the live sim
+    raids = outpost.online ? createVisitRaids(sim, { planet, seed: outpost.seed, ...carry }) : null;
   }
   rebuild(opened.outpost, saveSession.gold());
   // the clock the save sees: the arrival time plus the sim's own time (the sim never reads the wall clock)
@@ -212,6 +217,7 @@ export async function openOutpostSessionView(opts = {}) {
   session.start({
     paused: () => false,
     stopped: () => false,
+    afterTick: () => { if (raids) raids.step(); },
     beforeFrame: (dtMs) => { dt = Math.min(dtMs / 1000, 0.25); },
     beforeHud: () => {
       panelSince += dt;
@@ -242,5 +248,5 @@ export async function openOutpostSessionView(opts = {}) {
     resolveClosed();
   }
   refreshPanel();
-  return { closed: closedP, close, handle: { session, get sim() { return sim; }, get live() { return live; }, get ui() { return ui; }, panel, actOnSave } };
+  return { closed: closedP, close, handle: { session, get sim() { return sim; }, get live() { return live; }, get ui() { return ui; }, get raids() { return raids; }, panel, actOnSave } };
 }
