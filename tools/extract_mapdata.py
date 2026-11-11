@@ -219,6 +219,18 @@ def outpost_problems(data):
             out.append(f"{tag}: every building but the hub is bought, so Cost must be positive")
         if r.get("Kind") == "harvester" and (r.get("Tier") != 1 or r.get("Power_Draw")):
             out.append(f"{tag}: the harvester is one tier-1 row with no power draw")
+    # Power_Priority (owner 2026-11-11, #282 answer 4): who is served first on a short grid; blank = last. One value
+    # per kind across its tiers and the farm's buildings, a whole number >= 0.
+    prio = {}
+    for sheet, rows in (("Outpost_Structures", data["outpostStructures"]), ("Farm_Buildings", data.get("farmBuildings") or [])):
+        for r in rows:
+            p = r.get("Power_Priority")
+            if p is None:
+                continue
+            if not (isinstance(p, int) and p >= 0):
+                out.append(f"{sheet} {r.get('Kind')}: Power_Priority must be a whole number >= 0, got {p!r}")
+            elif prio.setdefault(r.get("Kind"), p) != p:
+                out.append(f"{sheet} {r.get('Kind')}: Power_Priority differs between rows ({prio[r.get('Kind')]} vs {p})")
     hp = data["outpostParams"]
     if all(isinstance(hp.get(k), int) for k in ("Harvester_Cap", "Harvester_Max")) and not (0 < hp["Harvester_Cap"] <= hp["Harvester_Max"]):
         out.append("Outpost_Params: need 0 < Harvester_Cap <= Harvester_Max")

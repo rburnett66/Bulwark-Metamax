@@ -280,6 +280,15 @@ export function collectionRates(o, map, params = OUTPOST) {
  * (o.farm.buildings, owner rule 7) are consumers on the same grids once finished at time `t` (default o.t).
  */
 export function powerGrids(o, map, t = o.t) {
+  const { nodes, find, groups: grids } = nodeGroups(o, map);
+  // pylons linked to no station have no power to give: they are not a grid (unlitChains lists them, for drawing)
+  for (const [root, g] of grids) if (!g.stations.length) grids.delete(root);
+  return serveGrids(o, map, t, nodes, find, grids);
+}
+
+/** The grid nodes (stations + pylons) and their linked groups by the reach rule — powerGrids' first step, shared with
+ *  unlitChains so both read one rule. → { nodes, find (node index → its group's root), groups: Map<root, group> } */
+function nodeGroups(o, map) {
   const nodes = Object.entries(o.pads).filter(([, b]) => POWER_NODE_KINDS.includes(b.kind))
     .map(([id, b]) => ({ id, kind: b.kind, at: centre(buildingRect(o, map, id)), def: structureDef(b.kind, b.tier) }));
   // union nodes within reach of each other
@@ -298,8 +307,22 @@ export function powerGrids(o, map, t = o.t) {
     g.supply += s.def.supply;
     grids.set(find(i), g);
   });
-  // pylons linked to no station have no power to give: they are not a grid
-  for (const [root, g] of grids) if (!g.stations.length) grids.delete(root);
+  return { nodes, find, groups: grids };
+}
+
+/**
+ * The pylon chains linked to NO station (owner 2026-11-11, #282 answer 3: drawn with dark, unlit conduits). powerGrids
+ * leaves them out — they carry no power, so they never power anything; this only says which pylons they are.
+ * → [{ nodes: [pylon ids, sorted] }], sorted by first id.
+ */
+export function unlitChains(o, map) {
+  return [...nodeGroups(o, map).groups.values()].filter((g) => !g.stations.length)
+    .map((g) => ({ nodes: [...g.nodes].sort() }))
+    .sort((a, b) => (a.nodes[0] < b.nodes[0] ? -1 : a.nodes[0] > b.nodes[0] ? 1 : 0));
+}
+
+/** powerGrids' second step: consumers join the nearest live node in reach, then each grid serves them by priority. */
+function serveGrids(o, map, t, nodes, find, grids) {
   const consumers = [
     ...Object.entries(o.pads).filter(([, b]) => !POWER_NODE_KINDS.includes(b.kind))
       .map(([id, b]) => ({ id, kind: b.kind, at: centre(buildingRect(o, map, id)), draw: structureDef(b.kind, b.tier).draw })),
