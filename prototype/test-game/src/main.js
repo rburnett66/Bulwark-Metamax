@@ -1,4 +1,4 @@
-import { MAP, WAVES, makeWaves, fxScaleForMap, projScaleForMap, getUnitDef } from './data/tables.js';
+import { MAP, WAVES, makeWaves, getUnitDef } from './data/tables.js';
 import { battleEntry, logBattle } from './save/battleLog.js';
 import { storeReplay, replayFor, latestReplay } from './save/replays.js';
 import { contractFor } from './data/collectiveContract.js';
@@ -26,12 +26,12 @@ const REG = globalThis.BulwarkFactions;
 import { createLog, recordCommand, serializeLog, deserializeLog, hashState, runReplay, replayOpts } from './sim/replay.js';
 import { createKillCamRecorder, createKillCamPlayer } from './killcam/killCam.js';
 import { runPricingReport } from './sim/balanceSim.js';
-import { createRenderer, renderFrame, destroyRenderer } from './render/renderer.js';
 import { VOXEL_UNIT_SCALE } from './render/voxel/loader.js';
 import { waveQuota } from './sim/harvest.js';
-import { createHud, updateHud, showResult, flashMessage, showWaveBanner, showSecuredBanner, showStarBanner, showWaveReport } from './render/hud.js';
+import { showResult, flashMessage, showWaveBanner, showSecuredBanner, showStarBanner, showWaveReport } from './render/hud.js';
 import { createResourceLedger, feedResources, closeWave, resourceNames, waveResourcesHtml } from './render/resourceSummary.js';
-import { createInput, createUiState, destroyInput, nextHarvesterId } from './input/input.js';
+import { createUiState, nextHarvesterId } from './input/input.js';
+import { createBattleSession } from './battle/session.js';
 import { createComm } from './comm/commCard.js';
 import { setChannelVolume, initAudio } from './comm/voice.js';
 import { musicPlay, musicIntensity, musicSting, musicResume } from './audio/music.js';
@@ -42,20 +42,6 @@ import { showContractModal } from './render/contractModal.js';
 import { ensureReveals, newlyDue, revealLine, shipArrived } from './save/reveals.js';
 import { noteRapportEvent } from './save/standings.js';
 import { PLANETS } from './data/planets.js';
-
-/**
- * CSS px the HUD covers on each side of the game view — the top bar across the top, the build tray down the left.
- * The 3D view frames the pre-match play area in what is left (render3d/camera.js clearBox) [MM-task_mvewfno7_g].
- */
-function hudInsets(mountEl) {
-  if (!mountEl || !mountEl.getBoundingClientRect) return null;
-  const m = mountEl.getBoundingClientRect(), out = { top: 0, left: 0, right: 0, bottom: 0 };
-  const vis = (el) => el && el.offsetWidth > 0 && el.offsetHeight > 0 && getComputedStyle(el).display !== 'none';
-  const bar = mountEl.querySelector('.bw-topbar'), tray = mountEl.querySelector('.bw-palette');
-  if (vis(bar)) out.top = Math.max(0, bar.getBoundingClientRect().bottom - m.top);
-  if (vis(tray)) out.left = Math.max(0, tray.getBoundingClientRect().right - m.left);
-  return out;
-}
 
 function parseSeedFromUrl() {
   try {
@@ -75,128 +61,7 @@ export function boot(mountEl, seed) {
     (typeof seed === 'number' && Number.isFinite(seed)) ? Math.floor(seed) :
     (urlSeed !== null ? urlSeed : 1);
 
-  // ---------------------------------------------------------------------
-  // Pixi application (primitives-only test build)
-  // ---------------------------------------------------------------------
-  const boardW = MAP.cols * MAP.tile;
-  const boardH = MAP.rows * MAP.tile;
-  // Render at the DEVICE's pixel density (phones are 2-3x): without this the canvas rasterizes at
-  // 1x and gets CSS-upscaled — blurry board next to crisp DOM HUD ("every component a different
-  // resolution"). Capped so the physical framebuffer never exceeds ~4096px on a side (mobile GPU
-  // texture limits) — at 64px/tile the classic 64x32 board is already 4096 logical, so it runs 1x
-  // while small campaign maps get the full density.
-  const fitResolution = (w, h) => Math.max(1, Math.min(window.devicePixelRatio || 1, 3, 4096 / w, 4096 / h));
-  const app = new PIXI.Application({
-    width: boardW,
-    height: boardH,
-    backgroundColor: 0x0e1216,
-    antialias: true,
-    resolution: fitResolution(boardW, boardH),
-    autoDensity: true,
-  });
-  const canvas = app.view || app.canvas;
-  canvas.style.display = 'block';
-  // s9: at 64x32 the board is 2048x1024 — scale the canvas to fit its container (preserve aspect) so the bigger
-  // map stays fully visible without overflowing the panel. Internal render resolution is unchanged, and input
-  // already maps screen->cell via the canvas rect (input.js), so pointer placement stays correct when scaled.
-  canvas.style.maxWidth = '100%';
-  canvas.style.maxHeight = '100%';
-  canvas.style.height = 'auto';
-  mountEl.appendChild(canvas);
-
-  // The three.js battle view (plan v2.2 §6.12, T3.1 [MM-task_mv883c5d_b]). render3d/ and three.js are imported
-  // dynamically; the 3D view covers the board and the Pixi canvas stays mounted but hidden (and draws nothing);
-  // the HUD and sim are untouched. Input binds to the 3D canvas once it is up (makeInput — T3.2 [MM-task_mv9s9lvj_1]).
-  // 3D BY DEFAULT [MM-story_mvbqugeo_l] (owner 2026-10-16: "the full game should be using the 3d"): the three.js view
-  // is the game's view. ?renderer=pixi (or =2d) keeps the old 2D view, and the game falls back to it on its own when
-  // this device can't run WebGL or the 3D view fails to start / keeps throwing (fallbackTo2D) — never a dead screen.
-  // T7 deletes Pixi once nothing needs the fallback.
-  const RENDERER_Q = (() => { try { return (new URLSearchParams(window.location.search).get('renderer') || '').toLowerCase(); } catch (e) { return ''; } })();
-  const hasWebGL = () => { try { const c = document.createElement('canvas'); return !!(window.WebGLRenderingContext && (c.getContext('webgl2') || c.getContext('webgl'))); } catch (e) { return false; } };
-  const WEBGL_OK = RENDERER_Q !== 'pixi' && RENDERER_Q !== '2d' && hasWebGL();   // asked once: each probe costs a GL context
-  let USE_3D = WEBGL_OK;
-  let fell2D = false;   // the 3D view failed on this map; the next map tries 3D again (retry3D)
-  let renderer3d = null;
-  let render3dMod = null;
   let landingReleased = false;   // LC: the landing craft flies in once the field is on screen (releaseLanding)
-  let mount3dSeq = 0;
-  let suspended3D = false;   // the outpost view holds the 3D GPU budget (onOutpostOpen / onOutpostClose)
-  let last3D = null;   // the map + slug the 3D view was last mounted for (a quality change remounts it)
-  if (USE_3D) { canvas.style.visibility = 'hidden'; app.stage.renderable = false; }   // the hidden 2D board draws nothing
-  let frameErrors3d = 0;
-  // The 3D view could not start or keeps failing: drop back to the 2D board so the game stays playable.
-  function fallbackTo2D(reason) {
-    if (!USE_3D) return;
-    console.error('[render3d] falling back to the 2D view:', reason);
-    USE_3D = false; fell2D = true;
-    mount3dSeq++;                                         // cancel any mount in flight
-    if (renderer3d && render3dMod) { try { render3dMod.destroyRenderer(renderer3d); } catch (e) { /* already gone */ } }
-    renderer3d = null;
-    canvas.style.visibility = ''; app.stage.renderable = true;
-    rebindInput();
-    flashMessage(hud, '3D view unavailable — playing in 2D');
-  }
-  // Owner 2026-11-10: Verdance map 6 played in the old 2D view. A fallback used to last the whole session; now it lasts
-  // one map, and the next map tries 3D again (a lost GPU context, e.g. phones capping live WebGL contexts, is usually
-  // over by then).
-  function retry3D() {
-    if (USE_3D || !fell2D || !WEBGL_OK) return;
-    USE_3D = true; fell2D = false; frameErrors3d = 0;
-    canvas.style.visibility = 'hidden'; app.stage.renderable = false;
-  }
-  // One heavy WebGL view at a time on a phone (owner 2026-11-07: two at once crashed an iPhone): the outpost view and the
-  // Pod Reward Chest borrow the GPU from the battle view, which is rebuilt when they close.
-  function suspend3D() {
-    if (!renderer3d || !render3dMod) return false;
-    mount3dSeq++;                                       // cancel a mount in flight
-    try { render3dMod.destroyRenderer(renderer3d); } catch (e) { /* already gone */ }
-    renderer3d = null; suspended3D = true;
-    rebindInput();
-    return true;
-  }
-  function resume3D() {
-    if (!suspended3D) return;
-    suspended3D = false;
-    if (USE_3D && last3D) void mount3D(last3D.map, last3D.slug);
-  }
-  async function mount3D(map, slug) {
-    const mySeq = ++mount3dSeq;
-    try {
-      // drop the old view at once — it must not draw the NEW board while this one builds
-      if (renderer3d && render3dMod) { render3dMod.destroyRenderer(renderer3d); renderer3d = null; rebindInput(); }
-      render3dMod = render3dMod || await import('./render3d/index.js');
-      if (mySeq !== mount3dSeq) return;
-      // ?world=<palette> previews a low-poly world; ?ground=baked keeps the baked-texture ground (LP).
-      const q = new URLSearchParams(window.location.search);
-      last3D = { map, slug };
-      const quality = await import('./render3d/quality.js');
-      let storage = null;
-      try { storage = window.localStorage; } catch (e) { storage = null; }
-      // LC [MM-epic_mvbkrvnz_2]: the base is the player's landing craft (?craft=<faction|craft key>, default the
-      // neutral craft until the player's own faction is chosen in the shell); ?landing=0 parks it without the
-      // fly-in. The battle's planet is the ENEMY faction's homeworld (maps are faction-owned) → its resources.
-      const enemy = REG && REG.find(currentTestFaction || DEFAULT_FACTION);
-      const r = await render3dMod.createRenderer3D(mountEl, map, { slug, world: q.get('world') || undefined, ground: q.get('ground') || undefined,
-        craft: q.get('craft') || 'system', landing: q.get('landing') !== '0' && interlude, landingHeld: !landingReleased,   // a remount mid-battle (quality change) parks the craft instead of replaying the landing
-        planet: q.get('planet') || (enemy && enemy.key) || null,
-        projFx: () => renderer.projFx, projScale: () => renderer.projScale,
-        qualityQuery: q.get('quality'), qualityChoice: quality.loadChoice(storage),
-        viewInsets: () => hudInsets(mountEl) });   // the pre-match camera frames the play area clear of the HUD [MM-task_mvewfno7_g]
-      if (mySeq !== mount3dSeq) { render3dMod.destroyRenderer(r); return; }
-      renderer3d = r;
-      rebindInput();   // the input was bound to the old (or no) 3D canvas — move it onto this one
-      console.log('[render3d]', r.status, slug || '(no baked level)', r.problems.join('; '), '· quality', r.quality.key, `(${r.quality.source})`);
-      // SETTINGS → 3D quality (T3.5 [MM-task_mv9s9p7h_4]): Auto or a fixed tier, saved on this device; a change
-      // rebuilds the 3D view at the new tier (the sim keeps running — the view is read-only on it)
-      hud.addSetting('quality3d', '3D view quality — saved on this device', quality.settingsOptions(r.quality.auto), r.quality.choice, (v) => {
-        quality.saveChoice(storage, v);
-        if (last3D) void mount3D(last3D.map, last3D.slug);
-      });
-    } catch (e) {
-      console.error('[render3d] failed to start', e);
-      fallbackTo2D((e && e.message) || e);
-    }
-  }
 
   // ---------------------------------------------------------------------
   // Session state (sim + log + ui). Re-created on restart / replay.
@@ -213,42 +78,16 @@ export function boot(mountEl, seed) {
   let log = createLog(currentSeed);
   let ui = createUiState();
 
-  let renderer = createRenderer(app, currentMap);
-  renderer.fxScale = fxScaleForMap(currentMapId);     // battle-FX size tier for this map
-  renderer.projScale = projScaleForMap(currentMapId); // projectile damping (early maps shrink shots)
-
-  // Load the AUTHORED unit art (faction .units.json + sheets) asynchronously; once ready, units that have art
-  // render as their real sprites. Non-blocking — the game runs with primitives until (and if) it resolves.
-  import('./render/unitArt.js').then(({ loadUnitArt }) => loadUnitArt()).then((art) => {
-    renderer.unitArt = art;
-    if (art && art.ready) console.log('[unitArt] loaded', Object.keys(art.defs).length, 'authored units');
-  }).catch((e) => console.warn('[unitArt] skipped:', e && e.message));
-
-  // VOXEL unit packs (Stack Forge): committed voxel-units.json + the Forge's localStorage manifest.
-  // Non-blocking; once ready, any unit whose id has a pack renders as its voxel body + aiming turret.
-  import('./render/voxel/loader.js').then(({ loadVoxelUnits }) => loadVoxelUnits()).then((vox) => {
-    renderer.voxelArt = vox;
-    if (vox && vox.ready) console.log('[voxel] loaded', Object.keys(vox.units).length, 'unit pack(s):', Object.keys(vox.units).join(', '));
-  }).catch((e) => console.warn('[voxel] skipped:', e && e.message));
-
-  // VOXEL DECOR packs (Stack Forge Terrain set) → renderer.decorArt; the renderer places map.decor[] groves.
-  import('./render/voxel/loader.js').then(({ loadVoxelDecor }) => loadVoxelDecor()).then((dec) => {
-    renderer.decorArt = dec;
-    if (renderer._decorMap) renderer._decorMap = null;   // force a rebuild now that packs are available
-    if (dec && dec.ready) console.log('[decor] loaded', Object.keys(dec.decor).length, 'decor pack(s):', Object.keys(dec.decor).join(', '));
-  }).catch((e) => console.warn('[decor] skipped:', e && e.message));
-
-  // PROJECTILE FX table (Shooting Gallery authoring → emitCombatFx): shipped content/fx/projectiles.json
-  // + dev-live localStorage overlay (gallery saves win). Ids not in the table keep the classic look.
-  import('./render/projFx.js').then(async ({ mergeProjFx, PROJ_FX_LS_KEY }) => {
-    let shipped = null;
-    try { const r = await fetch('content/fx/projectiles.json'); if (r.ok) shipped = await r.json(); } catch (e) { /* optional */ }
-    let local = null;
-    try { local = JSON.parse(localStorage.getItem(PROJ_FX_LS_KEY) || 'null'); } catch (e) { /* dev-live */ }
-    renderer.projFx = mergeProjFx(shipped && shipped.units, local && (local.units || local));
-    const n = Object.keys(renderer.projFx).length;
-    if (n) console.log('[projfx] authored projectile FX for', n, 'id(s):', Object.keys(renderer.projFx).join(', '));
-  }).catch((e) => console.warn('[projfx] skipped:', e && e.message));
+  // THE BATTLE SESSION [MM-story_mwc9p7al_2e]: the view (2D board + 3D view), the HUD, the input and the clock —
+  // src/battle/session.js, shared by every mode (docs/tech-plan/One-Battle-UX.md). The campaign below owns the sim,
+  // the UI state and what a battle does with its events; the session reads them through these getters.
+  const session = createBattleSession(mountEl, {
+    getSim: () => sim, getUi: () => ui, submit: (cmd) => submit(cmd), mapId: currentMapId,
+    mountOptions: () => {
+      const enemy = REG && REG.find(currentTestFaction || DEFAULT_FACTION);
+      return { planet: (enemy && enemy.key) || null, landing: interlude, landingHeld: !landingReleased };
+    },
+  });
 
   // The last COMPLETED game, captured so "Run Replay" replays it even after Restart resets the live log, and
   // after a page reload (persisted to localStorage). mmdev.
@@ -303,23 +142,6 @@ export function boot(mountEl, seed) {
     const quota = q ? ['common', 'uncommon'].filter((t) => q[t] > 0).map((t) => ({ tier: t, name: names[t] || t, units: q[t] })) : [];
     return { wave: wn, faction: waveEntry.faction, units, quota, par: ring ? ring.parSec : null };
   }
-  let accumulator = 0;        // fixed-timestep accumulator (seconds)
-  let pendingEvents = [];     // events produced by fixed steps, flushed to renderer each frame
-  let inputHandle = null;
-  // Input binds to the LIVE view: the Pixi canvas by default; under ?renderer=three the 3D canvas, picking
-  // through its camera and acting only on a tap (a drag there pans the camera).
-  function makeInput() {
-    if (renderer3d) {
-      return createInput(renderer3d.canvas, renderer, () => sim, submit, ui,
-        { pick: (ev, u) => render3dMod.eventToCell(renderer3d, ev, u), tapToAct: true });
-    }
-    return createInput(canvas, renderer, () => sim, submit, ui);
-  }
-  function rebindInput() {
-    if (!inputHandle) return;   // no session yet — the boot path creates it
-    destroyInput(inputHandle);
-    inputHandle = makeInput();
-  }
   let pendingCarry = null;   // campaign carry (gold + defenses) applied by restart() until the map changes by hand
   let missionCatalog = null;   // content/missions/missions.json
   loadMissionCatalog().then((c) => { missionCatalog = c; }).catch((e) => console.error('[missions] content failed to load', e));
@@ -336,13 +158,13 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   /** Start the Kill Camera at a defeat. False when it can't run (2D view, nothing recorded) — show the result now. */
   function startKillCam(onDone) {
-    if (!renderer3d || !render3dMod || !render3dMod.setKillCam) return false;
+    if (!session.view3d || !session.mod3d || !session.mod3d.setKillCam) return false;
     let plan = null;
     try { plan = killRec.plan(sim); } catch (e) { console.warn('[killcam] no plan', e); }
     if (!plan || !plan.base) return false;
     const player = createKillCamPlayer(plan, { stepSim, applyCommand, FIXED_DT });
     killCam = { player, onDone };
-    render3dMod.setKillCam(renderer3d, { base: plan.base, killer: plan.killerPos, replay: (plan.endTick - plan.start.tick) * FIXED_DT });
+    session.mod3d.setKillCam(session.view3d, { base: plan.base, killer: plan.killerPos, replay: (plan.endTick - plan.start.tick) * FIXED_DT });
     if (hud && hud.setKillCam) hud.setKillCam(true, () => endKillCam());
     comm.dismiss();
     return true;
@@ -352,7 +174,7 @@ export function boot(mountEl, seed) {
     if (!killCam) return;
     const k = killCam;
     killCam = null;
-    if (renderer3d && render3dMod && render3dMod.setKillCam) render3dMod.setKillCam(renderer3d, null);
+    if (session.view3d && session.mod3d && session.mod3d.setKillCam) session.mod3d.setKillCam(session.view3d, null);
     if (hud && hud.setKillCam) hud.setKillCam(false);
     if (!silent && k.onDone) k.onDone();
   }
@@ -393,7 +215,7 @@ export function boot(mountEl, seed) {
     const s = (typeof newSeed === 'number' && Number.isFinite(newSeed)) ? Math.floor(newSeed) : currentSeed;
     currentSeed = s;
     seenUnitTypes = new Set();   // fresh battle → every unit type is "new" again for the intel warnings
-    if (inputHandle) { destroyInput(inputHandle); inputHandle = null; }
+    session.unbindInput();
     {
       const sv = loadSave();
       // COLLISION RADII ARE NOT DERIVED FROM ART. They used to be built here from the loaded voxel packs
@@ -431,10 +253,9 @@ export function boot(mountEl, seed) {
     landingReleased = false;
     let underMenu = true; try { underMenu = menu.isOpen(); } catch (e) { /* menu not built yet (boot) */ }
     if (!underMenu) battleMusic();   // a board under the menu keeps the menu's theme
-    if (renderer3d && render3dMod && render3dMod.armLanding) render3dMod.armLanding(renderer3d);
-    accumulator = 0;
-    pendingEvents = [];
-    inputHandle = makeInput();
+    if (session.view3d && session.mod3d && session.mod3d.armLanding) session.mod3d.armLanding(session.view3d);
+    session.resetClock();
+    session.bindInput();
     if (hud && hud.hideResult) hud.hideResult();
     resetCommTracking();
     preDialogFaction = null;
@@ -459,26 +280,26 @@ export function boot(mountEl, seed) {
   // close (TAP TO START shows), or at the latest when the first wave starts.
   function releaseLanding() {
     landingReleased = true;
-    if (renderer3d && render3dMod && render3dMod.startLanding) render3dMod.startLanding(renderer3d);
+    if (session.view3d && session.mod3d && session.mod3d.startLanding) session.mod3d.startLanding(session.view3d);
   }
   // The landing as the level's opening: release it, then wait until it is over — the harvesters are out and the camera
   // is back with the player (or it is skipped, or the 3D view isn't running). A tap anywhere skips it.
   let openingLandingPending = false;
   function playOpeningLanding() {
     return new Promise((resolve) => {
-      if (!USE_3D) { resolve(); return; }
+      if (!session.use3D) { resolve(); return; }
       const t0 = performance.now();
       let done = false;
       const finish = () => { if (done) return; done = true; mountEl.removeEventListener('pointerdown', skip, true); resolve(); };
-      const skip = () => { if (renderer3d && render3dMod && render3dMod.skipLanding) render3dMod.skipLanding(renderer3d); finish(); };
+      const skip = () => { if (session.view3d && session.mod3d && session.mod3d.skipLanding) session.mod3d.skipLanding(session.view3d); finish(); };
       mountEl.addEventListener('pointerdown', skip, true);
       if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
       const poll = () => {
         if (done) return;
-        if (!interlude || mode !== 'play' || !USE_3D) { finish(); return; }
-        if (renderer3d) {
+        if (!interlude || mode !== 'play' || !session.use3D) { finish(); return; }
+        if (session.view3d) {
           releaseLanding();
-          const L = renderer3d.landing;
+          const L = session.view3d.landing;
           if (!L || L.done) { finish(); return; }
         }
         else if (performance.now() - t0 > 20000) { finish(); return; }   // the 3D view never came up — don't hold the level
@@ -492,8 +313,8 @@ export function boot(mountEl, seed) {
     if (!interlude) return;
     interlude = false;
     waveEndSeq++;                         // a wave-end sequence still waiting gives up
-    if (renderer3d && render3dMod && render3dMod.holdPlayArea) render3dMod.holdPlayArea(renderer3d, false);
-    accumulator = 0;                      // no time-jump on resume
+    if (session.view3d && session.mod3d && session.mod3d.holdPlayArea) session.mod3d.holdPlayArea(session.view3d, false);
+    session.resetClock({ events: false });   // no time-jump on resume
     hud.setNextWavePrompt(false);
     comm.dismiss();                       // the held speaker signs off
     submit({ type: 'startWave' });
@@ -580,24 +401,12 @@ export function boot(mountEl, seed) {
     currentMapId = id;
     currentMap = nextMap;
     currentWaves = nextWaves;
-    app.renderer.resolution = fitResolution(currentMap.cols * currentMap.tile, currentMap.rows * currentMap.tile);
-    app.renderer.resize(currentMap.cols * currentMap.tile, currentMap.rows * currentMap.tile);
-    const art = renderer && renderer.unitArt;
-    const vox = renderer && renderer.voxelArt;   // voxel packs load once at boot — carry them too
-    const dec = renderer && renderer.decorArt;   // decor packs too
-    destroyRenderer(renderer);                   // free the old renderer's GPU tree before replacing it
-    app.stage.removeChildren();
-    renderer = createRenderer(app, currentMap);
-    renderer.fxScale = fxScaleForMap(currentMapId);     // battle-FX size tier for this map
-  renderer.projScale = projScaleForMap(currentMapId); // projectile damping (early maps shrink shots)
-    if (art) renderer.unitArt = art;
-    if (vox) renderer.voxelArt = vox;
-    if (dec) renderer.decorArt = dec;
+    session.setBoard(currentMap, currentMapId);   // the 2D surface + renderer for the new board (art packs carry over)
     // the 3D view builds when the board is actually played: a board selected UNDER the menu (boot, a faction pick) skips
     // it — the menu hides it anyway, and Play selects the map again. Two heavy builds back to back (faction pick, then
     // the map card) left phones with no 3D view at all for a long while. [MM-task_mvd8b1mg_o]
-    retry3D();
-    if (USE_3D && !(menu && menu.isOpen())) void mount3D(currentMap, nextSlug);
+    session.retry3D();
+    if (session.use3D && !(menu && menu.isOpen())) void session.mount3D(currentMap, nextSlug);
     clearIntroOverlays();   // a previous board's contract / wave-intel / how-to-play card never carries over [MM-task_mvd6cfh8_n]
     // [MM-story_mvamfcnp_14] one dialog at a time: the intro below runs the speaker last, so the board
     // must not start it on its own (it used to speak behind the contract and the wave intel)
@@ -631,7 +440,7 @@ export function boot(mountEl, seed) {
       // banner, no contract — pressing Play selects the map again and that run owns the intro. (The boot board's
       // contract card used to open behind the menu and then sit over the real landing.)
       if (menu.isOpen() || replayBoot) return;   // a board loaded for a replay runs no landing and no intro cards
-      if (!USE_3D) { announceMap(); next(); return; }
+      if (!session.use3D) { announceMap(); next(); return; }
       void playOpeningLanding().then(() => {
         if (mySeq !== mapSelectSeq) return;                 // the player moved on to another map meanwhile
         announceMap();
@@ -659,7 +468,7 @@ export function boot(mountEl, seed) {
       flashMessage(hud, 'invalid replay log');
       return;
     }
-    if (inputHandle) { destroyInput(inputHandle); inputHandle = null; }
+    session.unbindInput();
     mode = 'replay';
     interlude = false;                               // replays run start-to-end, no tap gates
     if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
@@ -672,14 +481,13 @@ export function boot(mountEl, seed) {
     clearIntroOverlays();                            // a contract / wave-intel card never sits over a replay
     suppressPreDialog = true; comm.dismiss();
     landingReleased = true;
-    if (renderer3d && render3dMod && render3dMod.skipLanding) render3dMod.skipLanding(renderer3d);
+    if (session.view3d && session.mod3d && session.mod3d.skipLanding) session.mod3d.skipLanding(session.view3d);
     replayQueue = (replayLog.commands || []).slice().sort((a, b) => a.tick - b.tick);
     replayIdx = 0;
     ended = false;
     resetKillCam();
-    accumulator = 0;
-    pendingEvents = [];
-    inputHandle = makeInput();
+    session.resetClock();
+    session.bindInput();
     if (hud && hud.hideResult) hud.hideResult();
     resetCommTracking();
     flashMessage(hud, 'replay playback started');
@@ -719,7 +527,7 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   // HUD
   // ---------------------------------------------------------------------
-  const hud = createHud(mountEl, {
+  const hud = session.createHud({
     onBuildSelect: (structId) => {
       ui.buildSelection = structId;
       if (structId !== null) ui.selectedStructureId = null;
@@ -831,7 +639,7 @@ export function boot(mountEl, seed) {
   hud.setPlanet(() => planetOfFaction(currentTestFaction));   // read live: the enemy faction changes between battles
   // Settings › FPS reads the 3D view's last frame [MM-story_mw2s3s9k_c]
   hud.setFpsInfo(() => {
-    const r = renderer3d;
+    const r = session.view3d;
     if (!r || !r.renderer) return null;
     const i = r.renderer.info.render;
     return { calls: i.calls, triangles: i.triangles, ground: r.tiledGround ? 'tiled ground' : r.lowpoly ? 'low-poly ground' : 'painted ground', tier: r.tier && r.tier.label };
@@ -840,7 +648,7 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   // Input
   // ---------------------------------------------------------------------
-  inputHandle = makeInput();
+  session.bindInput();
 
   // boot = a fresh board on the DEFAULT MAP: selectMap rebuilds sim+renderer for map 1 and its
   // restart() opens the wave-1 tap-to-start overlay
@@ -919,8 +727,8 @@ export function boot(mountEl, seed) {
     },
     // the outpost view is a second full 3D scene: the battle's 3D view (behind the menu) gives its GPU context up while it
     // is open and is rebuilt when it closes — two at once crashed the page on an iPhone (owner 2026-11-07)
-    onOutpostOpen: () => { suspend3D(); },
-    onOutpostClose: () => { resume3D(); },
+    onOutpostOpen: () => { session.suspend3D(); },
+    onOutpostClose: () => { session.resume3D(); },
     // OUTPOST (O8): the menu opens the outpost view itself (O6, src/outpost/view/outpostView.js) and calls
     // onTechChanged when it closes, so the next battle sees the bank the outpost changed
     // a Battle History card's REPLAY (O8): that battle's own stored replay
@@ -1084,7 +892,7 @@ export function boot(mountEl, seed) {
       if (!live()) return;
     }
     let glide = 0;
-    if (renderer3d && render3dMod && render3dMod.focusPlayArea) glide = render3dMod.focusPlayArea(renderer3d, sim) || 0;
+    if (session.view3d && session.mod3d && session.mod3d.focusPlayArea) glide = session.mod3d.focusPlayArea(session.view3d, sim) || 0;
     if (glide > 0) await new Promise((r) => setTimeout(r, glide * 1000 + WAVE_END.afterCameraMs));
     if (!live()) return;
     await offerRareContract();          // wave 3 at 3★+: a capital ship's contact offers to buy this map's rare
@@ -1150,23 +958,24 @@ export function boot(mountEl, seed) {
   // ---------------------------------------------------------------------
   // Fixed-timestep game loop
   // ---------------------------------------------------------------------
-  app.ticker.add(() => {
-    const dtMs = (app.ticker && typeof app.ticker.deltaMS === 'number') ? app.ticker.deltaMS : 1000 / 60;
-    if (!ended && !interlude) {
-      accumulator += Math.min(dtMs / 1000, 0.25);
-      while (accumulator >= FIXED_DT && !ended) {
+  // THE CLOCK lives in the battle session (src/battle/session.js start): it steps the sim at FIXED_DT and draws each
+  // frame. What the CAMPAIGN does around each step and each frame is below, as hooks, in the order the loop calls them.
+  session.start({
+    paused: () => ended || interlude,
+    stopped: () => ended,
+    beforeStep: () => {
         if (mode === 'replay') {
           while (replayIdx < replayQueue.length && replayQueue[replayIdx].tick <= sim.tick) {
             if (applyCommand(sim, replayQueue[replayIdx].cmd).ok) killRec.command(sim.tick, replayQueue[replayIdx].cmd);
             replayIdx++;
           }
         }
-        const evs = stepSim(sim, FIXED_DT);
+    },
+    afterStep: (_sim, evs) => {
         killRec.after(sim, evs);   // Kill Camera memory — outside the tick path [MM-task_mvjng7sh_a]
         if (mode === 'play') { tallyEvents(battleTally, evs); noteHarvesters(battleTally, sim.harvesterIds); }
         if (evs && evs.length) {
           for (let i = 0; i < evs.length; i++) {
-            pendingEvents.push(evs[i]);
             // Boldly announce who's attacking, before the wave's enemies appear.
             if (evs[i].type === 'deposit') feedResources(resLedger, [evs[i]]);
             if (evs[i].type === 'waveStars') {
@@ -1214,7 +1023,7 @@ export function boot(mountEl, seed) {
               if (mode === 'play') {
                 interlude = true;
                 // the play area holds where it was until the reward is picked (camera + reveal follow the pick)
-                if (renderer3d && render3dMod && render3dMod.holdPlayArea) render3dMod.holdPlayArea(renderer3d, true);
+                if (session.view3d && session.mod3d && session.mod3d.holdPlayArea) session.mod3d.holdPlayArea(session.view3d, true);
                 void runWaveEnd();
               } else if (lastWaveFaction) {
                 comm.showCall(winCall(voicePacks, lastWaveFaction, evs[i].wave, currentSeed, commOutcome(), false));
@@ -1222,7 +1031,8 @@ export function boot(mountEl, seed) {
             }
           }
         }
-        accumulator -= FIXED_DT;
+    },
+    afterTick: () => {
         if (sim.result) {
           ended = true;
           // battle over (owner): clear any selection so the unit/structure panel doesn't linger
@@ -1308,10 +1118,10 @@ export function boot(mountEl, seed) {
             // [MM-story_mwatmvpt_1k]. Unopened (the game closed first) it waits in STORES › Seed pods.
             const openPodChest = podChest ? () => {
               if (S !== sim) return null;
-              const lent = suspend3D();   // the chest's own 3D view borrows the GPU; the battlefield comes back on COLLECT
+              const lent = session.suspend3D();   // the chest's own 3D view borrows the GPU; the battlefield comes back on COLLECT
               return playChestOpen({ doc: document, chest: podChest,
                 open: () => { let r = null; updateSave((sv) => { r = openChest(sv, podChest.id); }); return r; } })
-                .finally(() => { if (lent && S === sim) resume3D(); });
+                .finally(() => { if (lent && S === sim) session.resume3D(); });
             } : null;
             if (openPodChest && !lastWaveFaction) setTimeout(openPodChest, 1200);
             if (lastWaveFaction) {
@@ -1336,8 +1146,8 @@ export function boot(mountEl, seed) {
           };
           if (!(S.result === 'lose' && startKillCam(presentResult))) presentResult();
         }
-      }
-    }
+    },
+    beforeFrame: () => {
     // Replay-mode indicator — make it obvious a replay is playing (and when it finishes).
     if (hud.setReplay) {
       if (mode === 'replay') {
@@ -1353,32 +1163,23 @@ export function boot(mountEl, seed) {
     // BEFORE the hold existed and the card would sit over the battle forever — release it the
     // frame it appears. dismiss() is a no-op when nothing is held.
     if (mode === 'play' && !interlude) comm.dismiss();
-    // placement ghost re-validates every frame — money changes while the pointer is still
-    if (inputHandle && inputHandle.refreshHover) inputHandle.refreshHover();
-    // harvester/base interaction hints (owner): input sets ui.pendingHint, we flash it once
-    if (ui && ui.pendingHint) { flashMessage(hud, ui.pendingHint.text); ui.pendingHint = null; }
+    },
     // Kill Camera: the re-run end of the battle is what the 3D view draws while it plays [MM-task_mvjng96y_b]
-    let viewSim = sim;
-    if (killCam && !renderer3d) endKillCam();   // the 3D view went away (2D fallback): straight to the result
-    if (killCam && renderer3d) {
+    viewFrame: (dtMs, frame) => {
+    if (killCam && !session.view3d) endKillCam();   // the 3D view went away (2D fallback): straight to the result
+    if (killCam && session.view3d) {
       const f = killCam.player.step(dtMs / 1000);
-      pendingEvents = f.events.slice();   // the replay's own shots and kills (the live ones are already history)
-      if (f.killerPos) render3dMod.setKillCamKiller(renderer3d, f.killerPos);
-      if (f.justFell) render3dMod.blowUpBase(renderer3d);
-      viewSim = f.sim;
+      frame.events = f.events.slice();   // the replay's own shots and kills (the live ones are already history)
+      if (f.killerPos) session.mod3d.setKillCamKiller(session.view3d, f.killerPos);
+      if (f.justFell) session.mod3d.blowUpBase(session.view3d);
+      frame.sim = f.sim;
       if (f.phase === 'done') endKillCam();
     }
-    if (!USE_3D) renderFrame(renderer, sim, ui, pendingEvents, dtMs / 1000);   // pass REAL frame time so FX track sim time
-    if (renderer3d) {
-      // a throw here would stop the Pixi ticker that drives the whole game loop — contain it, and give up on 3D
-      // if it keeps happening
-      try { render3dMod.renderFrame(renderer3d, viewSim, ui, pendingEvents, dtMs / 1000); frameErrors3d = 0; }
-      catch (e) { console.error('[render3d] frame failed', e); if (++frameErrors3d >= 30) fallbackTo2D((e && e.message) || e); }
-    }
+    },
+    beforeHud: () => {
     // the planet's resource names for the harvester panel's Target row (recomputed only when the enemy changes)
     if (ui._namesFor !== currentTestFaction) { ui._namesFor = currentTestFaction; try { ui.resourceNames = battleResourceNames(); } catch (e) { ui.resourceNames = null; } }
-    updateHud(hud, sim, ui);
-    pendingEvents = [];
+    },
   });
 
   // ---------------------------------------------------------------------
@@ -1394,7 +1195,7 @@ export function boot(mountEl, seed) {
     /** Debug / headless tests: the UI state (selection, build tool). */
     get ui() { return ui; },
     /** Debug / headless tests: the 3D view (null under the 2D fallback). */
-    get view3d() { return renderer3d; },
+    get view3d() { return session.view3d; },
     /** Debug / headless tests: the menu and the comm card. */
     get menu() { return menu; },
     get comm() { return comm; },

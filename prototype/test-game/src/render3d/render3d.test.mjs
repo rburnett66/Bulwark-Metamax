@@ -165,7 +165,10 @@ test('render3d imports no three.js statically, and main.js reaches it only throu
   }
   const main = fs.readFileSync(path.join(GAME, 'src/main.js'), 'utf8');
   assert.doesNotMatch(main, /^\s*import\s[^;]*render3d/m, 'main.js must not statically import render3d');
-  assert.match(main, /import\('\.\/render3d\/index\.js'\)/);
+  // the 3D view is mounted by the battle session (moved out of main.js boot() [MM-story_mwc9p7al_2e]) — same rule there
+  const session = fs.readFileSync(path.join(GAME, 'src/battle/session.js'), 'utf8');
+  assert.doesNotMatch(session, /^\s*import\s[^;]*render3d/m, 'the battle session must not statically import render3d');
+  assert.match(session, /import\('\.\.\/render3d\/index\.js'\)/);
   const html = fs.readFileSync(path.join(GAME, 'index.html'), 'utf8');
   assert.doesNotMatch(html, /three/i, 'index.html never loads three.js');
 });
