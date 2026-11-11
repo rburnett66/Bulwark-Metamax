@@ -1,23 +1,29 @@
 // Owner 2026-11-10 [MM-story_mwbd4114_28]: "when you clear the attack wave, celebrate with a message but let the player
 // continue to harvest resources until time expires. Time on each level should be based on the expected attack duration
-// plus 15 seconds." A campaign wave lasts its par + WAVE_HARVEST_EXTRA_SEC; cleared sooner, it stays open to harvest.
+// plus 15 seconds." Then (owner, same day) "each wave is tuned to 3 minutes" [MM-story_mwbkgcmu_2b]: a campaign wave
+// lasts WAVE_WINDOW_SEC; cleared sooner, it stays open to harvest.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildCampaignMap, resolveResourceTypes } from './mapgen.js';
 import { createSim, stepSim, applyCommand } from './core.js';
 import { buildCampaignWaves } from './campaign.js';
-import { WAVE_HARVEST_EXTRA_SEC } from '../data/tables.js';
+import { WAVE_WINDOW_SEC } from '../data/tables.js';
 import { waveClockText, fmtWaveClock } from '../render/hud.js';
 
 const DT = 1 / 30;
 const board = () => { const map = resolveResourceTypes(buildCampaignMap(1, { seed: 2 }), 1); return createSim(3, { map, waves: buildCampaignWaves(map) }); };
 const killAttackers = (s) => { for (const u of s.units.values()) if (u.side === 'attacker') u.hp = 0; };
 
-test('a wave lasts its par + 15 s', () => {
-  assert.equal(WAVE_HARVEST_EXTRA_SEC, 15);
+test('every campaign wave lasts 3 minutes, whatever its par (Verdance 9 pars run 131-860 s)', () => {
+  assert.equal(WAVE_WINDOW_SEC, 180);
   const sim = board();
   assert.ok(applyCommand(sim, { type: 'startWave' }).ok);
-  assert.equal(sim.waves.endsAt, sim.time + sim.map.rings[0].parSec + 15);
+  assert.equal(sim.waves.endsAt, sim.time + 180);
+  const map9 = resolveResourceTypes(buildCampaignMap(9, { seed: 2 }), 9);
+  const s9 = createSim(3, { map: map9, waves: buildCampaignWaves(map9) });
+  assert.ok(map9.rings[7].parSec > 180, 'map 9 wave 8 has a long par (' + map9.rings[7].parSec + ' s)');
+  applyCommand(s9, { type: 'startWave' });
+  assert.equal(s9.waves.endsAt, s9.time + 180);
 });
 
 test('cleared early: a secured celebration, the wave stays open and the harvest runs on to the end of its time', () => {
