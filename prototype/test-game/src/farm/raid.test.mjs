@@ -191,7 +191,10 @@ test('the battle sim is untouched by this story (src/sim/ unchanged against feat
   let out;
   try {
     execFileSync('git', ['rev-parse', '--verify', '--quiet', 'feat/farm-model'], { cwd: root, stdio: 'pipe' });
-    out = execFileSync('git', ['diff', '--stat', 'feat/farm-model', '--', 'prototype/test-game/src/sim'], { cwd: root, encoding: 'utf8' });
+    // the story's OWN commits (its branch since it left main) touch no sim file; later, owner-asked sim work on main
+    // (the harvest window [MM-story_mwbd4114_28]) is not this story's and must not trip it
+    const base = execFileSync('git', ['merge-base', 'feat/farm-model', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+    out = execFileSync('git', ['diff', '--stat', base, 'feat/farm-model', '--', 'prototype/test-game/src/sim'], { cwd: root, encoding: 'utf8' });
   } catch { t.skip('no feat/farm-model ref in this clone'); return; }
   assert.equal(out.trim(), '');
   // and the farm's raid code never reaches into the sim or a clock
