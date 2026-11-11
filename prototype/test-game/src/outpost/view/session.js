@@ -193,7 +193,8 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
 
     /**
      * Act on the outpost. action: { type: 'online' | 'sell' | 'place' | 'upgrade' | 'upgradeDefense' | 'sellStructure' | 'repair' | 'repairAll' | 'deep' | 'buyHarvester', … }.
-     * → { ok: true, outpost, cost, gold (bank after), loads? (sell), earned? } or { ok: false, error }.
+     * → { ok: true, outpost, cost, gold (bank after), loads? (sell), earned?, warning (an upgrade that shorts the grid,
+     * model.upgradeGridShort) } or { ok: false, error }.
      */
     act(action, now) {
       let out = null;
@@ -210,7 +211,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         // a sale to the planet's ship: its captain buys, +1 to their rating (owner 2026-11-09, standings.js)
         if (action.type === 'sell' && r.gold) noteRapportEvent(s, captainOf(catalog, (PLANETS[planet] || {}).name), planet, 'sale');
         const settled = settle(s, now);
-        out = { ok: true, outpost: r.outpost, cost: r.cost || 0, earned: r.gold || 0, loads: r.loads || null, gold: bankOf(s), settled, farm: r.farm || null };
+        out = { ok: true, outpost: r.outpost, cost: r.cost || 0, earned: r.gold || 0, loads: r.loads || null, gold: bankOf(s), settled, farm: r.farm || null, warning: r.warning || null };
       });
       if (out.ok) last = out.outpost;
       return out;

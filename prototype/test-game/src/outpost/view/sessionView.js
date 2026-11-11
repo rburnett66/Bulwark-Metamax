@@ -44,6 +44,7 @@ import { createOutpostKit, modelSlug } from '../../render3d/outposts/outpostMode
 import { renderMenuIcons, OUTPOST_GLYPHS } from './menuIcons.js';
 import { oresOf } from '../../data/ores.js';
 import { createSession, onlineIssues, repairAllCost } from './session.js';
+import { upgradeGridShort } from '../model.js';
 import { hudModel, sellButton, fmtGold, harvesterTile } from './hudModel.js';
 import { awayReportModel } from './awayReport.js';
 import { loadSave, updateSave } from '../../save/save.js';
@@ -261,6 +262,15 @@ export async function openOutpostSessionView(opts = {}) {
     paused: () => false,
     stopped: () => false,
     // power changes during the visit start or park the trucks (S4 follow-up): checked on the sim's tick count, every 15 ticks (half a sim second)
+    // an upgrade (the battle's U command) that outgrows the grid goes ahead, flagged as the old view flags it: the save
+    // model's own check on the live state written back (model.upgradeGridShort) [MM-story_mwcp7u7b_3a]
+    afterStep: (s, evs) => {
+      if (!evs || !evs.some((e) => e.type === 'upgradeStart')) return;
+      try {
+        const w = upgradeGridShort(fromLiveSim(sim, live.link, nowOf()).outpost, map);
+        if (w) flashMessage(hud, 'Upgrade started · ' + w.replace(/^./, (c) => c.toUpperCase()));
+      } catch (e) { console.warn('[outpost] upgrade grid check', e); }
+    },
     afterTick: () => { if (raids) raids.step(); if (sim.tick % 15 === 0) syncHarvestPower(sim, live.link); },
     beforeFrame: (dtMs) => { dt = Math.min(dtMs / 1000, 0.25); },
     beforeHud: () => {

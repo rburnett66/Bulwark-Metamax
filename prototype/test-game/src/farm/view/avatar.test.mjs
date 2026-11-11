@@ -104,7 +104,7 @@ function farmOutpost(plots = 3) {
   const s = defaultSave();
   s.capitalShips = { Verdance: { arrived: true } };
   let o = referenceOutpost('ground', { seed: 5, map, now: T0 });
-  for (const b of Object.values(o.pads)) if (b.kind === 'rig') b.tier = 2;
+  for (const b of Object.values(o.pads)) if (b.kind === 'rig' || b.kind === 'power') b.tier = 2;   // a Rig II draws 8: it needs Power Station II [MM-story_mwcp7u7b_3a]
   o = confirmOnline(o, map, T0).outpost;
   s.outposts = { ground: o }; s.outpostContracts = { ground: { step: 3, state: 'complete', since: T0 } };
   acceptFarmContract(s, 'ground', { map, now: T0, cellOk: cellRule(map, o) });
