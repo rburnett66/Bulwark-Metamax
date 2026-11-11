@@ -21,7 +21,7 @@
  */
 import { fmtGold, fmtUnits, fmtClock, sellButton, ROMAN } from './hudModel.js';
 import { fmtPerHour } from './statusReport.js';
-import { PALETTE_CSS, SELPANEL_CSS, paletteBaseCss, railFit, applyRailFit, STRUCT_ICONS } from '../../render/buildPalette.js';
+import { PALETTE_CSS, SELPANEL_CSS, paletteBaseCss, railFit, applyRailFit, STRUCT_ICONS, LOCK_SVG } from '../../render/buildPalette.js';
 import { buildIcon, buildIconUrl } from '../../render/buildIcons.js';
 import { OUTPOST_GLYPHS } from './menuIcons.js';
 import { BATTLE_ICON } from './buildMenu.js';
@@ -284,9 +284,6 @@ ${SELPANEL_CSS}
 .op .bw-palette.op-narrow .bw-bname .op-s { display:inline; }
 .op .bw-buildbtn .bw-cost { font-family:'Courier New', monospace; font-weight:700; }
 .op .bw-buildbtn.bw-poor .bw-cost { color:#ff6a5a; }
-.op .bw-buildbtn.bw-locked { opacity:0.45; }
-.op .bw-buildbtn.bw-locked .bw-cost { color:#9aa6b4; }
-.op .bw-lock { position:absolute; top:2px; right:3px; width:11px; height:12px; }
 .op .bw-count { position:absolute; top:1px; right:3px; font-size:9px; font-weight:800; color:#bfe0ff; text-shadow:0 1px 2px #000; }
 .op .bw-buildbtn.bw-locked .bw-count { right:15px; }
 .op .bw-buildbtn.op-guide { border-color:#5fe0ff; animation:op-guide 1.6s ease-in-out infinite; }
@@ -308,7 +305,6 @@ ${SELPANEL_CSS}
 
 /** Names for the narrow two-column rail (a landscape phone), where the long ones would clip. */
 const SHORT = { power: 'POWER', rig: 'MINING', storage: 'STORAGE', resourceBay: 'RES. BAY', upgradeBay: 'UPGRADE', habitat: 'HABITAT', cannon: 'CANNON', traditional: 'PLOT', irrigated: 'IRRIGATED', silo: 'SILO', pump: 'PUMP' };
-const LOCK_SVG ='<svg class="bw-lock" viewBox="0 0 11 12"><rect x="1" y="5" width="9" height="7" rx="1" fill="#cfd6dd"/><path d="M3 5V3.6a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="#cfd6dd" stroke-width="1.5"/></svg>';
 export const WARN_SVG = {
   bolt: '<svg viewBox="0 0 20 20"><path d="M11.5 1 3.5 11.5h5L7.5 19l9-11.5h-5.2z" fill="#ffd23a" stroke="#8a5a00" stroke-width="1.2" stroke-linejoin="round"/></svg>',
   crate: '<svg viewBox="0 0 20 20"><rect x="2" y="5" width="16" height="12" fill="#c98a12" stroke="#5a3a00" stroke-width="1.3"/><path d="M2 9h16M7 5v12M13 5v12" stroke="#5a3a00" stroke-width="1.1"/><path d="M5 1.5h10l1.5 3.5h-13z" fill="#e0a83a" stroke="#5a3a00" stroke-width="1"/></svg>',

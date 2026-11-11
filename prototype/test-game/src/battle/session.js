@@ -24,6 +24,7 @@ import { stepSim, FIXED_DT } from '../sim/core.js';
 import { createRenderer, renderFrame, destroyRenderer } from '../render/renderer.js';
 import { createHud, updateHud, flashMessage } from '../render/hud.js';
 import { createInput, destroyInput } from '../input/input.js';
+import { createCatalogue } from './catalogue.js';
 
 /**
  * CSS px the HUD covers on each side of the game view — the top bar across the top, the build tray down the left.
@@ -45,10 +46,12 @@ export function hudInsets(mountEl) {
  *   getUi()           → the live UI state (selection, build tool)
  *   submit(cmd)       → the mode's command path (validation, logging)
  *   mapId             → the starting board's map id (FX scale tiers)
- *   mountOptions()    → per-mount 3D options the mode decides: { planet, landing, landingHeld }
+ *   mountOptions()    → per-mount 3D options the mode decides: { planet, landing, landingHeld, render3d }, where
+ *                       render3d is merged last into createRenderer3D's options (the outpost: no craft, its base url)
+ *   catalogue         → what the build rail and the number keys offer (battle/catalogue.js; default: the campaign's)
  * Returns the session handle (see the object at the end).
  */
-export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0, mountOptions = () => ({}) }) {
+export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0, mountOptions = () => ({}), catalogue = createCatalogue() }) {
   let hud = null;
 
   // ---------------------------------------------------------------------
@@ -156,7 +159,8 @@ export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0,
         planet: q.get('planet') || mo.planet || null,
         projFx: () => renderer.projFx, projScale: () => renderer.projScale,
         qualityQuery: q.get('quality'), qualityChoice: quality.loadChoice(storage),
-        viewInsets: () => hudInsets(mountEl) });   // the pre-match camera frames the play area clear of the HUD [MM-task_mvewfno7_g]
+        viewInsets: () => hudInsets(mountEl),   // the pre-match camera frames the play area clear of the HUD [MM-task_mvewfno7_g]
+        ...(mo.render3d || {}) });             // the mode's own mount options last [MM-task_mwcdvlf8_2t]
       if (mySeq !== mount3dSeq) { render3dMod.destroyRenderer(r); return; }
       renderer3d = r;
       rebindInput();   // the input was bound to the old (or no) 3D canvas — move it onto this one
@@ -241,9 +245,9 @@ export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0,
   function makeInput() {
     if (renderer3d) {
       return createInput(renderer3d.canvas, renderer, getSim, submit, getUi(),
-        { pick: (ev, u) => render3dMod.eventToCell(renderer3d, ev, u), tapToAct: true });
+        { pick: (ev, u) => render3dMod.eventToCell(renderer3d, ev, u), tapToAct: true, catalogue });
     }
-    return createInput(canvas, renderer, getSim, submit, getUi());
+    return createInput(canvas, renderer, getSim, submit, getUi(), { catalogue });
   }
   function rebindInput() {
     if (!inputHandle) return;   // no session yet — the boot path creates it
@@ -306,8 +310,12 @@ export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0,
   }
 
   return {
-    /** Create the battle HUD with the mode's callbacks (render/hud.js createHud). */
-    createHud(callbacks) { hud = createHud(mountEl, callbacks); return hud; },
+    /** Create the battle HUD with the mode's callbacks (render/hud.js createHud); its rail lists the session's catalogue. */
+    createHud(callbacks) { hud = createHud(mountEl, { ...callbacks, catalogue }); return hud; },
+    /** The mode's build list + locks (battle/catalogue.js); setLocks updates the rail and the number keys at once. */
+    catalogue,
+    /** A mode's own HUD panel (the outpost's SELL, GO ONLINE, away report …), placed in the battle HUD's mode slot. */
+    addPanel(node) { return hud && hud.addPanel ? hud.addPanel(node) : null; },
     get hud() { return hud; },
     // the 3D view
     mount3D, fallbackTo2D, retry3D, suspend3D, resume3D,

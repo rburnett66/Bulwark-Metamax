@@ -10,7 +10,13 @@
  */
 
 /** The palette's rules (the battle HUD's, verbatim). Needs the base .bw-panel / .bw-btn rules (paletteBaseCss). */
+/** The padlock a locked build item wears (moved here from the outpost's rail [MM-task_mwcdvlf8_2t]: one rail, one look). */
+export const LOCK_SVG = '<svg class="bw-lock" viewBox="0 0 11 12"><rect x="1" y="5" width="9" height="7" rx="1" fill="#cfd6dd"/><path d="M3 5V3.6a2.5 2.5 0 0 1 5 0V5" fill="none" stroke="#cfd6dd" stroke-width="1.5"/></svg>';
 export const PALETTE_CSS = `
+.bw-buildbtn { position:relative; }
+.bw-buildbtn.bw-locked { opacity:0.45; }
+.bw-buildbtn.bw-locked .bw-cost { color:#9aa6b4; }
+.bw-lock { position:absolute; top:2px; right:3px; width:11px; height:12px; }
 .bw-palette { position:absolute; left:6px; top:56px; display:flex; flex-direction:column; gap:4px; }
 .bw-palette .bw-title { font-size:11px; color:#9ab; margin-bottom:2px; }
 .bw-palette-row { display:flex; flex-direction:column; gap:4px; }

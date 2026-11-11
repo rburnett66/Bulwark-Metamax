@@ -1,4 +1,4 @@
-import { STRUCTURES } from '../data/tables.js';
+import { createCatalogue } from '../battle/catalogue.js';
 import { validatePlacement } from '../sim/structures.js';
 import { screenToCell } from '../render/renderer.js';
 
@@ -20,10 +20,10 @@ export function createUiState() {
   };
 }
 
-function buildOrder() {
-  // Deterministic ordered list of structure ids for the number-key shortcuts — the SAME filter as the
-  // HUD palette (hud.js structOrder), so key N always selects the button badged N.
-  return Object.keys(STRUCTURES).filter((id) => STRUCTURES[id].kind !== 'harvestorBay');
+function buildOrder(catalogue) {
+  // Deterministic ordered list of structure ids for the number-key shortcuts — the mode's catalogue, the SAME list the
+  // HUD rail shows (battle/catalogue.js [MM-task_mwcdvlf8_2t]), so key N always selects the button badged N.
+  return (catalogue || createCatalogue()).ids;
 }
 
 function findUnitAtCell(state, cell) {
@@ -302,6 +302,8 @@ function onKeyDown(handle, ev) {
     const order = handle.buildOrder;
     if (buildIdx < order.length) {
       const structId = order[buildIdx];
+      const locked = handle.catalogue && handle.catalogue.isLocked(structId);
+      if (locked) { ui.pendingHint = { text: locked }; ev.preventDefault(); return; }   // a locked item says why, and stays unarmed
       if (ui.buildSelection === structId) {
         // Toggle off if pressing the same shortcut again.
         ui.buildSelection = null;
@@ -370,7 +372,8 @@ export function createInput(canvas, renderer, getState, submit, ui, opts = {}) {
     submit,
     ui,
     pick: opts.pick || null,
-    buildOrder: buildOrder(),
+    catalogue: opts.catalogue || null,
+    buildOrder: buildOrder(opts.catalogue),
     listeners: [],
     destroyed: false,
   };
