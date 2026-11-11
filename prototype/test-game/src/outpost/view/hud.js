@@ -78,6 +78,8 @@ export const HUD_CSS = `
 .op-bar > i { position:absolute; left:0; top:0; bottom:0; width:0; background:linear-gradient(90deg,var(--cyan-d),var(--cyan)); transition:width .4s; }
 .op-bar.full > i { background:linear-gradient(90deg,#c26a00,var(--trim-hi)); }
 .op-chip.power .num { color:var(--cyan-d); }
+.op-chip.threat .num { font-size:.86em; white-space:nowrap; }
+.op-chip.threat .num.short { display:none; }
 .op-chip.hopper[hidden], .op-chip.raid[hidden] { display:none; }
 .op-chip.hopper .op-bar i { background:linear-gradient(90deg,#5fb8ff,#ffd34a); }
 .op-chip.raid { background:#3a0d0a; border-color:#d2453a; color:#ffd7d2; font-weight:800; letter-spacing:.06em; animation:opRaid 1s ease-in-out infinite alternate; }
@@ -202,6 +204,7 @@ export const HUD_CSS = `
 .op[data-layout="landscape"] .op-back { width:32px; height:32px; font-size:17px; }
 .op[data-layout="landscape"] .op-title i { display:none; }
 .op[data-layout="landscape"] .op-chip .lbl { display:none; }
+.op[data-layout="landscape"] .op-chip.threat .num.full { display:none; } .op[data-layout="landscape"] .op-chip.threat .num.short { display:inline; }
 .op[data-layout="landscape"] .op-bar { width:42px; }
 .op[data-layout="landscape"] .op-actions { left:auto; transform:none; right:max(10px, env(safe-area-inset-right)); bottom:max(10px, env(safe-area-inset-bottom)); flex-direction:column; align-items:stretch; }
 .op[data-layout="landscape"] .op-btn.repair { order:2; } .op[data-layout="landscape"] .op-btn.sell { order:3; }
@@ -344,6 +347,7 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
         <div class="op-chip" title="Storage">${ICON.box}<div class="op-bar" data-k="storeBar"><i></i></div><span class="num" data-k="store">0%</span></div>
         <div class="op-chip hopper" title="Resource Bay hopper: banked to your inventory when you open the outpost" hidden>${ICON.leaf}<div class="op-bar" data-k="hopperBar"><i></i></div><span class="num" data-k="hopper">0</span></div>
         <div class="op-chip raid" data-k="raid" title="Sensor Spire: a raid is inbound" hidden>RAID INBOUND <span class="num" data-k="raidIn"></span></div>
+        <div class="op-chip threat" data-k="threatChip" title="Raid threat: base size and the raids a day it draws"><span class="num full" data-k="threat"></span><span class="num short" data-k="threatShort"></span></div>
         <div class="op-chip power" title="Power used / supplied">${ICON.bolt}<span class="num" data-k="power">0/0</span><span class="lbl">POWER</span></div>
         <div class="op-chip shield" title="Defenses"><span class="op-shield" data-k="shieldIco"></span><span class="num" data-k="shield">100%</span></div>
       </div>
@@ -425,6 +429,9 @@ export function mountHud(host, cbs = {}, { title = 'OUTPOST', planetName = '' } 
       if (h.hopper) { $('hopperBar').firstElementChild.style.width = (h.hopper.frac * 100).toFixed(1) + '%'; $('hopper').textContent = fmtUnits(h.hopper.units); }
       $('raid').hidden = h.raidInbound == null;
       if (h.raidInbound != null) $('raidIn').textContent = fmtClock(h.raidInbound / 1000);
+      if (h.threat) {   // raid threat: size · raids/day (the short form in a phone's landscape bar) [MM-story_mwco8she_38]
+        $('threat').textContent = h.threat.text; $('threatShort').textContent = h.threat.short; $('threatChip').title = h.threat.text;
+      }
       root.querySelector('.op-chip.power').classList.toggle('short', h.power.short || h.power.unpowered > 0);
       const sf = h.shield.frac;
       const sh = shieldSvg(Math.max(0, Math.min(1, sf)));

@@ -31,11 +31,13 @@ export const GUN_KINDS = Object.freeze(['mg', 'cannon']);
 /**
  * Who gets power first when a grid is short (design §4.5, One Battle UX §5.2): lower serves first, so the outpost keeps
  * its core running. A kind not listed serves last (POWER_PRIORITY_LAST). outpost/model.js powerGrids reads it.
- * A data constant here, not a workbook column yet: the workbook (Outpost_Structures) would take a Power_Priority
- * column, but it is owned by another lane this round.
+ * A WORKBOOK column (owner 2026-11-11, #282 answer 4) [MM-subtask_mwco9m19_39]: Power_Priority on Outpost_Structures
+ * and Farm_Buildings (the farm's buildings are consumers on the same grids), via MAPDATA; a blank cell is unlisted.
  */
-export const POWER_PRIORITY = Object.freeze({ hub: 0, storage: 1, rig: 2, mg: 3, cannon: 3, resourceBay: 4, upgradeBay: 5, habitat: 6, farmhouse: 7, silo: 7, pump: 8 });
-export const POWER_PRIORITY_LAST = 9;
+export const POWER_PRIORITY = Object.freeze(Object.fromEntries(
+  [...(MAPDATA.outpostStructures || []), ...(MAPDATA.farmBuildings || [])]
+    .filter((r) => typeof r.Power_Priority === 'number').map((r) => [r.Kind, r.Power_Priority])));
+export const POWER_PRIORITY_LAST = Math.max(-1, ...Object.values(POWER_PRIORITY)) + 1;
 /** A kind's power priority (lower is served first). */
 export const powerPriority = (kind) => POWER_PRIORITY[kind] ?? POWER_PRIORITY_LAST;
 /** Old kind names kept readable: the Harvester Bay became the Resource Bay (owner, 2026-11-07). */

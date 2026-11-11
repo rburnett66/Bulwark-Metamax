@@ -154,11 +154,13 @@ def crop_level_rows():
     return rows
 
 # Farming-Design §6: Phase A's buildings. Cost/Build_Sec proposed (D14), sized like the outpost's pads.
-BUILDING_COLS = ["Kind", "Name", "Foot_W", "Foot_H", "Cost", "Build_Sec", "Power_Draw", "Water_Reach", "Unlock"]
+# Power_Priority: who a short grid serves first (lower first), as on Outpost_Structures (patch_power_priority.py).
+BUILDING_COLS = ["Kind", "Name", "Foot_W", "Foot_H", "Cost", "Build_Sec", "Power_Draw", "Water_Reach", "Unlock",
+                 "Power_Priority"]
 BUILDINGS = [
-    ["farmhouse", "Farmhouse", 2, 2, 0, 0, 1, 0, "granted by F1"],
-    ["silo", "Silo", 2, 2, 800, 180, 1, 0, "F1"],
-    ["pump", "Pump", 1, 1, 400, 60, 2, 4, "irrigated"],
+    ["farmhouse", "Farmhouse", 2, 2, 0, 0, 1, 0, "granted by F1", 7],
+    ["silo", "Silo", 2, 2, 800, 180, 1, 0, "F1", 7],
+    ["pump", "Pump", 1, 1, 400, 60, 2, 4, "irrigated", 8],
 ]
 
 # Distribution §5.2 / Farming-Design §2.2: Verdance's F1, "Bread for the Regiments". Phase A ships F1 on Verdance only.
