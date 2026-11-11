@@ -153,6 +153,8 @@ PARAMS = [
     ["Surface_Respawn_Mult", 0.05, "x", "owner 2026-11-07: outpost surface fields regrow at 5% of the battle maps' rate (units per cell / Primary_Respawn_Sec); stock as a battle field (O10)"],
     ["Gun_Cap", 4, "count", "guns (Machine Guns and Cannons; walls do not count) the hub crews without a Habitat (owner 2026-11-09: 4 base)"],
     ["Habitat_Guns_Per_Tier", 4, "count", "guns each Habitat tier adds: Habitat I +4, Habitat II +8 (owner 2026-11-09: 4 more per habitat)"],
+    ["Raid_Chance_Per_Size", 0.05, "x", "owner 2026-11-11: the bigger the base the more frequent attacks; a window's raid chance = (Raid_Min_Gap_Hours / Raid_Mean_Hours) x (1 + this x size), size = finished buildings + defenses, hub not counted"],
+    ["Raid_Chance_Max", 0.9, "share", "the raid chance per window never goes above this, however big the base (at most 1: one raid per window)"],
 ]
 
 TECH_COLS = ["Node", "Name", "Price", "Effect", "Unlocked_By", "Requires", "Applies"]

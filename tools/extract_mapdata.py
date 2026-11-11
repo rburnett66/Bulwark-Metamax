@@ -154,7 +154,8 @@ OUTPOST_PARAMS = ("Load_Sec", "Store_Hours", "Deep_Rate_Mult", "Deep_Price_Mult"
                   "Raid_Min_Gap_Hours", "Breach_Storage_Loss", "First_Raid_Sec", "Away_Cap_Hours", "Replay_Keep",
                   "Far_Buyer_Mult", "Far_Loyalty_Cost", "Defense_Price_Mult", "Repair_Share_Per_HP", "Shuttle_II_Bonus",
                   "Rig_Bay_Min", "Harvester_Cap", "Harvester_Max", "Hopper_Hours", "Harvest_Route_Mult",
-                  "Harvest_Rate_Mult", "Surface_Respawn_Mult", "Gun_Cap", "Habitat_Guns_Per_Tier")
+                  "Harvest_Rate_Mult", "Surface_Respawn_Mult", "Gun_Cap", "Habitat_Guns_Per_Tier",
+                  "Raid_Chance_Per_Size", "Raid_Chance_Max")
 OUTPOST_TECH_APPLIES = {"outposts", "upgradeBay"}
 
 
@@ -254,6 +255,12 @@ def outpost_problems(data):
     for p in OUTPOST_PARAMS:
         if not isinstance(data["outpostParams"].get(p), (int, float)):
             out.append(f"Outpost_Params: missing or non-numeric {p}")
+    # raids by base size (owner 2026-11-11): the chance grows, never shrinks, and a window holds at most one raid
+    op = data["outpostParams"]
+    if isinstance(op.get("Raid_Chance_Per_Size"), (int, float)) and op["Raid_Chance_Per_Size"] < 0:
+        out.append("Outpost_Params: Raid_Chance_Per_Size must be >= 0 (a bigger base is never raided less)")
+    if isinstance(op.get("Raid_Chance_Max"), (int, float)) and not 0 < op["Raid_Chance_Max"] <= 1:
+        out.append("Outpost_Params: Raid_Chance_Max must be in (0, 1] (at most one raid per window)")
     out += raid_problems(data, planets)
     return out
 
