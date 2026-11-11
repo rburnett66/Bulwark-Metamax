@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.11.11-g';
-export const VERSION_NOTE = '?outpost=session opens the outpost on the shared battle screen (the old outpost view stays the default)';
+export const VERSION = 'v2026.11.11-h';
+export const VERSION_NOTE = '?outpost=session: SELL, GO ONLINE, repair and the away report in the battle HUD';
