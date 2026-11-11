@@ -132,8 +132,9 @@ function liveFieldStock(state) {
 /**
  * The surface fields as sim resource nodes and the harvesters as sim harvesters (S4). A field's saved stock fills its
  * cells in order; every cell regrows its share of the field's rate (harvest.js stepFieldRegrowth). The trucks run only
- * when the closed form's would (harvestRunning: a finished, powered Resource Bay) and the hopper has room; otherwise
- * they stand parked at the bay. -> { loaded: { [fieldId]: units }, trucks } for fromLiveSim, or null with no fields.
+ * when the closed form's would: a finished, powered Resource Bay (u.parked otherwise; syncHarvestPower follows power
+ * changes during the visit) and room in the hopper (state.harvestRoom: loads stop when it is full, nothing overflows).
+ * -> { loaded: { [fieldId]: units }, trucks } for fromLiveSim, or null with no fields.
  */
 function seedHarvest(state, outpost, map) {
   const groups = surfaceFieldGroups(map);
@@ -158,7 +159,8 @@ function seedHarvest(state, outpost, map) {
   const loaded = liveFieldStock(state);
   const plan = harvestPlan(outpost, map), bay = resourceBayPad(outpost);
   if (!plan.length) return { loaded, trucks: 0 };
-  const running = powerGrids(outpost, map).powered.has(bay) && hopperUnits(outpost) < hopperCap(outpost, map) - 1e-9;
+  const powered = powerGrids(outpost, map).powered.has(bay);
+  state.harvestRoom = Math.max(0, hopperCap(outpost, map) - hopperUnits(outpost));   // the hopper's room (owner: stop when full)
   // the docks: open cells around the bay, each truck taking the free one nearest its field (deterministic: distance, y, x)
   const r = buildingRect(outpost, map, bay);
   const nav = buildNavGrid(state.map, Array.from(state.structures.values()), state.base.cells || []);
@@ -177,14 +179,14 @@ function seedHarvest(state, outpost, map) {
     if (!u) break;
     u.fieldId = h.fieldId;
     u.fieldLock = true;                        // the closed form's rule: a harvester stays on its field
-    u.state = running ? 'harvestIdle' : 'harvestParked';
+    u.parked = !powered;                       // no power, no operation (the closed form's harvestRunning)
   }
   return { loaded, trucks: plan.length };
 }
 
 /**
  * The visit's harvest into the save (S4): the fields' live stock, and into the hopper what the trucks unloaded (the
- * contract's kept units) plus what they still carry (it left the fields), up to the hopper's size. Nothing changes when
+ * contract's kept units) plus what they still carry (it left the fields); the live state kept it within the hopper's room. Nothing changes when
  * nothing moved, so a visit with no time saves back exactly what was loaded. Mutates o.
  */
 function saveHarvest(o, state, link, now) {
@@ -207,11 +209,10 @@ function saveHarvest(o, state, link, now) {
   }
   if (Object.keys(got).length) {
     o.hopper = o.hopper || {};
-    let room = Math.max(0, hopperCap(o, link.map) - hopperUnits(o));
+    // the live state never gathers past the hopper's room (state.harvestRoom), so nothing here is clamped or lost
     for (const t of ['common', 'uncommon']) {
-      const add = Math.min(got[t] || 0, room);
+      const add = got[t] || 0;
       if (!(add > 0)) continue;
-      room -= add;
       o.hopper[t] = (o.hopper[t] || 0) + add;
       if (o.lifetime) o.lifetime.harvested[t] = (o.lifetime.harvested[t] || 0) + add;
     }
@@ -220,6 +221,24 @@ function saveHarvest(o, state, link, now) {
     const prev = o.liveHarvest;
     o.liveHarvest = { from: prev ? Math.min(prev.from, link.now) : link.now, to: Math.max(now, prev ? prev.to : now) };
   }
+}
+
+/**
+ * Power changes during a visit (owner 2026-11-11): park the outpost's trucks when their Resource Bay has no power and
+ * start them again when it has — a station built, sold or upgraded, a pylon placed. Reads the live state as the save
+ * would see it (fromLiveSim → model.powerGrids), so it is the closed form's own power rule. The session calls it on the
+ * sim's tick count (sessionView afterTick), never on the wall clock. → whether the bay is powered (null: no trucks).
+ */
+export function syncHarvestPower(state, link) {
+  if (!link.harvest || !link.harvest.trucks) return null;
+  const o = fromLiveSim(state, link, link.now + Math.round(state.time * 1000)).outpost;
+  const bay = resourceBayPad(o);
+  const powered = !!bay && powerGrids(o, link.map).powered.has(bay);
+  for (const id of state.harvesterIds || []) {
+    const u = state.units.get(id);
+    if (u && u.fieldLock) u.parked = !powered;
+  }
+  return powered;
 }
 
 /**

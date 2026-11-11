@@ -922,16 +922,26 @@ export function updateHud(hud, state, ui) {
   hud.hpfill.style.width = (frac * 100).toFixed(1) + '%';
   hud.hptext.textContent = 'Base: ' + Math.max(0, Math.ceil(base.hp)) + '/' + Math.ceil(base.maxHp);
 
-  // Harvester buy button — live price / MAX / affordability (bought at the base, cap 4)
-  // (not on a board whose fleet is bought elsewhere — an outpost visit: harvest.js harvesterBuyRefusal)
-  if (hud.harvCost && state.resourceNodes && !state.harvesterBuyRefusal) {
+  // Harvester buy button — live price / MAX / affordability (bought at the base, cap 4). A mode that sells its harvesters
+  // by its own rules supplies callbacks.harvesterTile(state) → { cost, poor, title } (or null to hide the tile) — the
+  // outpost visit: its Resource Bay's price and refusals (outpost/view/hudModel.js harvesterTile); the battle has none.
+  const tileOf = hud.callbacks && hud.callbacks.harvesterTile;
+  if (hud.harvCost && tileOf) {
+    const t = tileOf(state);
+    if (t) {
+      hud.harvCost.textContent = t.cost;
+      hud.harvBtn.classList.toggle('bw-poor', !!t.poor);
+      if (t.title) hud.harvBtn.title = t.title;
+      hud.harvBtn.style.display = '';
+    } else hud.harvBtn.style.display = 'none';
+  } else if (hud.harvCost && state.resourceNodes) {
     const fleet = state.harvesterIds ? state.harvesterIds.filter((id) => { const u = state.units.get(id); return u && u.hp > 0; }).length : 0;
     const PRICE = [0, 500, 750, 1000];
     const gold = Math.floor((state.economy && state.economy.money) || 0);
     hud.harvCost.textContent = fleet >= 4 ? 'MAX' : PRICE[fleet] + 'g';
     hud.harvBtn.classList.toggle('bw-poor', fleet < 4 && gold < PRICE[fleet]);
     hud.harvBtn.style.display = '';
-  } else if (hud.harvBtn) { hud.harvBtn.style.display = 'none'; }   // classic board (or an outpost): no battle purchase
+  } else if (hud.harvBtn) { hud.harvBtn.style.display = 'none'; }   // classic board: no harvesters
 
   // Money — the gold-gain "+N" now floats at the dying unit on the map (render/renderer.js coin FX), not the HUD.
   const money = Math.floor((state.economy && state.economy.money) || 0);

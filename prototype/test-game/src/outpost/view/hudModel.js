@@ -6,9 +6,9 @@
  * tier, rate, the deep / shallow switch on a rig, upgrade). Pure: reads the outpost through src/outpost/model.js; the
  * DOM lives in hud.js.
  */
-import { powerGrids, loadsReady, bayCapacity, rigRatePerMin, repairCost, depositOf, onlineProblems, harvestPlan, hopperCap, hopperUnits,
+import { harvesterRefusal, powerGrids, loadsReady, bayCapacity, rigRatePerMin, repairCost, depositOf, onlineProblems, harvestPlan, hopperCap, hopperUnits,
   gunCount, gunCap, defenseUpgradeRefusal, harvesterCap, raidWarning, upgradeBayReady, steadyHarvest, fieldStock, surfaceFieldGroups , sellStructureQuote } from '../model.js';
-import { structureDef, maxTier, DEFENSE_KINDS, OUTPOST, OUTPOST_TECH } from '../../data/outpost.js';
+import { structureDef, maxTier, DEFENSE_KINDS, OUTPOST, OUTPOST_TECH, harvesterDef } from '../../data/outpost.js';
 import { oresOf, oreById } from '../../data/ores.js';
 import { bayKind } from './buildMenu.js';
 import { buildingWarnings, warningLines } from './warnings.js';
@@ -95,6 +95,19 @@ export function hudModel(o, map, { gold = 0, now = null, unlocks = null } = {}) 
 }
 
 /** The SELL button: label and whether it can be tapped. */
+/**
+ * The battle rail's HARVESTER tile on an outpost visit (owner 2026-11-11): the outpost's own purchase (model.buyHarvester)
+ * — its price, MAX at the Resource Bay's cap, and the refusal (no Resource Bay, the cap, the gold) as the tile's title.
+ * ctx: the save session's ctx (techOwned, params); gold: the gold in hand. → { cost, poor, title } for render/hud.js.
+ */
+export function harvesterTile(o, ctx = {}, gold = 0) {
+  const h = harvesterDef();
+  if (!h) return null;
+  const why = harvesterRefusal(o, { ...ctx, gold });
+  const full = (o.harvesters || 0) >= harvesterCap(o, ctx);
+  return { cost: full ? 'MAX' : `${h.cost}g`, poor: !!why, title: why ? `Harvester: ${why}` : `Harvester for the Resource Bay (${h.cost}g)` };
+}
+
 export function sellButton(h) {
   if (!h.online) return { label: 'SELL', sub: 'outpost offline', enabled: false };
   if (!h.loads) return { label: 'SELL', sub: 'no full load', enabled: false };

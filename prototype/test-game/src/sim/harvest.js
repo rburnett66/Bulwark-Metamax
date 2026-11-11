@@ -192,6 +192,17 @@ function reservedNodes(state, exceptUnit) {
 // only drives out for a cell holding a whole unit (a deposit credits whole units), so on a bare field it waits at its
 // dock while the field regrows instead of shuttling slivers. Unlocked (battle) trucks are unchanged.
 const worthPulling = (u, n) => n.remaining > (u.fieldLock ? 1 - 1e-9 : 0);
+// HOLD (outpost visits, owner 2026-11-11): a truck stays at its dock when it is parked (u.parked: its Resource Bay has no
+// power — outpost/liveSim.js syncHarvestPower) or when the board's store is full. state.harvestRoom (units, optional) is
+// the room left where loads land (the outpost's hopper); what trucks already carry counts against it, so a full hopper
+// stops the harvest exactly like the away closed form and nothing overflows. Battle boards set neither: no hold.
+function roomLeft(state) {
+  if (state.harvestRoom == null) return Infinity;
+  let carried = 0;
+  for (const id of state.harvesterIds || []) { const h = state.units.get(id); if (h && h.hp > 0) carried += h.cargo || 0; }
+  return state.harvestRoom - carried;
+}
+const held = (state, u) => !!u.parked || roomLeft(state) < 1 - 1e-9;
 // nearest field cell with anything left to pull, skipping cells another truck has claimed
 // (deterministic: distance, then id)
 function nextFieldTarget(state, u) {
@@ -239,14 +250,19 @@ export function cmdHarvest(state, cmd) {
   if (!nodeRevealed(state, node)) return { ok: false, reason: 'not revealed yet' };
   const live = fieldCells(state, node.fieldId).some((n) => n.remaining > 0);
   if (!live) return { ok: false, reason: 'field exhausted' };
+  // FIELD-LOCKED trucks take no field orders (owner 2026-11-11: outpost harvesters stay on their fields)
+  const LOCKED = 'outpost harvesters stay on their own fields';
   let u = null;
   if (cmd.harvesterId != null) {
     u = fleet.find((h) => h.id === cmd.harvesterId) || null;
     if (!u) return { ok: false, reason: 'that harvester is gone' };
+    if (u.fieldLock) return { ok: false, reason: LOCKED };
   } else {
+    const free = fleet.filter((h) => !h.fieldLock);
+    if (!free.length) return { ok: false, reason: LOCKED };
     const byDist = (a, b) => (Math.hypot(a.pos.x - node.x, a.pos.y - node.y) - Math.hypot(b.pos.x - node.x, b.pos.y - node.y)) || (a.id - b.id);
-    const idle = fleet.filter((h) => !h.fieldId && h.state === 'harvestIdle').sort(byDist);
-    u = idle[0] || fleet.slice().sort(byDist)[0];
+    const idle = free.filter((h) => !h.fieldId && h.state === 'harvestIdle').sort(byDist);
+    u = idle[0] || free.slice().sort(byDist)[0];
   }
   u.fieldId = node.fieldId;
   if (u.state === 'harvestUnload') {
@@ -467,22 +483,23 @@ function stepOneHarvester(state, u, dt) {
     // IDLE AUTO-GATHER (owner 2026-07-16): an idle truck dispatches ITSELF to the closest available
     // resource (any type). Trucks only truly rest when nothing revealed remains; explicit orders
     // still override at any time (cmdHarvest retasks regardless of state).
+    if (held(state, u)) return;                 // parked or the store is full: the truck holds its dock
     const pick = nearestFreeNode(state, u);
     if (pick) { u.fieldId = pick.fieldId; routeTo(state, u, pick); }
-  } else if (u.state === 'harvestParked') {
-    // PARKED (an outpost Resource Bay without power, outpost/liveSim.js): no power, no operation — the truck holds its dock
   } else if (u.state === 'harvestGo') {
     const node = nodes.find((n) => n.id === u.harvestNodeId);
-    if (!node) { routeHome(state, u); return; }
+    if (!node || held(state, u)) { routeHome(state, u); return; }
     if (marchAlong(u, dt)) u.state = 'harvestPull';
   } else if (u.state === 'harvestPull') {
     const node = nodes.find((n) => n.id === u.harvestNodeId);
-    if (!node) { routeHome(state, u); return; }
+    if (!node || u.parked) { routeHome(state, u); return; }   // power cut: haul home what is on board
+    const room = roomLeft(state);
+    if (room <= 1e-9) { routeHome(state, u); return; }        // the store is full: stop pulling
     const rate = node.units / Math.max(1, node.harvestSec);   // units per second at this cell
     // L5 unlock (workbook): PREMIUM FAST-HARVEST — endgame greed enabler
     const lvl = state.harvesterLevel || 1;
     const pullRate = (lvl >= 5 && node.role === 'premium') ? rate * 1.5 : rate;
-    const take = Math.min(pullRate * dt, Math.max(0, node.remaining), u.capacity - u.cargo);
+    const take = Math.min(pullRate * dt, Math.max(0, node.remaining), u.capacity - u.cargo, room);
     if (take > 0) {
       const tk = (state.waveTake ||= { common: 0, uncommon: 0, rare: 0, epic: 0 });   // the wave quotas' count
       tk[tierOfNode(node)] = (tk[tierOfNode(node)] || 0) + take;
@@ -582,6 +599,7 @@ function creditDeposit(state, u) {
     : { [u.cargoColor || 'blue']: { units: u.cargo, value: u.cargoValue, role: u.cargoRole } };   // a truck from an older save
   const colors = Object.keys(mix).sort((a, b) => MIX_ORDER.indexOf(a) - MIX_ORDER.indexOf(b));
   for (const color of colors) creditPart(state, u, color, mix[color]);
+  if (state.harvestRoom != null) state.harvestRoom = Math.max(0, state.harvestRoom - u.cargo);   // the load is in the store
   u.cargo = 0; u.cargoValue = 0; u.cargoRole = null; u.cargoColor = null; u.cargoMix = {};
 }
 
@@ -615,8 +633,8 @@ function creditPart(state, u, color, part) {
 /** Done at the dock: still mid-job? head back out — to the assigned field, or if it was stripped
  *  while hauling, to the nearest field of the SAME resource (owner 2026-07-17); else rest. */
 function leaveDock(state, u) {
-  let next = u.fieldId ? nextFieldTarget(state, u) : null;
-  if (!next && u.fieldId) {
+  let next = u.fieldId && !held(state, u) ? nextFieldTarget(state, u) : null;
+  if (!next && u.fieldId && !held(state, u)) {
     const hop = nextSameResourceField(state, u);
     if (hop) {
       u.fieldId = hop.fieldId; next = hop;

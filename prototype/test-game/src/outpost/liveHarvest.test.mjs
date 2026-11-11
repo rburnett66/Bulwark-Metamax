@@ -4,10 +4,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { map, T0, MIN } from './view/fixtures.mjs';
-import { referenceOutpost, confirmOnline, advance, harvestPlan, surfaceFieldGroups, buildingRect, outsideLive } from './model.js';
-import { OUTPOST, harvestRates } from '../data/outpost.js';
+import { referenceOutpost, confirmOnline, advance, harvestPlan, surfaceFieldGroups, buildingRect, outsideLive, hopperCap, hopperUnits as hopperUnitsOf, harvesterCap } from './model.js';
+import { OUTPOST, harvestRates, harvesterDef } from '../data/outpost.js';
+import { harvesterTile } from './view/hudModel.js';
 import { harvesterStats } from '../sim/harvestStats.js';
-import { toLiveSim, fromLiveSim } from './liveSim.js';
+import { toLiveSim, fromLiveSim, syncHarvestPower } from './liveSim.js';
 import { stepSim, applyCommand, FIXED_DT } from '../sim/core.js';
 import { HARVESTER_UNLOAD_TIME } from '../data/tables.js';
 
@@ -95,7 +96,7 @@ test('no harvesters without a finished Resource Bay; an unpowered bay parks them
   const o = withBay();
   delete o.pads.p1;                                       // no Power Station
   const { state, link } = toLiveSim(o, { map, now: T0, gold: 0 });
-  assert.ok(state.harvesterIds.every((id) => state.units.get(id).state === 'harvestParked'));
+  assert.ok(state.harvesterIds.every((id) => state.units.get(id).parked === true));
   run(state, 60);
   const back = fromLiveSim(state, link, T0 + MIN).outpost;
   assert.equal(hopper(back, 'common') + hopper(back, 'uncommon'), 0);
@@ -103,24 +104,106 @@ test('no harvesters without a finished Resource Bay; an unpowered bay parks them
 
 // The full-rate phase (a field with stock for whole loads): the closed form's trip is harvesterRate's
 // 2·d·Harvest_Route_Mult / speed + capacity / pull + unload from the bay's centre; the truck drives its real path from
-// its dock. Measured on the Verdance map: common 19.6–20.7 s a load (closed form 21.3 s), uncommon 102.7–106.8 s
-// (closed form 107.7 s). Tolerance: each load's interval within 15 % of the closed-form trip.
-test('full-rate loads: the truck\'s round trip agrees with the closed form\'s trip within 15 %', () => {
+// its dock beside the bay. Measured on the Verdance map (mean of the first whole loads): common 20.20 s a load vs the
+// closed form's 21.29 s (5.1 % faster), uncommon 105.25 s vs 107.68 s (2.3 % faster; its pull time dominates).
+// Owner 2026-11-11: the battle trucks are EXPECTED to run ~5 % faster than the closed form until Harvest_Route_Mult is
+// retuned in the workbook (Outpost_Params, after PR #281): the measured drive matches Harvest_Route_Mult ≈ 1.16 (common
+// 1.14, uncommon 1.17) against today's 1.3 (single loads vary: the nearest cells go first). So the live mean may be up to 10 % faster than the closed form and no slower
+// than it by more than 2 %; each single load stays within 15 %.
+test('full-rate loads: the battle truck runs ~5 % faster than the closed form\'s trip (until the route retune)', () => {
   const o0 = withBay(), m = bigFields(o0), o = withBay(m);
   const plan = harvestPlan(o, m);
   const { state } = toLiveSim(o, { map: m, now: T0, gold: 0 });
-  const deps = run(state, 330);
+  const deps = run(state, 700);
   for (const h of plan) {
-    // the first three loads (a big field still has stock for whole loads then)
-    const mine = deps.filter((d) => d.color === (h.tier === 'common' ? 'blue' : 'yellow')).slice(0, 3);
-    assert.equal(mine.length, 3, `${h.tier}: ${mine.length} loads`);
-    assert.ok(mine.every((d) => d.units === harvestRates().capacity), 'whole loads ' + mine.map((d) => d.units));
+    // the first whole loads (a big field still has stock for them): 10 common, 6 uncommon — the measurement above
+    const n = h.tier === 'common' ? 10 : 6;
+    const mine = deps.filter((d) => d.color === (h.tier === 'common' ? 'blue' : 'yellow')).slice(0, n);
+    assert.equal(mine.length, n, `${h.tier}: ${mine.length} loads`);
+    assert.ok(mine.every((d) => d.units === harvestRates().capacity), 'whole 40-unit loads credit 40: ' + mine.map((d) => d.units));
     const trip = harvestRates().capacity / (h.rate * 1000);
     for (let i = 1; i < mine.length; i++) {
       const gap = mine[i].t - mine[i - 1].t;
       assert.ok(Math.abs(gap - trip) <= 0.15 * trip, `${h.tier} load ${i}: ${gap.toFixed(1)} s vs closed form ${trip.toFixed(1)} s`);
     }
+    const mean = (mine[mine.length - 1].t - mine[0].t) / (mine.length - 1), faster = 1 - mean / trip;
+    assert.ok(faster >= -0.02 && faster <= 0.10, `${h.tier}: live ${mean.toFixed(2)} s vs closed form ${trip.toFixed(2)} s (${(faster * 100).toFixed(1)} % faster)`);
   }
+});
+
+// ── owner answers, 2026-11-11 ──────────────────────────────────────────────────────────────────────────────────
+test('outpost trucks take no field orders; the battle\'s retask still works for unlocked trucks', () => {
+  const o = withBay();
+  const { state } = toLiveSim(o, { map, now: T0, gold: 0 });
+  const other = state.resourceNodes.find((n) => !state.harvesterIds.some((id) => state.units.get(id).fieldId === n.fieldId));
+  const [first] = state.harvesterIds;
+  for (const cmd of [{ type: 'harvest', nodeId: other.id, harvesterId: first }, { type: 'harvest', nodeId: other.id }]) {
+    const res = applyCommand(state, cmd);
+    assert.equal(res.ok, false);
+    assert.match(res.reason, /stay on their own fields/);
+  }
+  assert.equal(state.units.get(first).fieldId, harvestPlan(o, map)[0].fieldId, 'still on its planned field');
+  state.units.get(first).fieldLock = false;                  // a battle truck (no lock) is retasked as before
+  assert.equal(applyCommand(state, { type: 'harvest', nodeId: other.id, harvesterId: first }).ok, true);
+  assert.equal(state.units.get(first).fieldId, other.fieldId);
+});
+
+test('a full hopper stops the harvest during a visit too: nothing overflows, the rest stays in the field', () => {
+  const o = withBay();
+  const cap = hopperCap(o, map);
+  o.hopper = { common: cap - 12 };                         // room for 12 units
+  const plan = harvestPlan(o, map);
+  const { state, link } = toLiveSim(o, { map, now: T0, gold: 0 });
+  run(state, 10 * 60);
+  const back = fromLiveSim(state, link, T0 + 10 * MIN).outpost;
+  const total = hopper(back, 'common') + hopper(back, 'uncommon');
+  assert.ok(total <= cap + 1e-9, `hopper ${total} within its ${cap}`);
+  assert.ok(total >= cap - 1, `filled up to the cap (${total} of ${cap})`);
+  const left = plan.reduce((a, h) => a + stockOf(back, map, h.fieldId), 0);
+  const before = plan.reduce((a, h) => a + stockOf(o, map, h.fieldId), 0);
+  assert.ok(left >= before - 12 - 1e-9, `the fields keep what did not fit (${left} of ${before})`);
+  assert.ok(state.harvesterIds.every((id) => state.units.get(id).state === 'harvestIdle'), 'the trucks hold their docks');
+  // and a full hopper at arrival: the trucks never leave
+  o.hopper = { common: cap };
+  const full = toLiveSim(o, { map, now: T0, gold: 0 });
+  run(full.state, 60);
+  assert.equal(hopperUnitsOf(fromLiveSim(full.state, full.link, T0 + MIN).outpost), cap);
+});
+
+test('power changes during a visit start and park the trucks (syncHarvestPower reads the live state)', () => {
+  const o = withBay();
+  const { state, link } = toLiveSim(o, { map, now: T0, gold: 0 });
+  const trucks = () => state.harvesterIds.map((id) => state.units.get(id));
+  assert.equal(syncHarvestPower(state, link), true);
+  run(state, 2);
+  assert.ok(trucks().every((u) => !u.parked && u.state === 'harvestGo'), 'powered: out they go');
+  // the Power Station is lost (sold, destroyed): the bay goes dark and the trucks come home and hold
+  const station = [...state.structures.values()].find((s) => s.structId === 'OUT-power');
+  state.structures.delete(station.id);
+  assert.equal(syncHarvestPower(state, link), false);
+  run(state, 60);
+  assert.ok(trucks().every((u) => u.parked && u.state === 'harvestIdle'), 'parked at the dock: ' + trucks().map((u) => u.state));
+  const at = hopperUnitsOf(fromLiveSim(state, link, T0 + MIN).outpost);
+  run(state, 60);
+  assert.equal(hopperUnitsOf(fromLiveSim(state, link, T0 + 2 * MIN).outpost), at, 'no power, no operation');
+  // power back: they start again
+  state.structures.set(station.id, station);
+  assert.equal(syncHarvestPower(state, link), true);
+  run(state, 2);
+  assert.ok(trucks().some((u) => u.state === 'harvestGo' || u.state === 'harvestPull'), 'running again');
+});
+
+test('the battle rail\'s HARVESTER tile on an outpost: the outpost price and refusals', () => {
+  const cost = harvesterDef().cost;
+  const noBay = withBay(map, 0);
+  delete noBay.pads.b1;
+  assert.deepEqual(harvesterTile(noBay, {}, 1e6), { cost: `${cost}g`, poor: true, title: 'Harvester: build the Resource Bay first' });
+  const ok = harvesterTile(withBay(map, 0), {}, 1e6);
+  assert.deepEqual(ok, { cost: `${cost}g`, poor: false, title: `Harvester for the Resource Bay (${cost}g)` });
+  assert.equal(harvesterTile(withBay(map, 0), {}, cost - 1).poor, true, 'short of gold');
+  const full = harvesterTile(withBay(map, harvesterCap(withBay(map, 0))), {}, 1e6);
+  assert.equal(full.cost, 'MAX');
+  assert.match(full.title, /holds \d+ harvesters/);
 });
 
 // The Verdance map's real fields (one cell each: 25 common, 10 uncommon) with K = 2 harvesters for N minutes. Both sides
