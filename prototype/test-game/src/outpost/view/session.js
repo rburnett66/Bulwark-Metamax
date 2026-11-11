@@ -58,6 +58,18 @@ function bankRaidLoss(s, planet, report) {
 }
 
 /**
+ * The raids' kill gold into the player's gold (owner 2026-11-11: "Players collect gold on outpost kills just like
+ * battle"): each raid entry's bounty (raid.js, the battle's grantKillIncome per kill) through goldAdd, the field every
+ * outpost earning uses. Called once per advance that fought the raids, so each raid pays exactly once. → gold banked
+ */
+function bankRaidBounty(s, report) {
+  let n = 0;
+  for (const raid of (report && report.raids) || []) if (raid.bounty > 0) n += raid.bounty;
+  if (n > 0) goldAdd(s, n);
+  return n;
+}
+
+/**
  * createSession({ store, planet, map, catalog, raidHook? }) → the view's session.
  * catalog: the mission catalog (content/missions/missions.json); null skips settling (the missions can't load).
  * raidHook: overrides raidHookFor (tests, the review page's stand-in).
@@ -110,6 +122,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
     const r = advance(o, now, ctxFor(s, now));
     s.outposts[planet] = r.outpost;
     bankRaidLoss(s, planet, r.report);
+    bankRaidBounty(s, r.report);
     return r.report;
   }
 
@@ -170,7 +183,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
       if (!o) return { outpost: null, report: null, saved: false };
       const r = advance(o, now, ctxFor(s, now));
       if (r.report.raids.length || r.report.built.length) {
-        const sv = store.update((x) => { x.outposts[planet] = r.outpost; bankRaidLoss(x, planet, r.report); settle(x, now); });
+        const sv = store.update((x) => { x.outposts[planet] = r.outpost; bankRaidLoss(x, planet, r.report); bankRaidBounty(x, r.report); settle(x, now); });
         last = sv.outposts[planet];
         return { outpost: last, report: r.report, saved: true };
       }

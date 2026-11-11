@@ -47,12 +47,12 @@ export function harvestRows(report, planet, catalog) {
 }
 
 /**
- * report → { show, away, rows: { extracted: [{ name, colour, units }], raids: [{ result, label, when, lost }],
- * wear, built: [label], full } }. show is false when nothing worth telling happened (a whole unit or more mined,
+ * report → { show, away, rows: { extracted: [{ name, colour, units }], raids: [{ result, label, when, lost, bounty }],
+ * wear, bounty (the raids' kill gold, banked into the player's gold), built: [label], full } }. show is false when nothing worth telling happened (a whole unit or more mined,
  * a raid, a build, a bay filling).
  */
 export function awayReportModel(report, planet, map, catalog = null) {   // eslint-disable-line no-unused-vars
-  const empty = { show: false, away: '', extracted: [], harvested: [], raids: [], wear: 0, built: [], full: 0, held: 0, breached: 0 };
+  const empty = { show: false, away: '', extracted: [], harvested: [], raids: [], wear: 0, bounty: 0, built: [], full: 0, held: 0, breached: 0 };
   if (!report || !(report.to > report.from)) return empty;
   const extracted = Object.entries(report.extracted || {})
     .map(([item, units]) => ({ ...oreLabel(item), units: Math.floor(units + 1e-9) }))
@@ -65,15 +65,17 @@ export function awayReportModel(report, planet, map, catalog = null) {   // esli
       label: r.result === 'breach' ? 'Raid broke through' : 'Raid repelled',
       lost, lostText: lost.length ? 'lost ' + lost.map((l) => `${l.units} ${l.name}`).join(', ') : '',
       damage: Math.round(r.damage || 0),
+      bounty: Math.floor((r.bounty || 0) + 1e-9),   // the kills' gold, banked by the catch-up (session.js bankRaidBounty)
     };
   });
   const wear = raids.reduce((a, r) => a + r.damage, 0);
+  const bounty = Math.floor((report.raids || []).reduce((a, r) => a + (r.bounty || 0), 0) + 1e-9);
   const built = (report.built || []).map((b) => `${KIND_NAME[b.kind] || b.kind}${b.tier > 1 ? ' ' + ROMAN[b.tier] : ''} finished`);
   const full = new Set((report.full || []).map((f) => f.pad)).size;
   const harvested = harvestRows(report, planet, catalog);
   const show = extracted.length > 0 || raids.length > 0 || built.length > 0 || full > 0 || harvested.length > 0;
   return {
-    show, away: awayFor(report.to - report.from), extracted, harvested, hopperFull: report.hopperFull != null, raids, wear, built, full,
+    show, away: awayFor(report.to - report.from), extracted, harvested, hopperFull: report.hopperFull != null, raids, wear, bounty, built, full,
     held: raids.filter((r) => r.result === 'held').length, breached: raids.filter((r) => r.result === 'breach').length,
     capped: report.to - report.from >= 72 * HOUR - MIN,
   };
