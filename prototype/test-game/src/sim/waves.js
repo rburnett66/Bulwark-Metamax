@@ -416,10 +416,12 @@ export function stepWaves(state, dt) {
 
     // WAVE BONUSES: roll the 3-of-16 offer from the seeded rng (deterministic → replay-identical).
     // Not on the final wave — that clear is a win, no interlude to choose in.
-    if (w.current < w.total) rollBonusOffer(state);
+    // An ENDLESS schedule (the outpost's visit raids [MM-subtask_mwcij14c_33]: waves are queued one at a time as they
+    // come) has no final wave: no win, and no wave-bonus offer between raids. A battle never sets it.
+    if (w.current < w.total && !w.endless) rollBonusOffer(state);
 
     // Surviving the final wave = win (unless the base already died).
-    if (w.current >= w.total && state.result === null) {
+    if (w.current >= w.total && state.result === null && !w.endless) {
       state.result = 'win';
       emitEvent(state, {
         type: 'win',
