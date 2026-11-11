@@ -1,7 +1,8 @@
 # One Battle UX — Outpost and Farm on the battle's own code
 
 Epic [MM-epic_mwc8zv0b_2c] · tech plan story [MM-story_mwc8zv5u_2d] · status: APPROVED by the owner 2026-11-11 · S1 shipped in PR #267 (v2026.11.11-a)
-Canonical: MetaMax `TECH_PLAN::One-Battle-UX.md`. This repo file is a mirror (as is the local drive copy); when they differ, MetaMax wins.
+Intent: this plan is the project's direction, held in MetaMax (`TECH_PLAN::One-Battle-UX.md`) and mirrored here and on the local drive.
+The repo's code is canon; where the plan and the code disagree, MetaMax raises it and the owner resolves it (HITM).
 
 ## 1. The rule
 
@@ -85,29 +86,24 @@ So pads go, and the two things pads gave us — **walk space** and an **elegant 
 placement system, the battle's `validatePlacement` / `placeStructure` (`sim/structures.js`). Same mechanism in every
 mode; only the per-structure numbers differ.
 
-### 5.1 Build spacing (the apron)
+### 5.1 Build spacing — one cell
 
-Owner 2026-11-11: "spacing needs to be the size of the harvester … .75 per structure so adjacent structures are 1.5
-apart." The harvester (`SYS-Harvester`, `radius: 0.42`) is 0.84 cells wide.
+Owner 2026-11-11: spacing "needs to be the size of the harvester"; then "if it is easier to separate buildings by 1
+cell that is fine. I want the simplest implementation." The harvester (`SYS-Harvester`, `radius: 0.42`) is 0.84 cells
+wide, so a one-cell lane fits it.
 
-- Every structure def gets **`clearance`** (cells, data in the structure table): **0.75** for outpost buildings
+- Each structure def gets **`spacing`** (whole cells, data in the structure table): **1** for outpost buildings
   (hub, power, pylon, rig, storage, bays, habitat, farm buildings), **0** for Wall, MG, Cannon and every battle tower.
-- **Target gap = clearanceA + clearanceB** — two outpost buildings read 1.5 cells apart. A building next to a tower
-  still keeps the 1-cell lane (target 0.75 rounds up), reading 1.25 with the building's inset; two battle towers
-  (0 + 0) may touch, as today.
-- **On the whole-cell grid** (owner chose "inset models"): footprints stay on whole cells, as in battle. The sim keeps
-  a lane of `ceil(clearanceA + clearanceB − 2 × inset)` free cells between footprints (= **1 cell** for two outpost
-  buildings), and each outpost building's model is drawn **inset 0.25 cells** inside its footprint, so 1 lane + 2 ×
-  0.25 inset = the 1.5 visible gap. `inset` is a per-structure data field (0 for battle towers → their look is
-  unchanged). The 0.84 harvester fits the 1.0 lane.
-- New refusal reason **`'spacing'`**, shown on the ghost like `'occupied'`.
-- Lanes are **walkable**: not added to the nav grid's blocked cells, so harvesters, the repair drone, farmhands and
-  raiders path through them. That is the walk space pads used to give. A test pins that a harvester can drive the
-  lane between two outpost buildings.
-- Battle values are 0, so **defense lines still pack tight and the battle plays exactly as tuned** (no balance change;
-  `balanceSim` and replay hashes prove it).
-- Keep the battle's existing seal-off check: a placement that cuts the hub off from any building or a raid lane
-  from the base is refused.
+- Rule in the battle's `validatePlacement`: a new footprint must leave **`max(spacingA, spacingB)` free cells** to every
+  existing footprint (Chebyshev distance, so diagonals count). Two outpost buildings → a 1-cell lane; a building and a
+  tower → 1 cell; two towers → 0, they may touch as today. New refusal reason **`'spacing'`**, shown on the ghost like
+  `'occupied'`.
+- Lanes are ordinary open cells, so harvesters, the repair drone, farmhands and raiders path through them — the walk
+  space pads used to give. A test pins that a harvester drives the lane between two outpost buildings.
+- Models are unchanged (no inset). Battle values are 0, so **the battle plays exactly as tuned** (replay hashes and
+  `balanceSim` unchanged).
+- The battle's existing seal-off check still refuses a placement that cuts the hub off from a building or a raid lane
+  from the base.
 
 ### 5.2 Energy grid by proximity
 
@@ -123,7 +119,7 @@ Pads only fixed the *positions* and the *conduit routes*. The redesign:
   A consumer connects to the nearest node of any grid whose reach covers its footprint centre.
 - **Priority** when short: unchanged (`PRIORITY` table moves to data).
 - **Conduits are derived, never authored**: drawn as the minimum spanning tree of each grid's nodes plus one
-  branch from each consumer to its node, routed along aprons/open cells so they read as tidy runs between
+  branch from each consumer to its node, routed along the open lanes so they read as tidy runs between
   buildings — the elegance pads gave, now from whatever base the player designs. Conduit art and pulse stay
   (`outpost/view/conduits.js` becomes a pure "plan conduits from structures" function).
 - **Reach display = the battle's weapon-radius system** (owner 2026-11-11: "pylon can behave just like the weapon
@@ -162,7 +158,7 @@ Board ids: S1 story_mwc9p7al_2e · S2a story_mwc9p8ee_2f · S2 story_mwc9pkcd_2g
 | S0 | This plan | owner approves; mirrored to MetaMax | 2 |
 | S1 | Extract the battle session | `src/battle/session.js` mounts renderer + camera + input + HUD + fog + loop; `main.js` campaign uses it with **no behaviour change**: replay hashes unchanged, full suite green, owner plays a campaign map on iPhone + desktop | 13 |
 | S2 | Outpost visit is a battle session | the outpost runs on `createBattleSession` with a live SimState; selection, camera, build rail and placement are the battle's; `outpost/view/hud.js`, `buildMenu.js`, `layout.js` and the outpost pointer code are **deleted**; outpost buildings are sim structure defs in data | 13 |
-| S2a | Build spacing in the shared placement | `clearance` (0.75 outpost / 0 battle) and model `inset` (0.25 / 0) in the structure data; 1-cell lane between outpost buildings, 1.5 visible; `validatePlacement` refuses `'spacing'`; aprons stay walkable; battle values 0 → replay hashes + balanceSim unchanged; tests for spacing, walkability and seal-off | 5 |
+| S2a | Build spacing in the shared placement | `spacing` (1 outpost / 0 battle) in the structure data; `validatePlacement` refuses `'spacing'` within `max(a, b)` cells; lanes stay walkable; battle values 0 → replay hashes + balanceSim unchanged; tests for spacing, walkability and seal-off | 3 |
 | S2b | Proximity energy grid | Pylon structure; grid from node links (no pads); consumers join by reach; priority from data; conduits derived (MST + branches); reach shown through the battle coverage map (planCoverage, new `power` class: select one → all nodes' collective reach); ghost cyan/amber/red with preview conduit; tests port `powerGrids` cases to free positions | 8 |
 | S2c | Pad removal + save migration | outpost maps lose `pads`/`conduits` (hub spot + deposits stay); Forge stops authoring pads; saves migrate pad buildings to legal cells deterministically; rig-on-deposit rule | 5 |
 | S3 | Build / upgrade / repair / sell through sim commands | outpost uses `place` / `upgrade` / `repair` / `sell`; the matching `outpost/model.js` functions are deleted; outpost times/costs are rows in the structure data | 8 |
