@@ -54,7 +54,7 @@ import { createRng } from '../sim/rng.js';
 import { ASSUMPTIONS, getStructureDef } from '../data/tables.js';
 import { oresOf, oreById, oreItemId } from '../data/ores.js';
 import { POWER_NODE_KINDS } from '../data/outpostStructures.js';
-import { OUTPOST, structureDef, DEFENSE_KINDS, GUN_KINDS, canonicalKind, harvesterDef, harvesterRate, surfaceStock } from '../data/outpost.js';
+import { OUTPOST, structureDef, DEFENSE_KINDS, GUN_KINDS, canonicalKind, harvesterDef, harvesterRate, surfaceStock, powerPriority } from '../data/outpost.js';
 // the farm is a layer on the outpost (owner rule 7): it grows inside this advance() and its buildings join this power grid
 import { growFarm, farmBuildEvents } from '../farm/grow.js';
 // raids trample the farm (story A11): the raid's raider cells, applied at the raid's moment on this one clock
@@ -214,8 +214,7 @@ export function collectionRates(o, map, params = OUTPOST) {
 }
 
 // ── power (design §4.5) ──────────────────────────────────────────────────────────────────────────────────────────
-// Consumers are served in this order when a grid is short, so the outpost keeps its core running first.
-const PRIORITY = { hub: 0, storage: 1, rig: 2, mg: 3, cannon: 3, resourceBay: 4, upgradeBay: 5, habitat: 6, farmhouse: 7, silo: 7, pump: 8 };
+// Consumers are served in priority order when a grid is short (data/outpost.js POWER_PRIORITY), core first.
 
 /**
  * The power grids, by proximity (One Battle UX S2b, plan §5.2). The NODES are the Power Stations (supply + reach) and
@@ -269,7 +268,7 @@ export function powerGrids(o, map, t = o.t) {
     grids.get(best.root).members.push(c);
   }
   for (const g of grids.values()) {
-    g.members.sort((a, b) => (PRIORITY[a.kind] ?? 9) - (PRIORITY[b.kind] ?? 9) || (a.id < b.id ? -1 : 1));
+    g.members.sort((a, b) => powerPriority(a.kind) - powerPriority(b.kind) || (a.id < b.id ? -1 : 1));
     for (const c of g.members) {
       if (g.draw + c.draw <= g.supply) { g.draw += c.draw; g.powered.push(c.id); powered.add(c.id); } else off[c.id] = 'supply';
     }

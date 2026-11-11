@@ -11,6 +11,7 @@ export function createUiState() {
     buildSelection: null,
     hoverCell: null,
     hoverValid: false,
+    hoverWarn: null,           // valid but warned: the placement's warning text (sim/structures.js placementWarnings) → amber ghost
     selectedStructureId: null,
     selectedUnitId: null,      // s5: a selected unit (enemy/defender) whose attack range is shown
     selectedResourceId: null,  // a clicked resource node: its description card is open [MM-story_mw2xo93o_2]
@@ -106,6 +107,7 @@ function findStructureAtCell(state, cell) {
 
 function refreshHoverValidity(handle) {
   const { ui, getState } = handle;
+  ui.hoverWarn = null;
   if (!ui.buildSelection || !ui.hoverCell) {
     ui.hoverValid = false;
     return;
@@ -118,6 +120,8 @@ function refreshHoverValidity(handle) {
   try {
     const res = validatePlacement(state, ui.buildSelection, ui.hoverCell);
     ui.hoverValid = !!(res && res.ok);
+    // valid but warned (a mode's state.placementWarnings, e.g. the outpost's 'no power in reach'): the ghost goes amber
+    ui.hoverWarn = (res && res.ok && res.warn) || null;
   } catch (err) {
     ui.hoverValid = false;
   }
