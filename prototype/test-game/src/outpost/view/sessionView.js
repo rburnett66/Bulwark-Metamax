@@ -13,8 +13,11 @@
  *   4. draws the outpost's own art on that 3D view: the building models, conduits and deposits (outpostScene.js), fed
  *      from the live state;
  *   5. on leaving, writes the live state back (fromLiveSim) and banks the gold.
- * Still to come on this path: the outpost's own panels (SELL, GO ONLINE, away report, status — S2.4b) and visit raids
- * as waves (S2.4c). The farm joins in S6.
+ *   6. shows the outpost's OWN controls as a battle-HUD panel (session.addPanel, S2.4b [MM-subtask_mwciizyc_32]):
+ *      online status + GO ONLINE, storage and loads + SELL, REPAIR ALL, the away report, LEAVE. Those are outpost
+ *      economy (no battle equivalent), so they run the save session's own rules (session.js act) — the live state is
+ *      written back first and rebuilt after, never a second copy of those rules.
+ * Still to come on this path: visit raids as waves (S2.4c). The farm joins in S6.
  */
 import { createBattleSession } from '../../battle/session.js';
 import { createCatalogue, lockRule } from '../../battle/catalogue.js';
@@ -29,7 +32,9 @@ import { outpostBattleMap, bakedSlugFor } from './outpostBoard.js';
 import { createOutpostScene } from './outpostScene.js';
 import { planBuildings } from './conduits.js';
 import { createOutpostKit, modelSlug } from '../../render3d/outposts/outpostModels.js';
-import { createSession } from './session.js';
+import { createSession, onlineIssues, repairAllCost } from './session.js';
+import { hudModel, sellButton, fmtGold } from './hudModel.js';
+import { awayReportModel } from './awayReport.js';
 import { loadSave, updateSave } from '../../save/save.js';
 import { loadMissionCatalog } from '../../save/missionCatalog.js';
 import { crumb } from '../../diag/errorLog.js';
@@ -76,15 +81,19 @@ export async function openOutpostSessionView(opts = {}) {
   if (!store.load().outposts || !store.load().outposts[planet]) { host.remove(); throw new Error(`no outpost on ${planet}`); }
   const nextFrame = () => new Promise((ok) => win.requestAnimationFrame(() => ok()));
   const opened = await saveSession.openChunked(clockNow(), nextFrame);   // the away catch-up
-  const t0 = clockNow();
-  const live = toLiveSim(opened.outpost, { map, now: t0, gold: saveSession.gold() });
-  const sim = live.state;
-  // the clock the save sees: the arrival time plus the sim's own time (the sim never reads the wall clock)
-  const nowOf = () => t0 + Math.round(sim.time * 1000);
-
   // the OUTPOST catalogue on the battle rail; a lock is refused by the sim too
   const catalogue = createCatalogue(outpostCatalogueIds());
-  sim.placementRules = [...(sim.placementRules || []), lockRule(catalogue)];
+  // the live state, (re)built from the save — on arrival and after an outpost-economy action (actOnSave below)
+  let t0 = 0, live = null, sim = null;
+  function rebuild(outpost, gold) {
+    t0 = clockNow();
+    live = toLiveSim(outpost, { map, now: t0, gold });
+    sim = live.state;
+    sim.placementRules = [...(sim.placementRules || []), lockRule(catalogue)];
+  }
+  rebuild(opened.outpost, saveSession.gold());
+  // the clock the save sees: the arrival time plus the sim's own time (the sim never reads the wall clock)
+  const nowOf = () => t0 + Math.round(sim.time * 1000);
   let ui = createUiState();
   let hud = null;
   const submit = (cmd) => {
@@ -121,12 +130,92 @@ export async function openOutpostSessionView(opts = {}) {
   // the outpost's art follows the live state: re-read the save shape a few times a second (cheap), animate each frame
   let since = 1, view = null, ctx = null, dt = 1 / 60;
   const ctxNow = () => ctx || (ctx = saveSession.ctx(nowOf()));
+
+  // ── the outpost's own controls, in the battle HUD (S2.4b) ──────────────────────────────────────────────────
+  // An outpost-economy action (sell ore, go online, repair all) is the save session's rule: write the live state back,
+  // run it, rebuild the live state from the result. → the session's result ({ ok, error, gold, … }).
+  function actOnSave(action) {
+    const at = nowOf();
+    const back = fromLiveSim(sim, live.link, at);
+    bankVisit(store, planet, back.outpost, back.gold);
+    const res = saveSession.act(action, at);
+    if (!res.ok) {
+      if (hud) flashMessage(hud, String(res.error || 'not now').replace(/^./, (c) => c.toUpperCase()));
+      return res;
+    }
+    const s = store.load();
+    rebuild(s.outposts[planet], saveSession.gold());
+    ui.selectedStructureId = null; ui.buildSelection = null;
+    ctx = null; view = null; since = 1;
+    return res;
+  }
+  const panel = doc.createElement('div');
+  panel.className = 'bw-panel op-session-panel';
+  Object.assign(panel.style, { position: 'absolute', right: '8px', top: '56px', width: '210px', padding: '8px',
+    display: 'flex', flexDirection: 'column', gap: '6px', font: '600 12px/1.3 Rajdhani, system-ui, sans-serif', color: '#cfd6dd', zIndex: '20' });
+  const line = (cls) => { const d = doc.createElement('div'); d.className = cls; panel.appendChild(d); return d; };
+  const title = line('op-s-title');
+  title.style.font = '900 13px/1.2 Orbitron, sans-serif';
+  title.style.letterSpacing = '.14em';
+  const status = line('op-s-status');
+  const storeLine = line('op-s-store');
+  const btn = (label, fn) => {
+    const b = doc.createElement('button');
+    b.className = 'bw-btn';
+    b.textContent = label;
+    b.addEventListener('click', fn);
+    panel.appendChild(b);
+    return b;
+  };
+  const onlineBtn = btn('GO ONLINE', () => {
+    if (actOnSave({ type: 'online' }).ok) flashMessage(hud, 'OUTPOST ONLINE · mining has begun. Raiders will come: hold the first one.');
+  });
+  const sellBtn = btn('SELL', () => {
+    const r = actOnSave({ type: 'sell' });
+    if (r.ok) flashMessage(hud, 'Sold · +' + fmtGold(r.earned != null ? r.earned : 0) + ' gold');
+  });
+  const repairBtn = btn('REPAIR ALL', () => {
+    const r = actOnSave({ type: 'repairAll' });
+    if (r.ok) flashMessage(hud, 'Repair drones launched · −' + fmtGold(r.cost || 0) + ' gold');
+  });
+  btn('LEAVE', () => close());
+  // the away report (what happened while the player was gone), once, on arrival
+  const away = awayReportModel(opened.report, planet, map, catalog);
+  if (away.show) {
+    const rep = line('op-s-away');
+    rep.style.borderTop = '1px solid #2b3540';
+    rep.style.paddingTop = '6px';
+    const rows = ['While you were away (' + away.away + ')', ...away.built,
+      ...away.raids.map((x) => x.label + ' · ' + x.when + (x.lostText ? ' · ' + x.lostText : '')),
+      ...away.extracted.slice(0, 4).map((x) => '+' + x.units + ' ' + x.name)];
+    rows.forEach((t, i) => { const d = doc.createElement(i ? 'div' : 'b'); d.textContent = t; rep.appendChild(d); });
+  }
+  session.addPanel(panel);
+  let panelSince = 1;
+  function refreshPanel() {
+    const v = view || fromLiveSim(sim, live.link, nowOf()).outpost;
+    const h = hudModel(v, map, { gold: sim.economy.money, now: nowOf() });
+    const issues = onlineIssues(v, map);
+    title.textContent = 'OUTPOST';
+    status.textContent = h.online ? (h.raidInbound ? 'Online · raid inbound' : 'Online') : ('Offline — ' + (issues.join('; ') || 'ready to go online'));
+    storeLine.textContent = 'Storage ' + Math.floor(h.storage.units) + ' / ' + Math.floor(h.storage.cap) + ' · ' + (h.loads || 0) + (h.loads === 1 ? ' load' : ' loads') + ' ready';
+    onlineBtn.style.display = h.online ? 'none' : '';
+    onlineBtn.disabled = issues.length > 0;
+    const sb = sellButton(h);
+    sellBtn.textContent = sb.enabled ? ('SELL · ' + sb.sub) : ('SELL (' + sb.sub + ')');
+    sellBtn.disabled = !sb.enabled;
+    const rc = repairAllCost(v);
+    repairBtn.style.display = rc > 0 ? '' : 'none';
+    repairBtn.textContent = 'REPAIR ALL · ' + fmtGold(rc);
+  }
   session.bindInput();
   session.start({
     paused: () => false,
     stopped: () => false,
     beforeFrame: (dtMs) => { dt = Math.min(dtMs / 1000, 0.25); },
     beforeHud: () => {
+      panelSince += dt;
+      if (panelSince >= 0.5) { panelSince = 0; try { refreshPanel(); } catch (e) { console.warn('[outpost] panel', e); } }
       if (!scene) return;
       since += dt;
       if (since >= 0.25 || !view) {
@@ -152,5 +241,6 @@ export async function openOutpostSessionView(opts = {}) {
     host.remove();
     resolveClosed();
   }
-  return { closed: closedP, close, handle: { session, sim, live, get ui() { return ui; } } };
+  refreshPanel();
+  return { closed: closedP, close, handle: { session, get sim() { return sim; }, get live() { return live; }, get ui() { return ui; }, panel, actOnSave } };
 }
