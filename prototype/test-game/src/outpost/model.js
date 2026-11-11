@@ -66,6 +66,17 @@ const P = (ctx) => (ctx && ctx.params) || OUTPOST;
 
 // ── the map ──────────────────────────────────────────────────────────────────────────────────────────────────────
 const padOf = (map, id) => map.pads.find((p) => p.id === id) || null;
+/**
+ * Where a building stands, as a rectangle { id, x, y, w, h } [MM-story_mwc9pmbn_2i]. A building placed freely on the
+ * shared battle placement (One Battle UX S2c) carries its own `at` rectangle; one on a map pad is that pad. Every
+ * "where is this building" question goes through here, so free and pad buildings answer alike. id: its key in o.pads
+ * (or a construction job's `pad`).
+ */
+export function buildingRect(o, map, id) {
+  const b = (o.pads && o.pads[id]) || ((o.building || []).find((j) => j.pad === id)) || null;
+  if (b && b.at) return { id, x: b.at.x, y: b.at.y, w: b.at.w, h: b.at.h };
+  return padOf(map, id);
+}
 const centre = (p) => [p.x + p.w / 2, p.y + p.h / 2];
 const cellCentre = (c) => [c[0] + 0.5, c[1] + 0.5];
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -214,7 +225,7 @@ const PRIORITY = { hub: 0, storage: 1, rig: 2, mg: 3, cannon: 3, resourceBay: 4,
  */
 export function powerGrids(o, map, t = o.t) {
   const stations = Object.entries(o.pads).filter(([, b]) => b.kind === 'power')
-    .map(([id, b]) => ({ id, at: centre(padOf(map, id)), def: structureDef('power', b.tier) }));
+    .map(([id, b]) => ({ id, at: centre(buildingRect(o, map, id)), def: structureDef('power', b.tier) }));
   // union stations within reach of each other
   const parent = stations.map((_, i) => i);
   const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
@@ -232,7 +243,7 @@ export function powerGrids(o, map, t = o.t) {
   });
   const consumers = [
     ...Object.entries(o.pads).filter(([, b]) => b.kind !== 'power')
-      .map(([id, b]) => ({ id, kind: b.kind, at: centre(padOf(map, id)), draw: structureDef(b.kind, b.tier).draw })),
+      .map(([id, b]) => ({ id, kind: b.kind, at: centre(buildingRect(o, map, id)), draw: structureDef(b.kind, b.tier).draw })),
     ...o.defenses.map((d) => ({ id: d.id, kind: d.kind, at: cellCentre(d.cell), draw: structureDef(d.kind, d.tier).draw })),
     ...Object.entries((o.farm && o.farm.buildings) || {}).filter(([, b]) => b.done <= t)
       .map(([id, b]) => ({ id, kind: b.kind, at: [b.x + b.w / 2, b.y + b.h / 2], draw: farmBuildingOf(b.kind).draw })),
@@ -377,7 +388,7 @@ export const resourceBayPad = (o) => Object.keys(o.pads).sort().find((id) => o.p
 export function harvestPlan(o, map, params = OUTPOST) {
   const bay = resourceBayPad(o), n = Math.min(o.harvesters || 0, params.Harvester_Max ?? 4);
   if (!bay || !n) return [];
-  const pad = padOf(map, bay);
+  const pad = buildingRect(o, map, bay);
   if (!pad) return [];
   const at = centre(pad), groups = surfaceFieldGroups(map, params);
   const byTier = {};
@@ -558,7 +569,8 @@ export function advance(outpost, toMs, ctx) {
       const b = ev.build;
       o.building = o.building.filter((x) => x !== b && !(x.pad === b.pad && x.done === b.done));
       const prev = o.pads[b.pad] || {};
-      o.pads[b.pad] = { ...prev, kind: b.kind, tier: b.tier, ...(b.kind === 'rig' ? { deposit: b.deposit ?? prev.deposit, deep: !!prev.deep } : {}) };
+      o.pads[b.pad] = { ...prev, kind: b.kind, tier: b.tier, ...(b.at && !prev.at ? { at: b.at } : {}),   // a free building keeps its spot
+        ...(b.kind === 'rig' ? { deposit: b.deposit ?? prev.deposit, deep: !!prev.deep } : {}) };
       if (b.kind === 'rig') o.storage[b.pad] ||= {};
       report.built.push({ pad: b.pad, kind: b.kind, tier: b.tier, at: b.done });
     } else if (ev.farmBuilt) {
