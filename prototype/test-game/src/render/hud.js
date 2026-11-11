@@ -1049,7 +1049,7 @@ export function updateHud(hud, state, ui) {
       rows = [
         ['Target', target, 'wide'],
         ['HP', Math.max(0, Math.ceil(u.hp)) + ' / ' + Math.ceil(u.maxHp)],
-        ['Cargo', Math.floor(u.cargo || 0) + ' / ' + (u.capacity || 0)],
+        ['Cargo', cargoText(u)],
         ['Speed', fmt(u.speed)],
         ['Yield', 'x' + fmt(u.yieldMult || 1)],
         ['Status', HARVEST_STATE[u.state] || u.state || '—'],
@@ -1174,6 +1174,12 @@ export function showWaveReport(hud, model) {
     hud.resultEl.style.display = 'flex';
     hud.resultEl.classList.add('bw-show');
   });
+}
+
+/** A harvester's load as whole units, "held / capacity" (owner 2026-11-10: the capacity, scaled by upgrades and
+ *  bonuses, printed with a long tail of decimals — round to integer) [MM-story_mwbdaa9o_29]. */
+export function cargoText(u) {
+  return Math.floor((u && u.cargo) || 0) + ' / ' + Math.round((u && u.capacity) || 0);
 }
 
 export function flashMessage(hud, text) {
