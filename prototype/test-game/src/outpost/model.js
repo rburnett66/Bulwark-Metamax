@@ -745,11 +745,22 @@ export const gunCount = (o) => o.defenses.filter((d) => GUN_KINDS.includes(d.kin
 export const habitatTier = (o) => Math.max(0, ...Object.values(o.pads).filter((b) => b.kind === 'habitat').map((b) => b.tier));
 /** How many guns the outpost crews: Gun_Cap from the hub, + Habitat_Guns_Per_Tier for each Habitat tier. */
 export function gunCap(o, params = OUTPOST) {
-  return (params.Gun_Cap ?? 4) + (params.Habitat_Guns_Per_Tier ?? 4) * habitatTier(o);
+  return gunCapFor(habitatTier(o), params);
+}
+/** The gun cap for a finished Habitat of tier h (0 = none) — the one formula the save and the live sim both use. */
+export function gunCapFor(h, params = OUTPOST) {
+  return (params.Gun_Cap ?? 4) + (params.Habitat_Guns_Per_Tier ?? 4) * h;
 }
 /** Why one more gun cannot be placed now, or null. */
 export function gunRefusal(o, params = OUTPOST) {
-  const n = gunCount(o), cap = gunCap(o, params), h = habitatTier(o);
+  return gunRefusalFor(gunCount(o), habitatTier(o), params);
+}
+/**
+ * Why one more gun cannot be placed with n guns standing and a finished Habitat of tier h, or null — shared by the
+ * save's rules above and the live sim's placement rule (outpost/placementRules.js) [MM-task_mwcdvixz_2r].
+ */
+export function gunRefusalFor(n, h, params = OUTPOST) {
+  const cap = gunCapFor(h, params);
   if (n < cap) return null;
   if (!h) return `the hub crews ${cap} guns: build a Habitat for more`;
   if (structureDef('habitat', h + 1)) return `the Habitat crews ${cap} guns: upgrade it to Habitat ${'I'.repeat(h + 1)} for more`;

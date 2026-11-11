@@ -5,6 +5,8 @@
 // No balance numbers exist anywhere else in the codebase.
 // -----------------------------------------------------------------------------
 import { validateRenderTiers } from './renderTiers.js';
+import { MAPDATA } from '../../content/maps/mapdata.js';
+import { buildOutpostStructures } from './outpostStructures.js';
 
 // ---------------------------------------------------------------------------
 // Assumptions sheet + slice economy constants
@@ -1510,8 +1512,14 @@ export function getUnitDef(unitId) {
   return def;
 }
 
+// The outpost's buildings and defenses as sim structure defs ('OUT-<kind>'), derived from the workbook's Outpost_Structures
+// rows and the battle towers they name (data/outpostStructures.js) [MM-task_mwcdvixz_2r]. Kept OUT of STRUCTURES so the
+// battle's build rail never lists them; getStructureDef resolves both, so the one placement / build / upgrade / sell path
+// (sim/structures.js) serves the battle and the outpost alike.
+export const OUTPOST_STRUCTURES = buildOutpostStructures(MAPDATA.outpostStructures, STRUCTURES);
+
 export function getStructureDef(structId) {
-  const def = STRUCTURES[structId];
+  const def = STRUCTURES[structId] || OUTPOST_STRUCTURES[structId];
   if (!def) throw new Error('tables.getStructureDef: unknown structId "' + structId + '"');
   return def;
 }
