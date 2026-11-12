@@ -81,13 +81,16 @@ from patch_power_priority import PRIORITY as POWER_PRIORITY  # noqa: E402
 # Defense prices are the battle price × 4 (design §5.2), the battle tier stats come from Battle_Struct; the
 # harvester is the battle harvester's 500 × 4 (the same ×4 as the defenses).
 STRUCTS = [
+    # Power_Draw rises with tier (owner 2026-11-11: "upgraded buildings can use more power requiring upgraded power
+    # stations"; tiers do not count toward raid size): tier N draws N x the tier-I draw for rig, storage, mg and cannon
+    # (starting numbers, owner tunes) [MM-story_mwcp7u7b_3a]. Without LibreOffice: tools/economy/patch_tier_power_draw.py.
     ["hub", 1, 0, 0, 0, 2, 0, 0, "", "", "", "", "hub", "granted"],
     ["power", 1, 600, 600, 120, 0, 10, 10, "", "", "", "", "power", "contract:1"],
     ["power", 2, 6000, 6000, 900, 0, 20, 14, "", "", "", "", "power_ii", "tech:power_grid_2"],
     ["rig", 1, 600, 600, 120, 4, 0, 0, "", 1, 1, "", "rig", "contract:1"],
-    ["rig", 2, 8000, 8000, 1200, 4, 0, 0, "", 2, 2, "", "rig", "tech:rig_mk2"],
+    ["rig", 2, 8000, 8000, 1200, 8, 0, 0, "", 2, 2, "", "rig", "tech:rig_mk2"],
     ["storage", 1, 300, 300, 60, 1, 0, 0, 4, "", "", "", "storage", "contract:1"],
-    ["storage", 2, 5000, 5000, 900, 1, 0, 0, 8, "", "", "", "storage", "tech:supply_depot"],
+    ["storage", 2, 5000, 5000, 900, 2, 0, 0, 8, "", "", "", "storage", "tech:supply_depot"],
     ["resourceBay", 1, 2500, 2500, 300, 2, 0, 0, "", "", "", "", "resource_bay", "contract:1"],
     ["harvester", 1, 2000, 2000, 0, 0, 0, 0, "", "", "", "", "harvester", "contract:1"],
     ["upgradeBay", 1, 4000, 4000, 600, 1, 0, 0, "", "", "", "", "upgrade_bay", "contract:1"],
@@ -96,11 +99,11 @@ STRUCTS = [
     ["habitat", 1, 3000, 3000, 600, 0, 0, 0, "", "", "", "", "habitat", "contract:1"],
     ["habitat", 2, 5000, 5000, 900, 0, 0, 0, "", "", "", "", "habitat", "contract:1"],
     ["mg", 1, 600, 600, 120, 1, 0, 0, "", "", "", "STR-MG", "", "contract:1"],
-    ["mg", 2, 1500, 1500, 120, 1, 0, 0, "", "", "", "STR-MG", "", "techtree+upgradeBay"],
-    ["mg", 3, 3000, 3000, 120, 1, 0, 0, "", "", "", "STR-MG", "", "techtree+upgradeBay"],
+    ["mg", 2, 1500, 1500, 120, 2, 0, 0, "", "", "", "STR-MG", "", "techtree+upgradeBay"],
+    ["mg", 3, 3000, 3000, 120, 3, 0, 0, "", "", "", "STR-MG", "", "techtree+upgradeBay"],
     ["cannon", 1, 1200, 1200, 120, 1, 0, 0, "", "", "", "STR-Cannon", "", "contract:1"],
-    ["cannon", 2, 3000, 3000, 120, 1, 0, 0, "", "", "", "STR-Cannon", "", "techtree+upgradeBay"],
-    ["cannon", 3, 6000, 6000, 120, 1, 0, 0, "", "", "", "STR-Cannon", "", "techtree+upgradeBay"],
+    ["cannon", 2, 3000, 3000, 120, 2, 0, 0, "", "", "", "STR-Cannon", "", "techtree+upgradeBay"],
+    ["cannon", 3, 6000, 6000, 120, 3, 0, 0, "", "", "", "STR-Cannon", "", "techtree+upgradeBay"],
     ["wall", 1, 400, 400, 120, 0, 0, 0, "", "", "", "STR-Wall", "", "contract:1"],
     ["wall", 2, 1000, 1000, 120, 0, 0, 0, "", "", "", "STR-Wall", "", "tech:reinforced_walls"],
     # Pylon (One Battle UX S2b, owner 2026-11-11 "keep it very simple"): a 1x1 grid node with reach only — one tier,

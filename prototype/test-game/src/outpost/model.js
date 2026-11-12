@@ -963,7 +963,10 @@ export function place(outpost, what, ctx) {
   return { outpost: o, cost: def.cost, id };
 }
 
-/** Upgrade the building on a pad to its next tier (Power Station II, Rig Mk II, Storage Tower II). */
+/**
+ * Upgrade the building on a pad to its next tier (Power Station II, Rig Mk II, Storage Tower II).
+ * -> { outpost, cost, warning? } or { error } (warning: upgradeGridShort, when ctx.map is given)
+ */
 export function upgrade(outpost, padId, ctx) {
   const b = outpost.pads[padId];
   if (!b) return { error: `nothing on ${padId}` };
@@ -974,7 +977,36 @@ export function upgrade(outpost, padId, ctx) {
   if (!unlocked(def, ctx, outpost)) return { error: `${b.kind} tier ${b.tier + 1} is not unlocked (${def.unlock})` };
   const o = clone(outpost);
   o.building.push({ pad: padId, kind: b.kind, tier: b.tier + 1, done: ctx.now + def.buildSec * 1000 });
-  return { outpost: o, cost: def.cost };
+  return withGridWarning({ outpost: o, cost: def.cost }, ctx.map);
+}
+
+// ── upgrades and the grid (owner 2026-11-11: "upgraded buildings can use more power requiring upgraded power
+// stations") [MM-story_mwcp7u7b_3a] ──────────────────────────────────────────────────────────────────────────────
+/**
+ * Would the outpost's upgrades in progress short its grid once they land? powerGrids on the outpost with every pending
+ * upgrade finished (a pad job on a standing building, the defense on the Upgrade Bay) against the outpost as it is: a
+ * consumer the finished grid cuts for supply that it does not cut now means the upgrade outgrows its station(s).
+ * An upgrade is never refused for this (the player may be about to add power); it is flagged.
+ * → null, or 'grid short — upgrade a Power Station' (or '… build another Power Station' when every station on the
+ * outpost is at its top tier).
+ */
+export function upgradeGridShort(o, map) {
+  if (!o || !map) return null;
+  const done = clone(o);
+  for (const j of o.building || []) {
+    const b = done.pads[j.pad];
+    if (b && b.kind === j.kind && j.tier > b.tier) b.tier = j.tier;
+  }
+  if (o.upgrading) { const d = done.defenses.find((x) => x.id === o.upgrading.id); if (d) d.tier = o.upgrading.tier; }
+  const before = powerGrids(o, map).off, after = powerGrids(done, map).off;
+  if (!Object.keys(after).some((id) => after[id] === 'supply' && before[id] !== 'supply')) return null;
+  const canUpgrade = Object.values(done.pads).some((b) => b.kind === 'power' && structureDef('power', b.tier + 1));
+  return canUpgrade ? 'grid short — upgrade a Power Station' : 'grid short — build another Power Station';
+}
+/** An upgrade's result with its grid warning, when it has one: { …r, warning }. */
+function withGridWarning(r, map) {
+  const warning = upgradeGridShort(r.outpost, map);
+  return warning ? { ...r, warning } : r;
 }
 
 const inSet = (set, id) => (set instanceof Set ? set.has(id) : (set || []).includes(id));
@@ -1026,7 +1058,7 @@ export function defenseUpgradeRefusal(o, id, ctx = {}) {
  * show the unit being upgraded"; upgrades are timed, as buildings are). Gold is paid now; the defense leaves its cell
  * for the bay's pad for the next tier's build time (it does not fight a raid meanwhile), then returns at the new tier.
  * Its HP rises by the tier's extra HP; wear it already had stays. One defense on the bay at a time.
- * -> { outpost, cost, done } or { error }
+ * -> { outpost, cost, done, warning? } or { error } (warning: upgradeGridShort, when ctx.map is given)
  */
 export function upgradeDefense(outpost, id, ctx = {}) {
   const why = defenseUpgradeRefusal(outpost, id, ctx);
@@ -1035,7 +1067,7 @@ export function upgradeDefense(outpost, id, ctx = {}) {
   const next = structureDef(d.kind, d.tier + 1);
   const now = ctx.now ?? o.t;
   o.upgrading = { id, kind: d.kind, tier: d.tier + 1, done: now + next.buildSec * 1000, since: now };
-  return { outpost: o, cost: next.cost, done: o.upgrading.done };
+  return withGridWarning({ outpost: o, cost: next.cost, done: o.upgrading.done }, ctx.map);
 }
 /** Finish the defense on the Upgrade Bay (advance calls it at its time): the new tier, back on its cell. Mutates o. */
 function finishDefenseUpgrade(o) {

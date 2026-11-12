@@ -337,7 +337,9 @@ async function openOutpostViewInner(opts, stage) {
     scene.sync(o, clockNow(), ctxNow());
     farm.sync(o, clockNow());
     crew.sync(o);
-    if (okText) hud.toast(typeof okText === 'function' ? okText(res) : okText);
+    // an upgrade that outgrows the grid still goes ahead, flagged (model.upgradeGridShort) [MM-story_mwcp7u7b_3a]
+    const text = okText ? (typeof okText === 'function' ? okText(res) : okText) : null;
+    if (text || res.warning) hud.toast([text, res.warning && res.warning.replace(/^./, (c) => c.toUpperCase())].filter(Boolean).join(' · '));
     if (after) after(res);
     else if (sel) select(sel);
     refreshHud(true);

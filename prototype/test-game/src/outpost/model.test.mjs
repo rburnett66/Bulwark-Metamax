@@ -322,6 +322,7 @@ test('owner 2026-11-07: no electricity, no operation; stored ore is kept; an unp
 
 test('Rig Mk II doubles extraction and its bay; one full bay stops only its own rig (design §4.2)', () => {
   let o = online();
+  o.pads.p1.tier = 2;                    // a Rig II draws 8 (13 of Power Station I's 10): it runs on Power Station II [MM-story_mwcp7u7b_3a]
   o = upgrade(o, 'r1', { now: T0, unlocks: ['rig_mk2'] }).outpost;
   o = quiet(o, T0 + 20 * MIN).outpost;   // the upgrade finishes at 20 minutes
   assert.equal(o.pads.r1.tier, 2);
