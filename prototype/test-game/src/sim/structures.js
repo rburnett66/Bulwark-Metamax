@@ -185,6 +185,9 @@ export function validatePlacement(state, structId, slotOrCell) {
     return placementOk(state, def, cell, structId);
   }
 
+  // A NON-BLOCKING def (the farm's rail items, data/farmStructures.js: plots never block paths) cannot seal a lane.
+  if (def.nonBlocking) return placementOk(state, def, cell, structId);
+
   // Every structure (towers included, now that they block) must leave the ground lane OPEN — reject any
   // placement that would seal the base off so units can no longer path to it.
   // Hypothetical nav grid with the new piece: the ground lane must stay open.
