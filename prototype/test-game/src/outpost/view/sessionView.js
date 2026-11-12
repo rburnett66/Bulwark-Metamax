@@ -119,7 +119,9 @@ async function openSession(opts, opening) {
     // visit raids (S2.4c): the probe count and the countdown carry over a mid-visit rebuild (a sale, going online)
     const carry = raids ? { probes: raids.probes, nextIn: Math.max(0, raids.nextAt - sim.time) } : {};
     t0 = clockNow();
-    live = toLiveSim(outpost, { map, now: t0, gold });
+    // the save's owned tech rides along: the live upgrade command asks the outpost's own rule (model.upgradeRefusal)
+    const { unlocks, techOwned } = saveSession.ctx(t0);
+    live = toLiveSim(outpost, { map, now: t0, gold, unlocks, techOwned });
     sim = live.state;
     sim.placementRules = [...(sim.placementRules || []), lockRule(catalogue)];
     // legal but unpowered → the shared ghost's amber (sim/structures.js placementWarnings → ui.hoverWarn)
