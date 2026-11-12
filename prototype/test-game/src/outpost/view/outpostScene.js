@@ -25,6 +25,9 @@ import { padModelScale } from '../../terrain/outpostPads.js';
 const PAD_Y = 0.05;
 const C = { plate: 0x3b4047, plateTop: 0x4a5058, edge: 0x24282d, trim: 0xeb5c0d, cyan: 0x3fd0ff, rock: 0x8a8076, rockDark: 0x6a625b };
 
+/** The locked-deposit padlock's brass. */
+export const DEPOSIT_LOCK_BRASS = 0xc9a14a;
+
 export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced = false }) {
   const scene = r.scene, root = new THREE.Group();
   root.name = 'outpost';
@@ -190,7 +193,8 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     }
     if (rocks.length) { const m = new THREE.Mesh(mergeGeos(THREE, rocks, [], true), rockMat); m.castShadow = true; m.receiveShadow = true; g.add(m); }
     if (crystals.length) { const m = new THREE.Mesh(mergeGeos(THREE, crystals, [], true), crystalMat); m.castShadow = true; g.add(m); }
-    if (locks.length) g.add(new THREE.Mesh(mergeGeos(THREE, locks), new THREE.MeshStandardMaterial({ color: 0xd8dde3, roughness: 0.4, metalness: 0.6, emissive: 0x30363d })));
+    // the padlock is BRASS (owner 2026-11-11: "I see a lock on resources I can't build on so make the lock brass colored")
+    if (locks.length) g.add(new THREE.Mesh(mergeGeos(THREE, locks), new THREE.MeshStandardMaterial({ color: DEPOSIT_LOCK_BRASS, roughness: 0.35, metalness: 0.85, emissive: 0x3a2a0c })));
     root.add(g);
     deposits = { group: g, sig };
     r.lights.invalidateShadows();
