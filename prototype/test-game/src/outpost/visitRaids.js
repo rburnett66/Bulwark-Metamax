@@ -9,9 +9,9 @@
  * defenses fight it with the battle's combat, and every kill pays the battle bounty into the live economy
  * (combat.grantKillIncome) — no combat or reward code of the outpost's own.
  *
- * The timing and the raiders (probeDelay: the first at 45–75 s, then 100–180 s after the last one clears; probeUnits:
- * the planet's light tank and a trooper, a second tank every other probe) are the old view's probes' (visitProbe.js,
- * moved here in S6 when that view was deleted [MM-story_mwc9q1y6_2n]).
+ * The timing (probeDelay: the first at 45–75 s, then 100–180 s after the last one clears) is the old view's probes'
+ * (visitProbe.js, moved here in S6 when that view was deleted [MM-story_mwc9q1y6_2n]); the raiders (probeUnits: two,
+ * three every other probe) are cycled from the planet's raid Units (Outpost_Raids), troopers [MM-task_mwd2qc3c_4].
  * The raiders follow the outpost's raid rules (raid.js raiderRules: raid-only strength — probeRules below, the step-1
  * raid's multipliers × Outpost_Params Probe_Strength, so a probe stays mild [MM-task_mwcutmnk_3h] — range cap, fire while advancing;
  * siegeRoutes: walls may seal the ramps, so an idle raider marches on the first defense in its way) and pull back after
@@ -25,7 +25,7 @@
 import { startNextWave } from '../sim/waves.js';
 import { buildNavGrid } from '../sim/pathfinding.js';
 import { raidFor, OUTPOST } from '../data/outpost.js';
-import { raiderRules, siegeRoutes } from './raid.js';
+import { raiderRules, siegeRoutes, composeRaid } from './raid.js';
 
 /** When probes come, in seconds of visit time: the first, then the gap after each one ends. */
 export const PROBE_FIRST_S = [45, 75];
@@ -46,13 +46,18 @@ export function probeDelay(seed, n) {
   return lo + (mix(seed, 0x9b0 + n) % 1000) / 1000 * (hi - lo);
 }
 
-/** The probe's raiders: the planet's light tank and a trooper, and a second tank every other probe. [] without data. */
+/**
+ * The probe's raiders: PROBE_SIZE[n % 2] of the planet's step-1 raid Units (Outpost_Raids), cycled in order as a raid's
+ * are (raid.js composeRaid), never the breacher. Owner 2026-11-12, "base is getting attacked by heavy tanks,
+ * juggernauts" [MM-task_mwd2qc3c_4]: this used to pick the planet's assault tank by id FIRST (tank + trooper, a second
+ * tank every other probe: 3 of every 5 probe raiders a tank); now the workbook's roster decides, and it is troopers.
+ * [] without data.
+ */
+export const PROBE_SIZE = Object.freeze([2, 3]);
 export function probeUnits(planet, n = 0) {
   const r = raidFor(planet, 1);
   if (!r || !r.units.length) return [];
-  const tank = r.units.find((u) => /-Tanks$/.test(u)) || r.units[0];
-  const troop = r.units.find((u) => /-Troops$/.test(u)) || r.units[0];
-  return n % 2 ? [tank, troop, tank] : [tank, troop];
+  return composeRaid(r.units, PROBE_SIZE[n % 2]);
 }
 
 /**
