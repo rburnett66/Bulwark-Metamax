@@ -97,9 +97,9 @@ const CSS = `
 .bwm-title span { color:#f2c869; }
 .bwm-sub { margin-top:16px; max-width:420px; color:#8fa0b3; font-size:14px; line-height:1.6; }
 .bwm-menu { margin-left:auto; width:min(340px,42vw); display:flex; flex-direction:column; gap:12px; padding:24px; }
-/* OUTPOST and FARM share one row (Farming-Design §2.3: FARM beside OUTPOST), so the column keeps its height on a phone */
-.bwm-pair { display:flex; gap:8px; } .bwm-pair > .bwm-btn { flex:1 1 0; min-width:0; }
-.bwm-pair > .bwm-btn .hint { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+/* ONE outpost entry (owner 2026-11-11, S6 [MM-story_mwcgbd9q_2y]): the farm is the outpost's FARM tab, its status rides
+   on the OUTPOST button's line — kept to one line so the column keeps its height on a phone */
+.bwm-outpost .hint { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-width:0; }
 .bwm-btn { display:flex; justify-content:space-between; align-items:center; text-align:left; width:100%;
   background:#1a1f28; border:1px solid #2e3846; color:#e6ecf3; padding:16px 20px; font-size:15px;
   letter-spacing:.14em; font-weight:700; cursor:pointer; transition:border-color .12s, background .12s; }
@@ -414,7 +414,7 @@ export function createMenu(mountEl, cbs) {
   }
   // ACCEPT on the farming contract (Farming A5) [MM-story_mwabgpsa_e], struck in person with the planet faction's Factor
   // at the Trade Station (farm/factor.js) [MM-story_mwcuzyf7_3k]: the Farmhouse beside the outpost's hub, the Pod Crate,
-  // the FARM button lights, and the deal counts with the Factor
+  // the OUTPOST button gains its FARM tab, and the deal counts with the Factor
   async function acceptFarm(key, factor) {
     const map = await outpostMap(key), now = Date.now();
     updateSave((s) => { const r = acceptViaFactor(s, key, factor, { map, now, cellOk: cellRule(map, s.outposts && s.outposts[key]) }); if (r.error) console.warn('[farm] accept', r.error); });
@@ -552,12 +552,9 @@ export function createMenu(mountEl, cbs) {
     const m = outpostButtonModel(loadSave(), targetKey());
     if (!m.locked && !outpostOpen) openOutpost(m.planet);
   });
-  // FARM, beside OUTPOST (Farming-Design §2.3, A5): the same outpost view, on its FARM tab (story A7 draws the tab)
-  const farmBtn = mkBtn('FARM', ' ', 'bwm-farm', () => {
-    const m = farmButtonModel(loadSave(), targetKey());
-    if (!m.locked && !outpostOpen) openOutpost(m.planet, 'farm');
-  });
-  { const pair = el(doc, 'div', 'bwm-pair'); menu.insertBefore(pair, outpostBtn); pair.appendChild(outpostBtn); pair.appendChild(farmBtn); }
+  // (no FARM button: owner 2026-11-11 "do we need outpost and farm on the planet view menu, I think the Build menu should
+  // have build and Farm toggles" [MM-story_mwcgbd9q_2y] — the farm is the outpost's FARM tab on the battle rail; its
+  // status (farmButton.js) joins the OUTPOST button's line and red dot. openOutpost(planet, 'farm') opens on that tab.)
   async function openOutpost(planet, tab = 'outpost') {
     outpostOpen = true;
     // the menu's own 3D views (the live globes and capital ship, the tech net) hold GPU contexts too: let them go while
@@ -569,9 +566,9 @@ export function createMenu(mountEl, cbs) {
     // view) is open, so a phone holds one battle-sized scene at a time (iOS crash, owner 2026-11-07)
     if (cbs.onOutpostOpen) { try { cbs.onOutpostOpen(); } catch (e) { console.warn('[outpost] release', e); } }
     try {
-      const V = await import('../outpost/view/outpostView.js');
+      const V = await import('../outpost/view/sessionView.js');
       const q = (() => { try { return new URLSearchParams(location.search).get('quality'); } catch (e) { return null; } })();
-      const v = await V.openOutpostView({ planet, tab, mount: doc.body, tier: ['high', 'standard', 'low'].includes(q) ? q : null, onChange: () => refreshOutpost() });
+      const v = await V.openOutpostSessionView({ planet, tab, mount: doc.body, tier: ['high', 'standard', 'low'].includes(q) ? q : null });
       if (cbs.onOutpost) cbs.onOutpost(planet);
       await v.closed;
     } catch (e) { console.error('[outpost] the outpost view failed', e); }
@@ -585,14 +582,12 @@ export function createMenu(mountEl, cbs) {
   function refreshOutpost() {
     let m;
     try { m = outpostButtonModel(loadSave(), targetKey()); } catch (e) { console.error('[outpost] status failed', e); return; }
+    let f = null;
+    try { f = m.locked ? null : farmButtonModel(loadSave(), m.planet); } catch (e) { console.error('[farm] status failed', e); }
+    const farm = f && !f.locked && f.planet === m.planet ? f : null;   // the farm on the outpost this button opens
     outpostBtn.disabled = m.locked;
-    outpostBtn.querySelector('.hint').textContent = m.hint;
-    outpostBtn.dot.classList.toggle('on', !!m.dot);
-    let f;
-    try { f = farmButtonModel(loadSave(), targetKey()); } catch (e) { console.error('[farm] status failed', e); return; }
-    farmBtn.disabled = f.locked;
-    farmBtn.querySelector('.hint').textContent = f.hint;
-    farmBtn.dot.classList.toggle('on', !!f.dot);
+    outpostBtn.querySelector('.hint').textContent = m.hint + (farm ? ' · farm: ' + farm.hint : '');
+    outpostBtn.dot.classList.toggle('on', !!(m.dot || (farm && farm.dot)));
   }
   mkBtn('RESET PROGRESS', 'wipe all progress', null, () => {
     if (doc.defaultView && !doc.defaultView.confirm('Reset all progress? Stars, gold, loyalty, tech and faction records are wiped.')) return;

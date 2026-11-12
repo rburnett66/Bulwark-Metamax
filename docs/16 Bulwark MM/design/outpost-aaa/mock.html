@@ -1,0 +1,166 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Outpost AAA mock</title>
+<style>
+/* tokens: the battle HUD's (render/hud.js + render/buildPalette.js), verbatim values */
+:root { --panel:rgba(10,14,20,.85); --line:#3a4a5a; --btn:#22303e; --btn-line:#4a6076; --ink:#e8e8e8; --dim:#9ab;
+  --gold:#ffd76a; --cyan:#8fe0ff; --key:#ffe58a; --hp:#8cf22e; --hp-track:#34373c; --sel:#3d6a3d; --sel-line:#7ac07a;
+  --foe:#ff9d7a; --alarm:#ff5a3c; --name:#bfe0ff; }
+* { box-sizing:border-box; }
+body { margin:0; background:#111; font-family:'Courier New', monospace; color:var(--ink); }
+.frame { position:relative; width:844px; height:390px; overflow:hidden; background:radial-gradient(ellipse at 60% 55%, #7aa040 0%, #4f7a2e 45%, #2c3f22 80%, #1a221a 100%); }
+.frame::after { content:''; position:absolute; inset:0; background:rgba(0,0,0,.18); pointer-events:none; }
+.p { position:absolute; background:var(--panel); border:1px solid var(--line); border-radius:4px; padding:6px 8px; z-index:2; }
+.btn { background:var(--btn); color:var(--ink); border:1px solid var(--btn-line); border-radius:3px; padding:3px 6px; font:inherit; font-size:11px; white-space:nowrap; }
+.btn.sel { background:var(--sel); border-color:var(--sel-line); }
+.btn:disabled { opacity:.4; }
+.top { left:6px; right:6px; top:6px; display:flex; gap:6px; align-items:center; height:42px; }
+.hp { width:80px; height:14px; background:var(--hp-track); border:1px solid #141619; } .hp i { display:block; height:100%; width:92%; background:var(--hp); }
+.timer { font-size:13px; font-weight:bold; color:var(--cyan); letter-spacing:1px; }
+.money { font-size:13px; color:var(--gold); font-weight:bold; }
+.chip { font-size:11px; white-space:nowrap; }
+.chip b { color:#fff; }
+.foe { color:var(--foe); }
+.grow { flex:1; }
+.rail { left:6px; top:56px; width:150px; bottom:6px; display:flex; flex-direction:column; gap:4px; }
+.tabs { display:flex; gap:3px; } .tabs .btn { flex:1; padding:3px 0; font-size:10px; font-weight:800; letter-spacing:.08em; }
+.grid { display:grid; grid-template-columns:repeat(2, 66px); gap:4px; }
+.bb { height:50px; background:var(--btn); border:1px solid var(--btn-line); border-radius:3px; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding:2px; position:relative; }
+.bb .pic { width:24px; height:20px; background:#56636f; border-radius:2px; margin-bottom:1px; }
+.bb .n { font-size:8px; font-weight:800; letter-spacing:.06em; color:#e3eaf1; } .bb .c { font-size:9px; color:var(--gold); }
+.bb .k { position:absolute; left:2px; top:0; font-size:10px; font-weight:800; color:var(--key); }
+.side { right:6px; top:56px; width:200px; font-size:12px; display:flex; flex-direction:column; gap:4px; }
+.side .t { font-size:13px; font-weight:bold; color:var(--name); }
+.side .row { display:flex; gap:4px; } .side .row .btn { flex:1; padding:3px 4px; }
+.side .kv { display:flex; justify-content:space-between; font-size:11px; } .side .kv span:first-child { color:#7f9fb2; }
+.key { color:var(--key); font-weight:800; }
+.mini { left:162px; bottom:6px; width:128px; height:64px; background:rgba(8,12,16,.82); border:1px solid #2a3a4a; border-radius:4px; position:absolute; z-index:2; }
+.mini i { position:absolute; width:4px; height:4px; background:#e33; }
+.round { position:absolute; bottom:6px; width:38px; height:38px; background:rgba(10,16,22,.9); border:1px solid var(--btn-line); border-radius:6px; z-index:2; display:grid; place-items:center; color:#cfe3f0; font-size:16px; }
+.toast { position:absolute; left:50%; top:70px; transform:translateX(-50%); padding:6px 14px; border-radius:4px; font-size:13px; z-index:3; white-space:nowrap; }
+.toast.ok { background:rgba(16,40,26,.92); border:1px solid #57a057; color:#c8f5cf; }
+.banner { position:absolute; left:50%; top:30%; transform:translate(-50%,-50%); text-align:center; z-index:3; white-space:nowrap; }
+.banner .l { font-size:30px; font-weight:900; color:var(--alarm); text-transform:uppercase; text-shadow:0 3px 12px #000, 0 0 26px rgba(255,80,40,.65); }
+.banner .s { font-size:14px; font-weight:700; letter-spacing:3px; color:#ffd6c8; text-shadow:0 2px 6px #000; margin-top:4px; }
+.edge { position:absolute; z-index:3; color:var(--alarm); font-size:22px; text-shadow:0 0 10px rgba(255,80,40,.8); }
+.label { position:absolute; left:8px; bottom:-1px; z-index:4; background:#ffd76a; color:#141a20; font:800 11px 'Courier New'; padding:2px 8px; }
+.ring { position:absolute; border:2px dashed rgba(143,224,255,.8); border-radius:50%; z-index:1; }
+.sep { width:1px; align-self:stretch; background:#2b3540; }
+</style></head><body>
+
+<!-- A: outpost idle -->
+<div class="frame" id="A">
+  <div class="p top">
+    <div class="hp"><i></i></div>
+    <span class="timer" title="next raid">RAID 1:12</span>
+    <span class="money">20000g</span>
+    <span class="sep"></span>
+    <span class="chip">⚡ <b>9/10</b></span>
+    <span class="chip">▣ <b>3/720</b></span>
+    <span class="chip foe">☠ size 11 · 6/day</span>
+    <span class="grow"></span>
+    <button class="btn">LEAVE ▸</button>
+  </div>
+  <div class="p rail">
+    <div class="tabs"><button class="btn sel">BUILD</button><button class="btn">FARM</button></div>
+    <div class="grid">
+      <div class="bb"><b class="k">1</b><div class="pic"></div><span class="n">POWER</span><span class="c">600g</span></div>
+      <div class="bb"><b class="k">2</b><div class="pic"></div><span class="n">PYLON</span><span class="c">150g</span></div>
+      <div class="bb"><b class="k">3</b><div class="pic"></div><span class="n">MINING</span><span class="c">600g</span></div>
+      <div class="bb"><b class="k">4</b><div class="pic"></div><span class="n">STORAGE</span><span class="c">300g</span></div>
+      <div class="bb"><b class="k">5</b><div class="pic"></div><span class="n">RES. BAY</span><span class="c">2500g</span></div>
+      <div class="bb"><b class="k">6</b><div class="pic"></div><span class="n">UPGRADE</span><span class="c">4000g</span></div>
+      <div class="bb"><b class="k">7</b><div class="pic"></div><span class="n">CANNON</span><span class="c">1200g</span></div>
+      <div class="bb"><b class="k">8</b><div class="pic"></div><span class="n">M. GUN</span><span class="c">600g</span></div>
+      <div class="bb"><b class="k">9</b><div class="pic"></div><span class="n">WALL</span><span class="c">400g</span></div>
+      <div class="bb"><div class="pic"></div><span class="n">HARVESTER</span><span class="c">2000g</span></div>
+    </div>
+  </div>
+  <div class="p side">
+    <div class="t">OUTPOST · ONLINE</div>
+    <div class="kv"><span>Storage</span><span>3 / 720</span></div>
+    <div class="kv"><span>Loads ready</span><span>0</span></div>
+    <div class="hp" style="width:100%;height:8px"><i style="width:1%"></i></div>
+    <div class="row"><button class="btn" disabled><span class="key">S</span> Sell</button><button class="btn"><span class="key">R</span> Repair all</button></div>
+  </div>
+  <div class="mini"><i style="left:116px;top:30px;background:#5fe0ff"></i></div>
+  <div class="round" style="right:50px">⛶</div><div class="round" style="right:6px">⚙</div>
+  <div class="toast ok">Repair drones launched · −450g</div>
+  <div class="label">A · outpost idle (target)</div>
+</div>
+
+<!-- B: defense selected -->
+<div class="frame" id="B">
+  <div class="p top">
+    <div class="hp"><i></i></div>
+    <span class="timer">RAID 1:12</span>
+    <span class="money">20000g</span>
+    <span class="sep"></span>
+    <span class="chip">⚡ <b>9/10</b></span>
+    <span class="chip">▣ <b>3/720</b></span>
+    <span class="chip foe">☠ size 11 · 6/day</span>
+    <span class="grow"></span>
+    <button class="btn">LEAVE ▸</button>
+  </div>
+  <div class="p rail">
+    <div class="tabs"><button class="btn sel">BUILD</button><button class="btn">FARM</button></div>
+    <div class="grid">
+      <div class="bb"><b class="k">1</b><div class="pic"></div><span class="n">POWER</span><span class="c">600g</span></div>
+      <div class="bb"><b class="k">2</b><div class="pic"></div><span class="n">PYLON</span><span class="c">150g</span></div>
+      <div class="bb"><b class="k">3</b><div class="pic"></div><span class="n">MINING</span><span class="c">600g</span></div>
+      <div class="bb"><b class="k">4</b><div class="pic"></div><span class="n">STORAGE</span><span class="c">300g</span></div>
+      <div class="bb"><b class="k">5</b><div class="pic"></div><span class="n">RES. BAY</span><span class="c">2500g</span></div>
+      <div class="bb"><b class="k">6</b><div class="pic"></div><span class="n">UPGRADE</span><span class="c">4000g</span></div>
+      <div class="bb"><b class="k">7</b><div class="pic"></div><span class="n">CANNON</span><span class="c">1200g</span></div>
+      <div class="bb"><b class="k">8</b><div class="pic"></div><span class="n">M. GUN</span><span class="c">600g</span></div>
+      <div class="bb"><b class="k">9</b><div class="pic"></div><span class="n">WALL</span><span class="c">400g</span></div>
+      <div class="bb"><div class="pic"></div><span class="n">HARVESTER</span><span class="c">2000g</span></div>
+    </div>
+  </div>
+  <div class="p side">
+    <div class="t">Cannon Tower T1</div>
+    <div>State: Complete · ⚡ powered</div>
+    <div class="hp" style="width:100%;height:10px"><i style="width:100%"></i></div>
+    <div>HP 400/400</div>
+    <div class="row"><button class="btn"><span class="key">U</span> Upgrade<br>(4200g)</button><button class="btn"><span class="key">X</span> Sell<br>(+600g)</button><button class="btn" disabled><span class="key">R</span> Repair</button></div>
+  </div>
+  <div class="ring" style="left:430px;top:150px;width:120px;height:70px"></div>
+  <div class="mini"><i style="left:116px;top:30px;background:#5fe0ff"></i></div>
+  <div class="round" style="right:50px">⛶</div><div class="round" style="right:6px">⚙</div>
+  <div class="label">B · defense selected: the battle's panel owns the right slot</div>
+</div>
+
+<!-- C: visit raid -->
+<div class="frame" id="C">
+  <div class="p top">
+    <div class="hp"><i style="width:78%"></i></div>
+    <span class="timer">00:41</span>
+    <span class="money">20120g</span>
+    <span class="chip foe">⚔ 3 left · 1:19</span>
+    <span class="sep"></span>
+    <span class="chip">⚡ <b>9/10</b></span>
+    <span class="chip">▣ <b>3/720</b></span>
+    <span class="grow"></span>
+    <button class="btn">LEAVE ▸</button>
+  </div>
+  <div class="p rail">
+    <div class="tabs"><button class="btn sel">BUILD</button><button class="btn">FARM</button></div>
+    <div class="grid">
+      <div class="bb"><b class="k">1</b><div class="pic"></div><span class="n">POWER</span><span class="c">600g</span></div>
+      <div class="bb"><b class="k">2</b><div class="pic"></div><span class="n">PYLON</span><span class="c">150g</span></div>
+      <div class="bb"><b class="k">3</b><div class="pic"></div><span class="n">MINING</span><span class="c">600g</span></div>
+      <div class="bb"><b class="k">4</b><div class="pic"></div><span class="n">STORAGE</span><span class="c">300g</span></div>
+      <div class="bb"><b class="k">5</b><div class="pic"></div><span class="n">RES. BAY</span><span class="c">2500g</span></div>
+      <div class="bb"><b class="k">6</b><div class="pic"></div><span class="n">UPGRADE</span><span class="c">4000g</span></div>
+      <div class="bb"><b class="k">7</b><div class="pic"></div><span class="n">CANNON</span><span class="c">1200g</span></div>
+      <div class="bb"><b class="k">8</b><div class="pic"></div><span class="n">M. GUN</span><span class="c">600g</span></div>
+      <div class="bb"><b class="k">9</b><div class="pic"></div><span class="n">WALL</span><span class="c">400g</span></div>
+      <div class="bb"><div class="pic"></div><span class="n">HARVESTER</span><span class="c">2000g</span></div>
+    </div>
+  </div>
+  <div class="banner"><div class="l">Raiders incoming,</div><div class="s">hold the line!</div></div>
+  <div class="edge" style="left:170px;top:190px">◀</div>
+  <div class="mini"><i style="left:116px;top:30px;background:#5fe0ff"></i><i style="left:8px;top:40px"></i><i style="left:12px;top:44px"></i><i style="left:6px;top:46px"></i></div>
+  <div class="round" style="right:50px">⛶</div><div class="round" style="right:6px">⚙</div>
+  <div class="label">C · visit raid: the battle's banner, countdown, minimap and edge pointer</div>
+</div>
+</body></html>

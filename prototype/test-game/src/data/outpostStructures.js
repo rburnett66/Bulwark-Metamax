@@ -44,8 +44,8 @@ export const OUTPOST_KIND_NAME = Object.freeze({
 
 /**
  * The short names a build rail shows (owner 2026-11-11: "Building names can be shortened"): the full names overlap on a
- * phone-width rail. ONE table for every rail — the shared battle rail (render/hud.js reads a def's `label`) and the old
- * outpost view's narrow rail (outpost/view/hud.js) — so a rename happens once. Farm kinds included for the farm rail.
+ * phone-width rail. ONE table for the one rail — the shared battle rail (render/hud.js reads a def's `label`), its
+ * outpost BUILD tab and its FARM tab (data/farmStructures.js) — so a rename happens once.
  */
 export const RAIL_SHORT_NAME = Object.freeze({
   power: 'POWER', pylon: 'PYLON', rig: 'MINING', storage: 'STORAGE', resourceBay: 'RES. BAY', harvesterBay: 'RES. BAY',

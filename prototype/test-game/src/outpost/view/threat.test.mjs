@@ -56,11 +56,8 @@ test('hudModel carries the threat at `now` (one model for both views); the text 
   assert.ok(h.threat.short.length <= 20, h.threat.short);
 });
 
-test('both outpost views render hudModel().threat.text in their existing HUD (no new HUD of their own)', () => {
+test('the outpost renders hudModel().threat.text in its existing panel (no new HUD of its own; the old view went in S6)', () => {
   const src = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
-  const hud = src('./hud.js');
-  assert.match(hud, /\$\('threat'\)\.textContent = h\.threat\.text/, 'old view: the top-bar chip');
-  assert.match(hud, /\$\('threatShort'\)\.textContent = h\.threat\.short/, 'old view: the landscape short form');
   const sv = src('./sessionView.js');
   assert.match(sv, /threatLine\.textContent = h\.threat\.text/, 'session path: the outpost panel on the battle HUD');
   assert.match(sv, /session\.addPanel\(panel\)/);

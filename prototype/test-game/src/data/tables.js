@@ -7,6 +7,7 @@
 import { validateRenderTiers } from './renderTiers.js';
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import { buildOutpostStructures } from './outpostStructures.js';
+import { buildFarmStructures } from './farmStructures.js';
 
 // ---------------------------------------------------------------------------
 // Assumptions sheet + slice economy constants
@@ -1517,6 +1518,10 @@ export function getUnitDef(unitId) {
 // battle's build rail never lists them; getStructureDef resolves both, so the one placement / build / upgrade / sell path
 // (sim/structures.js) serves the battle and the outpost alike.
 export const OUTPOST_STRUCTURES = buildOutpostStructures(MAPDATA.outpostStructures, STRUCTURES);
+// The farm's rail items (plots, the Silo and Pump, crops) as defs for the shared placement (data/farmStructures.js)
+// [MM-story_mwcgbd9q_2y]: also out of STRUCTURES, also resolved by getStructureDef. The sim never builds one — the
+// outpost session hands a farm placement to the save session's farm actions.
+export const FARM_STRUCTURES = buildFarmStructures();
 
 /**
  * The battle tower a structure looks and fires like: an outpost defense ('OUT-mg') is its battle tower ('STR-MG');
@@ -1529,7 +1534,7 @@ export function towerStructId(structId) {
 }
 
 export function getStructureDef(structId) {
-  const def = STRUCTURES[structId] || OUTPOST_STRUCTURES[structId];
+  const def = STRUCTURES[structId] || OUTPOST_STRUCTURES[structId] || FARM_STRUCTURES[structId];
   if (!def) throw new Error('tables.getStructureDef: unknown structId "' + structId + '"');
   return def;
 }

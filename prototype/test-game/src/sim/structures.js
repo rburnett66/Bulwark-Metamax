@@ -185,6 +185,9 @@ export function validatePlacement(state, structId, slotOrCell) {
     return placementOk(state, def, cell, structId);
   }
 
+  // A NON-BLOCKING def (the farm's rail items, data/farmStructures.js: plots never block paths) cannot seal a lane.
+  if (def.nonBlocking) return placementOk(state, def, cell, structId);
+
   // Every structure (towers included, now that they block) must leave the ground lane OPEN — reject any
   // placement that would seal the base off so units can no longer path to it.
   // Hypothetical nav grid with the new piece: the ground lane must stay open.
@@ -270,6 +273,21 @@ export function placeStructure(state, structId, slotOrCell) {
   return s;
 }
 
+/**
+ * MODE UPGRADE RULES [MM-task_mwcunn53_3f] — as state.placementRules for placement: a mode adds its own upgrade
+ * checks here rather than a copy of the upgrade command. state.upgradeRules: [(state, structure) → a refusal reason
+ * string, or null]. The campaign sets none (its gate is state.structTiers); the outpost sets the outpost model's rule
+ * (outpost/liveSim.js → model.upgradeRefusal). The HUD reads the same answer to show the tier LOCKED. → reason or null.
+ */
+export function upgradeRuleRefusal(state, s) {
+  if (!state.upgradeRules || !s) return null;
+  for (const rule of state.upgradeRules) {
+    const why = rule(state, s);
+    if (why) return why;
+  }
+  return null;
+}
+
 export function startUpgrade(state, structureId) {
   const s = state.structures.get(structureId);
   if (!s) return false;
@@ -283,6 +301,7 @@ export function startUpgrade(state, structureId) {
     const group = s.kind === 'antiGround' ? 'cannon' : s.kind === 'antiAir' ? 'flak' : 'wall';
     if (s.tier + 1 > (state.structTiers[group] || 1)) return false;
   }
+  if (upgradeRuleRefusal(state, s)) return false;
   const upCost = def.cost[s.tier] - def.cost[s.tier - 1];
   if (!canAfford(state, upCost)) return false;
   if (!spend(state, upCost, 'upgrade:' + s.structId)) return false;

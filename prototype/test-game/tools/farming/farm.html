@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Farm View Review</title>
 <!-- [MM-story_mwabgs3l_f] [MM-story_mwabh8h1_l] Review page for the real FARM tab: the game's own outpost view
-     (src/outpost/view/outpostView.js) opened on its FARM tab, on a seeded save built with the game's own functions, an
+     (src/outpost/view/sessionView.js, S6: the farm is the battle rail FARM tab) opened on that tab, on a seeded save built with the game's own functions, an
      in-memory save (your real save is never touched) and a clock you can speed up. The outpost view's own review page
      is ../outpost/view.html; this is its farm twin.
      Query: ?state=new|growing|harvest|full|dead|trampled|away · ?quality=high|standard|low · ?speed=1 (clock ×)
@@ -57,7 +57,7 @@
 <button id="raid" type="button" title="Bring a visit probe now: the avatar and farmhands shelter at the Farmhouse">Raid now</button>
 <div id="closed"><div>The farm view closed.<br><button id="reopen">Open again</button></div></div>
 <script type="module">
-import { openOutpostView } from '../../src/outpost/view/outpostView.js';
+import { openOutpostSessionView as openOutpostView } from '../../src/outpost/view/sessionView.js';
 import { outpostMapFor } from '../../src/outpost/outpostMap.js';
 import { referenceOutpost, confirmOnline, advance } from '../../src/outpost/model.js';
 import { OUTPOST } from '../../src/data/outpost.js';

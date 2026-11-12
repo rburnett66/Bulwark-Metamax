@@ -16,10 +16,11 @@ test('every buildable outpost building carries a short rail label from the one t
   }
 });
 
-test('the shared rail shows a def label; the old view reads the same table (no second copy)', () => {
+test('the shared rail shows a def label; the FARM tab reads the same table (no second copy; the old view went in S6)', () => {
   const hud = readFileSync(new URL('../../render/hud.js', import.meta.url), 'utf8');
   assert.match(hud, /\|\| def\.label \|\|/);
-  const old = readFileSync(new URL('./hud.js', import.meta.url), 'utf8');
-  assert.match(old, /const SHORT = RAIL_SHORT_NAME;/);
-  assert.doesNotMatch(old, /'RES\. BAY'/, 'no second short-name table');
+  const farm = readFileSync(new URL('../../data/farmStructures.js', import.meta.url), 'utf8');
+  assert.match(farm, /RAIL_SHORT_NAME\[m\.id\]/);
+  assert.match(farm, /RAIL_SHORT_NAME\[b\.kind\]/);
+  assert.doesNotMatch(farm, /'IRRIGATED'/, 'no second short-name table');
 });

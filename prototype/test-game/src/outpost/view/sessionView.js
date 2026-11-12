@@ -1,8 +1,8 @@
 /**
  * src/outpost/view/sessionView.js — the outpost on the shared BATTLE SESSION [MM-subtask_mwciiylh_31]
- * (S2.4a of One Battle UX, TECH_PLAN::One-Battle-UX.md §4). Since S2.4d [MM-story_mwc9pkcd_2g] this IS the outpost:
- * outpostView.js opens it for the OUTPOST tab, for everyone (the old pad-based view is deleted; ?outpost=session is
- * still accepted and changes nothing).
+ * (S2.4a of One Battle UX, TECH_PLAN::One-Battle-UX.md §4). Since S2.4d [MM-story_mwc9pkcd_2g] this IS the outpost,
+ * and since S6 the farm too: the menu's one OUTPOST button opens it (opts.tab 'farm' opens on the rail's FARM tab); the
+ * old pad-based outpost view and the farm view after it are deleted.
  *
  * Owner 2026-11-11: "users are trained to work with camera, characters, and structure in one pattern … we should never
  * have to change UX in two places." So this view writes no input, camera, placement, build rail, selection panel or
@@ -24,7 +24,16 @@
  *   8. the rail's pictures: an outpost defense shows its battle tower's baked picture (render/buildIcons.js resolves
  *      OUT-<kind> through towerStructId); a building shows its GLB rendered by menuIcons.js (the old menu's pictures),
  *      handed to the battle rail with hud.setBuildPicture — one rail, one picture slot.
- * The farm joins in S6.
+ *   9. THE FARM (S6 [MM-story_mwc9q1y6_2n], one view [MM-story_mwcgbd9q_2y]; owner 2026-11-11: "outpost and farm are
+ *      the same view, but the difference is the Purchase window on the left"): once the planet has a farm, the battle
+ *      rail has BUILD | FARM tabs (battle/catalogue.js). FARM lists plots, the Silo and Pump, and crops
+ *      (farm/farmRail.js); they are armed, ghosted and checked by the battle placement (farm/farmRail.js
+ *      farmGroundRule in state.placementRules), then handed to the save session's farm actions (session.js act farmPlace,
+ *      plant, prep, harvest, harvestAll, deliver, farmSell) through actOnSave — the farm's rules run once, in
+ *      farm/model.js. A tap on a plot or a farm building (the battle input's onGroundTap) shows its panel in this view's
+ *      panel; the farm's 3D picture (farm/view/farmLayer.js), the avatar and farmhands (avatar.js) and the harvest embers
+ *      (embers.js) are mounted on the session's own 3D scene, as outpostScene.js is. Raiders that cross the farm during
+ *      a visit raid trample it as a raid does (visitRaids.js takeCells → act trample).
  */
 import { createBattleSession } from '../../battle/session.js';
 import { createCatalogue, lockRule } from '../../battle/catalogue.js';
@@ -37,6 +46,17 @@ import { getStructureDef } from '../../data/tables.js';
 import { toLiveSim, fromLiveSim, syncHarvestPower } from '../liveSim.js';
 import { ghostPowerOf, powerWarning } from '../placementRules.js';
 import { createVisitRaids } from '../visitRaids.js';
+import { validatePlacement } from '../../sim/structures.js';
+import { isFarmStructId } from '../../data/farmStructures.js';
+import { cropOf } from '../../data/farm.js';
+import { hasFarm } from '../../farm/contract.js';
+import { farmRailIds, farmRailLocks, farmGroundRule, farmThingAt, grownFarm } from '../../farm/farmRail.js';
+import { farmPanelModel, farmRailGlyph } from '../../farm/view/farmUi.js';
+import { storeCapacity } from '../../farm/model.js';
+import { createFarmLayer } from '../../farm/view/farmLayer.js';
+import { createFarmEmbers } from '../../farm/view/embers.js';
+import { createFarmCrew } from '../../farm/view/avatar.js';
+import { K as FXK } from '../../render3d/fx/impacts.js';
 import { outpostMapFor } from '../outpostMap.js';
 import { outpostBattleMap, bakedSlugFor } from './outpostBoard.js';
 import { createOutpostScene } from './outpostScene.js';
@@ -107,10 +127,19 @@ async function openSession(opts, opening) {
   if (!store.load().outposts || !store.load().outposts[planet]) { host.remove(); throw new Error(`no outpost on ${planet}`); }
   const nextFrame = () => new Promise((ok) => win.requestAnimationFrame(() => ok()));
   const opened = await saveSession.openChunked(clockNow(), nextFrame);   // the away catch-up
-  // the OUTPOST catalogue on the battle rail; a lock is refused by the sim too
-  const catalogue = createCatalogue(outpostCatalogueIds());
+  // the OUTPOST catalogue on the battle rail; a lock is refused by the sim too. With a farm on this planet the rail has
+  // two tabs, BUILD (the outpost's equipment) and FARM (plots, farm machinery, crops) — one rail, one placement (S6)
+  const save0 = store.load();
+  const farmed = hasFarm(save0, planet) || !!opened.outpost.farm;
+  const farmIds = farmed ? farmRailIds(save0, planet) : [];
+  const catalogue = createCatalogue(farmed
+    ? [{ id: 'build', label: 'BUILD', ids: outpostCatalogueIds() }, { id: 'farm', label: 'FARM', ids: farmIds }]
+    : outpostCatalogueIds());
+  if (farmed && opts.tab === 'farm') catalogue.setTab('farm');   // a deep link to the farm opens on its tab
   // the live state, (re)built from the save — on arrival and after an outpost-economy action (actOnSave below)
   let t0 = 0, live = null, sim = null, raids = null;
+  // the farm as last grown (farmNow), the selected plot / farm building, and the save context the FARM locks were read from
+  let farmMemo = null, farmSel = null, farmLocksOf = null;
   // the ghost's power answer (S2b §5.2), from the outpost as last read (`view`, refreshed a few times a second below):
   // the battle's shared ghost goes amber on its warning, and the preview conduit draws its route
   let view = null;
@@ -119,11 +148,16 @@ async function openSession(opts, opening) {
     // visit raids (S2.4c): the probe count and the countdown carry over a mid-visit rebuild (a sale, going online)
     const carry = raids ? { probes: raids.probes, nextIn: Math.max(0, raids.nextAt - sim.time) } : {};
     t0 = clockNow();
-    live = toLiveSim(outpost, { map, now: t0, gold });
+    // the save's owned tech rides along: the live upgrade command asks the outpost's own rule (model.upgradeRefusal)
+    const { unlocks, techOwned } = saveSession.ctx(t0);
+    live = toLiveSim(outpost, { map, now: t0, gold, unlocks, techOwned });
     sim = live.state;
     sim.placementRules = [...(sim.placementRules || []), lockRule(catalogue)];
     // legal but unpowered → the shared ghost's amber (sim/structures.js placementWarnings → ui.hoverWarn)
     sim.placementWarnings = [...(sim.placementWarnings || []), powerWarning(() => view, map, ghostOf)];
+    // the farm's ground (S6): a farm item goes only where the farm model allows it, a crop only on a prepped plot, and an
+    // outpost structure never on a plot (the sim does not hold the farm as structures) — farm/farmRail.js
+    sim.placementRules.push(farmGroundRule(() => farmNow(), map, () => ({ now: nowOf(), cellOk: ctxNow().cellOk })));
     // small raids come while the player is here, once the outpost is online (owner rules §5b) — waves of the live sim
     raids = outpost.online ? createVisitRaids(sim, { planet, seed: outpost.seed, ...carry }) : null;
   }
@@ -134,6 +168,7 @@ async function openSession(opts, opening) {
   let closed = false;
   let hud = null;
   const submit = (cmd) => {
+    if (cmd && cmd.type === 'place' && isFarmStructId(cmd.structId)) return placeFarmItem(cmd);
     const warn = cmd && cmd.type === 'place' ? ui.hoverWarn : null;
     const res = applyCommand(sim, cmd);
     if (!res.ok && res.reason && hud) flashMessage(hud, res.reason);
@@ -146,7 +181,7 @@ async function openSession(opts, opening) {
   const board = outpostBattleMap(map, { bakeTune });
   const slug = await bakedSlugFor(map, { base: ROOT });
   const session = createBattleSession(host, {
-    getSim: () => sim, getUi: () => ui, submit, mapId: 0, catalogue,
+    getSim: () => sim, getUi: () => ui, submit, mapId: 0, catalogue, onGroundTap: (cell) => tapFarm(cell),
     mountOptions: () => ({ planet, landing: false, landingHeld: true,
       render3d: { baseUrl: ROOT, craft: false, landing: false, qualityQuery: opts.tier || null } }),
   });
@@ -160,10 +195,12 @@ async function openSession(opts, opening) {
   // the outpost buildings' glyphs on the battle rail until their GLB pictures are rendered (below)
   const RAIL_KINDS = OUTPOST_BUILDING_KINDS.filter((k) => k !== 'hub');
   for (const k of RAIL_KINDS) if (OUTPOST_GLYPHS[k] && hud.setBuildPicture) hud.setBuildPicture(outpostStructId(k), { glyph: OUTPOST_GLYPHS[k] });
+  // the FARM tab's pictures: the farm glyphs the old farm menu drew (menuIcons.js), a crop's seed in its colour
+  for (const id of farmIds) { const g = farmRailGlyph(id); if (g && hud.setBuildPicture) hud.setBuildPicture(id, { glyph: g }); }
   session.setBoard(board, 0);
   await session.mount3D(board, slug);
   const r = session.view3d;
-  let scene = null;
+  let scene = null, farmLayer = null, farmFx = null, crew = null;
   if (r) {
     if (r.markers && r.markers.setBaseVisible) r.markers.setBaseVisible(false);   // the hub model stands on the base
     const { GLTFLoader } = await import(ROOT + 'vendor/three-addons/loaders/GLTFLoader.js');
@@ -171,6 +208,15 @@ async function openSession(opts, opening) {
     scene = createOutpostScene(r.THREE, r, { map, kit, tier: r.tier.key, reduced });
     const o = fromLiveSim(sim, live.link, nowOf()).outpost;
     const slugs = new Set(planBuildings(o, map, nowOf()).map((b) => modelSlug(b.kind, b.tier, b.rigHead)).filter(Boolean));
+    if (farmed) for (const k of ['farmhouse', 'silo', 'pump']) if (kit.manifest[k]) slugs.add(k);
+    // the farm on this same scene (S6): its plots and plants, its buildings, the avatar and farmhands, the harvest embers
+    if (farmed) {
+      farmLayer = createFarmLayer(r.THREE, r, { map, kit, reduced });
+      farmFx = createFarmEmbers({ safe: false });
+      crew = createFarmCrew(r.THREE, r, { map, board, safe: false, reduced, land: (a) => landFarm(a), busy: () => false });
+      const fo = farmNow();
+      farmLayer.sync(fo, nowOf()); crew.sync(fo);
+    }
     await kit.preload([...slugs]);
     // the buildings' pictures for the rail, rendered from their GLBs (menuIcons.js, as the old build menu does)
     const rigHead = (oresOf(planet)[0] || {}).rig;
@@ -206,7 +252,7 @@ async function openSession(opts, opening) {
   // ── the outpost's own controls, in the battle HUD (S2.4b) ──────────────────────────────────────────────────
   // An outpost-economy action (sell ore, go online, repair all) is the save session's rule: write the live state back,
   // run it, rebuild the live state from the result. → the session's result ({ ok, error, gold, … }).
-  function actOnSave(action) {
+  function actOnSave(action, { keepTool = false } = {}) {
     const at = nowOf();
     const back = fromLiveSim(sim, live.link, at);
     bankVisit(store, planet, back.outpost, back.gold);
@@ -216,10 +262,103 @@ async function openSession(opts, opening) {
       return res;
     }
     const s = store.load();
+    const tool = keepTool ? ui.buildSelection : null;
     rebuild(s.outposts[planet], saveSession.gold());
-    ui.selectedStructureId = null; ui.buildSelection = null;
-    ctx = null; view = null; since = 1;
+    ui.selectedStructureId = null; ui.buildSelection = tool;   // a farm placement keeps its tool armed, as a battle build does
+    ctx = null; view = null; since = 1; farmMemo = null; farmLocksOf = null;
     return res;
+  }
+
+  // ── the FARM (S6): its state now, its placements, its taps and its actions — all through the save session ──────────
+  // The farm's plants grow on the outpost's clock (advance → farm/grow.js); during a visit the picture and the rules read
+  // the outpost as last saved, grown on to now (farm/farmRail.js grownFarm) once a second.
+  function farmNow() {
+    const base = view || fromLiveSim(sim, live.link, nowOf()).outpost;
+    if (!base.farm) return base;
+    const sec = Math.floor(nowOf() / 1000);
+    if (!farmMemo || farmMemo.of !== base || farmMemo.sec !== sec) farmMemo = { of: base, sec, o: grownFarm(base, map, nowOf()) };
+    return farmMemo.o;
+  }
+  /** A FARM item placed on the shared rail: the sim's own check (the ghost's answer), then the save session's action. */
+  function placeFarmItem(cmd) {
+    const chk = validatePlacement(sim, cmd.structId, cmd.cell);
+    if (!chk.ok) { if (hud) flashMessage(hud, String(chk.reason || 'not here').replace(/^./, (c) => c.toUpperCase())); return { ok: false, reason: chk.reason }; }
+    const def = getStructureDef(cmd.structId);
+    if (def.farmItem === 'crop') {   // planting is the avatar's work: it walks to the plot, and the action lands then
+      const at = farmThingAt(farmNow(), cmd.cell.x, cmd.cell.y);
+      farmAct('plant', def.crop, at && at.plot);
+      return { ok: true };
+    }
+    const res = actOnSave({ type: 'farmPlace', what: def.farmItem, id: def.farmId, cell: [cmd.cell.x, cmd.cell.y] }, { keepTool: true });
+    if (res.ok && hud) flashMessage(hud, def.farmItem === 'plot' ? `${def.name} placed · prepping` : `${def.name} under construction`);
+    return { ok: !!res.ok, reason: res.error };
+  }
+  /** The battle input's tap on open ground: a plot or a farm building there opens its panel. → whether it took the tap. */
+  function tapFarm(cell) {
+    const hit = farmThingAt(farmNow(), cell.x, cell.y);
+    farmSel = hit;
+    if (farmLayer) farmLayer.select(farmRect(hit));
+    panelSince = 1;
+    return !!hit;
+  }
+  function farmRect(sel) {
+    const o = farmNow();
+    const q = sel && o.farm ? (sel.plot ? o.farm.plots[sel.plot] : sel.farm ? o.farm.buildings[sel.farm] : null) : null;
+    return q ? { x: q.x, y: q.y, w: q.w, h: q.h } : null;
+  }
+  const FARM_TEXT = {
+    prep: () => 'Prepping the plot',
+    plant: (res) => (`Planted ${res.farm && res.farm.planted ? (cropOf(res.farm.planted) || { name: res.farm.planted }).name : ''}`.trim() +
+      (res.farm && res.farm.level ? ` · level ${res.farm.level}` : '') + (res.farm && res.farm.capped ? ` (${res.farm.capped})` : '')),
+    harvest: (res) => harvestText(res), harvestAll: (res) => harvestText(res),
+    deliver: (res) => `Delivered ${res.farm.delivered} to the ship`,
+    farmSell: (res) => `Crops sold · +${fmtGold(res.earned)} gold`,
+  };
+  function harvestText(res) {
+    const f = res.farm || {}, units = Object.values(f.harvested || {}).reduce((a, b) => a + b, 0);
+    const pods = (f.pods || []).reduce((a, p) => a + p.n, 0);
+    return (units ? `Harvested ${units} into the store` : 'Pods recovered') + (pods ? ` · +${pods} pod${pods > 1 ? 's' : ''}` : '') + (f.blocked && f.blocked.length ? ` · ${f.blocked.length} waiting: the Silo is full` : '');
+  }
+  /** A farm action lands (the avatar's work done, or a Farmhouse tap): one save-session act; embers off a harvest. */
+  function landFarm(action) {
+    const keep = farmSel;
+    const res = actOnSave(action, { keepTool: true });
+    farmSel = keep;
+    if (!res.ok) return res;
+    const text = FARM_TEXT[action.type] ? FARM_TEXT[action.type](res) : null;
+    if (text && hud) flashMessage(hud, text);
+    const r3 = session.view3d;
+    if (farmFx && r3 && r3.impacts && res.farm && res.farm.plots) farmFx.harvest(res.farm.plots, store.load().outposts[planet], r3.impacts, FXK);
+    panelSince = 1;
+    return res;
+  }
+  // PREP / PLANT / HARVEST are the avatar's work (avatarQueue.js): queued, walked to, landed once. HARVEST ALL queues every
+  // Fruited and Dead plot. DELIVER and SELL CROPS are the Farmhouse's: at once.
+  const AVATAR_WORK = new Set(['prep', 'plant', 'harvest']);
+  function farmAct(a, arg, plot = farmSel && farmSel.plot) {
+    const action = a === 'plant' ? { type: 'plant', plot, pick: arg } : a === 'prep' || a === 'harvest' ? { type: a, plot: arg }
+      : a === 'deliver' ? { type: 'deliver', crop: arg } : { type: a };
+    if (AVATAR_WORK.has(action.type) && action.plot && crew) {
+      crew.enqueue(action);
+      if (hud) flashMessage(hud, a === 'plant' ? `Planting ${(cropOf(arg) || { name: arg }).name}` : a === 'prep' ? 'Prepping the plot' : 'Harvesting');
+      return;
+    }
+    if (action.type === 'harvestAll' && crew) {
+      const ids = crew.harvestable(nowOf());
+      if (ids.length) { for (const id of ids) crew.enqueue({ type: 'harvest', plot: id }); if (hud) flashMessage(hud, `Harvesting ${ids.length} plot${ids.length > 1 ? 's' : ''}`); return; }
+    }
+    landFarm(action);
+  }
+  /** The FARM tab's locks (methods not unlocked, crops without pods), refreshed when the save changed. */
+  function refreshFarmLocks() {
+    if (!farmed) return;
+    const c = ctxNow();
+    if (farmLocksOf === c) return;
+    farmLocksOf = c;
+    const locks = farmRailLocks(store.load(), c, farmIds);
+    const all = { ...catalogue.locks };
+    for (const id of farmIds) delete all[id];
+    catalogue.setLocks({ ...all, ...locks });
   }
   const panel = doc.createElement('div');
   panel.className = 'bw-panel op-session-panel';
@@ -252,6 +391,40 @@ async function openSession(opts, opening) {
     if (r.ok) flashMessage(hud, 'Repair drones launched · −' + fmtGold(r.cost || 0) + ' gold');
   });
   btn('LEAVE', () => close());
+  // the selected plot's / farm building's panel (S6): this panel's farm section, from the farm's own panel model
+  // (farm/view/farmUi.js farmPanelModel); its buttons run farmAct. The outpost lines hide while it is open.
+  const farmBox = doc.createElement('div');
+  farmBox.className = 'op-s-farm';
+  Object.assign(farmBox.style, { display: 'none', flexDirection: 'column', gap: '5px' });
+  panel.appendChild(farmBox);
+  let farmKey = '';
+  function renderFarmPanel(m) {
+    const key = JSON.stringify(m);
+    if (key === farmKey) return;
+    farmKey = key;
+    farmBox.innerHTML = '';
+    if (!m) return;
+    const row = (text, style = {}) => { const d = doc.createElement('div'); d.textContent = text; Object.assign(d.style, style); farmBox.appendChild(d); return d; };
+    row(m.title, { font: '900 13px/1.2 Orbitron, sans-serif', letterSpacing: '.1em' });
+    if (m.status) row(m.status, { color: m.tone === 'ok' ? '#8cf22e' : m.tone === 'warn' || m.tone === 'off' ? '#ffb43c' : '#9ab' });
+    for (const [k, v] of m.stats || []) row(k + ' · ' + v);
+    for (const w of m.warnings || []) row(w.text, { color: '#ffb43c' });
+    for (const a of m.actions || []) {
+      const b = doc.createElement('button');
+      b.className = 'bw-btn';
+      b.textContent = a.label;
+      b.disabled = !a.enabled;
+      if (a.why) b.title = a.why;
+      b.addEventListener('click', () => farmAct(a.act, a.arg));
+      farmBox.appendChild(b);
+    }
+    if (m.note) row(m.note, { color: '#8a96a3', fontWeight: '500' });
+    const x = doc.createElement('button');
+    x.className = 'bw-btn';
+    x.textContent = 'CLOSE';
+    x.addEventListener('click', () => { farmSel = null; if (farmLayer) farmLayer.select(null); panelSince = 1; });
+    farmBox.appendChild(x);
+  }
   // the away report (what happened while the player was gone), once, on arrival
   const away = awayReportModel(opened.report, planet, map, catalog);
   if (away.show) {
@@ -267,6 +440,18 @@ async function openSession(opts, opening) {
   session.addPanel(panel);
   let panelSince = 1;
   function refreshPanel() {
+    refreshFarmLocks();
+    // a battle selection (a structure or a unit) or an armed tool replaces a farm selection
+    if (farmSel && (ui.selectedStructureId != null || ui.selectedUnitId != null || ui.buildSelection)) { farmSel = null; if (farmLayer) farmLayer.select(null); }
+    let fm = null;
+    if (farmSel) {
+      const fo = farmNow(), c = ctxNow();
+      fm = farmPanelModel(fo, map, farmSel, { ...c, now: nowOf(), gold: sim.economy.money, room: Math.max(0, storeCapacity(fo, map) - (c.heldTotal || 0)) });
+      if (!fm) farmSel = null;
+    }
+    renderFarmPanel(fm);
+    farmBox.style.display = fm ? 'flex' : 'none';
+    for (const n of panel.children) if (n !== farmBox) n.hidden = !!fm;
     const v = view || fromLiveSim(sim, live.link, nowOf()).outpost;
     const h = hudModel(v, map, { gold: sim.economy.money, now: nowOf() });
     const issues = onlineIssues(v, map);
@@ -297,7 +482,16 @@ async function openSession(opts, opening) {
         if (w) flashMessage(hud, 'Upgrade started · ' + w.replace(/^./, (c) => c.toUpperCase()));
       } catch (e) { console.warn('[outpost] upgrade grid check', e); }
     },
-    afterTick: () => { if (raids) raids.step(); if (sim.tick % 15 === 0) syncHarvestPower(sim, live.link); },
+    afterTick: () => {
+      if (raids) {
+        raids.step();
+        // a visit raid that crossed the farm tramples it as a raid does (Farming-Design §10): the cells its raiders
+        // stood on, once it clears, through the save session (act trample → farm/model.js trample)
+        const cells = farmed ? raids.takeCells() : null;
+        if (cells && cells.length) { const keep = ui.selectedStructureId; actOnSave({ type: 'trample', cells }, { keepTool: true }); ui.selectedStructureId = keep; }
+      }
+      if (sim.tick % 15 === 0) syncHarvestPower(sim, live.link);
+    },
     beforeFrame: (dtMs) => { dt = Math.min(dtMs / 1000, 0.25); },
     beforeHud: () => {
       panelSince += dt;
@@ -308,12 +502,25 @@ async function openSession(opts, opening) {
         since = 0;
         try { view = fromLiveSim(sim, live.link, nowOf()).outpost; scene.sync(view, nowOf(), ctxNow()); }
         catch (e) { console.warn('[outpost] scene sync', e); }
+        if (farmLayer) {
+          try { const fo = farmNow(); farmLayer.sync(fo, nowOf()); crew.sync(fo); if (farmSel) farmLayer.select(farmRect(farmSel)); }
+          catch (e) { console.warn('[outpost] farm sync', e); }
+        }
         // a repair drone finished its work during the visit: settle the save (its clock completes the repair, as it does
         // while away) and rebuild the live state, so the wreck stands again before the player leaves
         if (view && repairDue(view, nowOf())) { const keep = ui.selectedStructureId; actOnSave({ type: 'settle' }); ui.selectedStructureId = keep; }
       }
       try { const gp = ghostNow(); scene.setPreview(previewPlan(gp)); scene.setPowerIcons(powerIconsNow(gp)); } catch (e) { console.warn('[outpost] preview conduit', e); }
       try { scene.update(dt, view); } catch (e) { console.warn('[outpost] scene update', e); }
+      if (farmLayer) {
+        try {
+          farmLayer.update(dt);
+          crew.shelter(!!sim.waves.active);   // a raid: the avatar and the farmhands wait it out at the Farmhouse (§10)
+          crew.update(dt);
+          const r3 = session.view3d;
+          if (r3 && r3.impacts) farmFx.step(dt, farmNow(), r3.impacts, FXK);   // embers drifting off each Fruited plot
+        } catch (e) { console.warn('[outpost] farm update', e); }
+      }
     },
   });
 
@@ -327,10 +534,18 @@ async function openSession(opts, opening) {
       bankVisit(store, planet, outpost, gold);
     } catch (e) { console.error('[outpost] could not save the visit', e); crumb('outpost: save failed'); }
     try { if (scene && scene.dispose) scene.dispose(); } catch (e) { /* already gone */ }
+    try { if (farmLayer) farmLayer.dispose(); if (crew) crew.dispose(); } catch (e) { /* already gone */ }
     session.destroy();
     host.remove();
+    try { if (win.Bulwark && win.Bulwark.outpost) delete win.Bulwark.outpost; } catch (e) { /* no window */ }
     resolveClosed();
   }
   refreshPanel();
-  return { closed: closedP, close, handle: { session, get sim() { return sim; }, get live() { return live; }, get ui() { return ui; }, get raids() { return raids; }, get scene() { return scene; }, panel, actOnSave } };
+  const handle = { session, get sim() { return sim; }, get live() { return live; }, get ui() { return ui; }, get raids() { return raids; }, get scene() { return scene; }, panel, actOnSave,
+    // the farm (S6; review pages and the headless check): its tab, the picture's counts, the crew, a farm action, a tap
+    catalogue, get farm() { return farmLayer; }, get crew() { return crew ? crew.info() : null; }, farmAct, tapFarm, farmNow,
+    get farmSel() { return farmSel; } };
+  // the open outpost for the review pages and the headless check (window.Bulwark is the game's diagnostics namespace)
+  try { win.Bulwark = win.Bulwark || {}; win.Bulwark.outpost = handle; } catch (e) { /* no window */ }
+  return { closed: closedP, close, handle };
 }
