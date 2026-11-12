@@ -108,10 +108,13 @@ test('probes come 45–75 s into a visit, then every 100–180 s, the same for t
   }
 });
 
-test('a probe is the planet\'s light tank and a trooper, a second tank every other time', () => {
-  assert.deepEqual(probeUnits('ground', 0), ['GND-Tanks', 'GND-Troops']);
-  assert.deepEqual(probeUnits('ground', 1), ['GND-Tanks', 'GND-Troops', 'GND-Tanks']);
-  for (const p of ['air', 'water', 'dark', 'greenies']) assert.ok(probeUnits(p, 0).some((u) => /-Tanks$/.test(u)), p);
+// Owner 2026-11-12, "base is getting attacked by heavy tanks, juggernauts" [MM-task_mwd2qc3c_4]: a probe used to be the
+// planet's assault tank and a trooper (a second tank every other time); it is now two troopers, three every other time,
+// from the workbook roster (raidRoster.test.mjs walks every raid path on every planet).
+test('a probe is two of the planet\'s troopers, three every other time — no tank', () => {
+  assert.deepEqual(probeUnits('ground', 0), ['GND-Troops', 'GND-Troops']);
+  assert.deepEqual(probeUnits('ground', 1), ['GND-Troops', 'GND-Troops', 'GND-Troops']);
+  for (const p of ['air', 'water', 'dark', 'greenies']) assert.ok(!probeUnits(p, 0).some((u) => /-Tanks$/.test(u)), p);
 });
 
 
