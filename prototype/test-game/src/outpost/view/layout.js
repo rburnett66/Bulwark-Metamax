@@ -13,7 +13,8 @@
  * leaves clear (camera.js clearBox / fitCameraToRect). Pure.
  */
 import { clearBox, fitCameraToRect, CAMERA } from '../../render3d/camera.js';
-import { mesaFrame } from '../../terrain/outpostPads.js';
+import { mesaFrame, HEIGHT } from '../../terrain/outpostPads.js';
+import { reservedRects } from '../outpostMap.js';
 
 /** The battle camera's angle: its pitch, facing north (owner 2026-11-08: "why is the outpost camera angle rotated .. we
  *  should keep it the same as battle"; it was turned 0.38 rad for the concept's three-quarter view). */
@@ -37,9 +38,12 @@ export function frameRect(map, margin = 1) {
   return { x0: f.x, z0: f.y, x1: f.x + f.w, z1: f.y + f.h };
 }
 
-/** The mesa's buildings: the bounding box of its (non-remote) pads plus `margin`, world units. */
+/** The mesa's core: the bounding box of its fixed features on the mesa top (the landing pad and the deposits there;
+ *  S2c.2: no build pads) plus `margin`, world units. */
 export function padsRect(map, margin = 1) {
-  const pads = (map.pads || []).filter((p) => !p.remote);
+  const cols = map.width ?? map.cols, H = map.heights;
+  const onTop = (p) => { if (!H) return true; for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) if (H[y * cols + x] !== HEIGHT.TOP) return false; return true; };
+  const pads = reservedRects(map).filter(onTop);
   if (!pads.length) return frameRect(map);
   return { x0: Math.min(...pads.map((p) => p.x)) - margin, z0: Math.min(...pads.map((p) => p.y)) - margin,
     x1: Math.max(...pads.map((p) => p.x + p.w)) + margin, z1: Math.max(...pads.map((p) => p.y + p.h)) + margin };

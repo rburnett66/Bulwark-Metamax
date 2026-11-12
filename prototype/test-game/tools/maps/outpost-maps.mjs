@@ -27,11 +27,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const R = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..') + '/';
 const imp = (p) => import(pathToFileURL(R + p).href);
 const { generateTerrain, placeBase } = await imp('src/terrain/terrainGen.js');
-const { stampOutpost, deriveConduits, validateOutpostLayout, padSizeFor } = await imp('src/terrain/outpostPads.js');
+const { stampOutpost, validateOutpostLayout } = await imp('src/terrain/outpostPads.js');
 const { PLANET_RECIPES, evaluate, passes } = await imp('tools/maps/faction-maps.mjs');
 const POWDER = JSON.parse(fs.readFileSync(R + 'content/maps/forge/powder-map-1.json', 'utf8'));
-
-const pad = (id, x, y, role, extra = {}) => ({ id, x, y, w: padSizeFor(role), h: padSizeFor(role), role, ...extra });
 
 /** Planet key (src/data/planets.js) → its faction slug (the Forge slot names, tools/maps/faction-maps.mjs). */
 export const PLANET_SLUGS = Object.freeze({
@@ -46,36 +44,27 @@ const IMP_TARGET = { powder: 19.7, air: 12.9, 'high-tech': 12.6, artillery: 19.4
 
 /**
  * The outpost layer every planet shares (O4 Verdance's; O11 [MM-story_mw5oeob4_s] gives it to the other eight): the
- * large maps' 64 × 32 world, the hub centred on their base (31, 15). The mesa (21 × 19 cells) carries the hub and
- * seven pads within 10 cells of Power Station I on p1, with 1-cell walkways between them. The common ore sits on r1
- * and the uncommon on r2 at the mesa edge; the rare ore is remote in the west lowland on r3, with its own power pad
- * p2. Raids come in from the west edge (past the remote site, up the west ramp) and the east edge (up the south ramp).
+ * large maps' 64 × 32 world, the landing pad (hub) centred on their base (31, 15). The mesa (21 × 19 cells) carries the
+ * landing pad, the common ore south of it (clear of it by the hub clearance, S2c.2) and the uncommon ore east at the
+ * mesa edge; the rare ore is remote in the west lowland, with a clearing north of it for its own station. No build pads
+ * (S2c.2 [MM-story_mwc9pmbn_2i]): buildings are placed freely. Raids come in from the west edge (past the remote site,
+ * up the west ramp) and the east edge (up the south ramp).
  * One layout for all nine keeps the raid measurement comparable planet to planet (the same reference walls, the same
  * ramps); what differs is each planet's recipe, seed, decor, resources, palette and raiders.
  */
 const SHARED = {
     mesa: { cx: 35.5, cy: 14.5, rx: 10.5, ry: 9.5, ramps: [{ x: 24, y: 14, w: 3, h: 2 }, { x: 38, y: 23, w: 2, h: 2 }] },
-    // half scale (owner 2026-11-08): a 3 × 3 hub on the base's cells (30–32, 14–16) and 2 × 2 pads packed round it with
-    // 1-cell walkways — the bays north, the station and storage east, the uncommon rig beyond the station, the common
-    // rig south. The west half of the mesa (the west ramp's side) is left open for defenses. The remote rare site keeps
-    // its place in the west lowland (the pads centred in their authored clearings).
-    pads: [
-      pad('hub', 30, 14, 'hub'),
-      pad('p1', 34, 13, 'power'),
-      pad('r1', 30, 18, 'rig'),
-      pad('s1', 34, 16, 'storage'),
-      pad('r2', 37, 13, 'rig'),
-      pad('b1', 29, 11, 'bay'),
-      pad('b2', 32, 11, 'bay'),
-      pad('x1', 35, 10, 'spare'),
-      pad('r3', 16, 18, 'rig', { remote: true }),
-      pad('p2', 16, 12, 'power', { remote: true }),
-    ],
+    // half scale (owner 2026-11-08): a 3 × 3 landing pad on the base's cells (30–32, 14–16). S2c.2 (owner playtest
+    // 2026-11-11: "the mining station is too close to the landing pad"): the common ore moved one cell south (30, 19)
+    // so a rig on it keeps HUB_CLEARANCE (2) from the landing pad. The remote rare site keeps its place in the west
+    // lowland; its yard and the clearing north of it (the old station spot) are terrain only.
+    hub: { x: 30, y: 14, w: 3, h: 3 },
     deposits: [
-      { tier: 'common', x: 30, y: 18, pad: 'r1' },
-      { tier: 'uncommon', x: 37, y: 13, pad: 'r2' },
-      { tier: 'rare', x: 16, y: 18, pad: 'r3' },
+      { tier: 'common', x: 30, y: 19 },
+      { tier: 'uncommon', x: 37, y: 13 },
+      { tier: 'rare', x: 16, y: 18 },
     ],
+    clearings: [{ x: 16, y: 12, w: 2, h: 2 }],
     // design §2.3: a Cannon, a Machine Gun and a wall ring — the cannon covers the west ramp, the MG the south ramp and
     // the mesa's south-east corner. The walls CLOSE the ways onto the mesa (O7, measured on the raid sim): walls that
     // only flank a ramp let a lone tier I troop walk past the guns to the hub, 1–2 cells from the ramp head. They
@@ -116,10 +105,10 @@ export const OUTPOST_LAYOUTS = Object.fromEntries(Object.entries(PLANET_SLUGS).m
   planet, name: PLANET_NAMES[planet], slug, ...structuredClone(SHARED), ...structuredClone(OVERRIDES[planet] || {}),
 }]));
 
-/** The layout with its derived conduits (the Forge's default: auto from reach) and its planet recipe. */
+/** The layout with its planet recipe. */
 export function layoutFor(planet) {
   const L = OUTPOST_LAYOUTS[planet];
-  return { ...L, recipe: L.recipe || PLANET_RECIPES[L.slug], conduits: deriveConduits(L) };
+  return { ...L, recipe: L.recipe || PLANET_RECIPES[L.slug] };
 }
 
 /**
@@ -131,12 +120,12 @@ export function outpostForgeFor(planet, seed) {
   const L = layoutFor(planet);
   const g = generateTerrain({ cols: POWDER.cols, rows: POWDER.rows, seed, types: L.recipe.types, water: L.recipe.water });
   const base = placeBase(g, POWDER.base.gap, { x: 31, y: 15 });
-  stampOutpost(g, { mesa: L.mesa, pads: L.pads, spawns: L.lanes, kitDefenses: L.kitDefenses });
+  stampOutpost(g, { mesa: L.mesa, deposits: L.deposits, clearings: L.clearings, spawns: L.lanes, kitDefenses: L.kitDefenses });
   const forge = {
     ...POWDER, seed, types: L.recipe.types, water: L.recipe.water, base: { pos: base.pos, gap: base.gap },
     spawnsByWave: { 1: L.lanes }, spawns: L.lanes, resources: [], decor: [],
     terrain: Array.from(g.terrain), blocking: Array.from(g.blocking),
-    planet, outpost: true, autoConduits: true, mesa: L.mesa, pads: L.pads, deposits: L.deposits, conduits: L.conduits,
+    planet, outpost: true, mesa: L.mesa, hub: L.hub, deposits: L.deposits, clearings: L.clearings,
     kitDefenses: L.kitDefenses, heights: Array.from(g.heights),
     ...(L.resourceDensity != null ? { resourceDensity: L.resourceDensity } : {}),
     ...(L.decorDensity != null ? { decorDensity: L.decorDensity } : {}),

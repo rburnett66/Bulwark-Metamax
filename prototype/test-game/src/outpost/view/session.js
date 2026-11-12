@@ -23,6 +23,7 @@ import { bankOf } from '../../save/save.js';
 import { noteRapportEvent, captainOf } from '../../save/standings.js';
 import { structureDef, OUTPOST, OUTPOST_TECH_IDS } from '../../data/outpost.js';
 import { raidHookFor } from './raidSeam.js';
+import { migrateOutpostLayout, LAYOUT_VERSION } from '../siting.js';
 import { awayReportModel } from './awayReport.js';
 import { applyProbeWear } from './visitProbe.js';
 import { trample, placePlot, placeFarmBuilding, prep, plant, harvest, harvestAll, applyFarmLoss } from '../../farm/model.js';
@@ -113,6 +114,18 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
     return banked;
   }
   const settle = (s, now) => { if (catalog) return settleOutpost(s, catalog, flowCtx(s, { ...flowOpts, now })); return null; };
+  /**
+   * S2c.2 save migration [MM-story_mwc9pmbn_2i]: before the catch-up, a save from the pad era is brought onto the free
+   * layout once (siting.js migrateOutpostLayout: pad buildings keep their pad's rectangle; only what now breaks the hub
+   * clearance or the spacing moves, to the nearest legal cell). → { moved, stuck } (empty when nothing changed).
+   */
+  function migrateLayout() {
+    let out = { moved: [], stuck: [] };
+    const o0 = (store.load().outposts || {})[planet];
+    if (!o0 || o0.layout === LAYOUT_VERSION) return out;
+    store.update((sv) => { const r = migrateOutpostLayout(sv.outposts[planet], map); sv.outposts[planet] = r.outpost; out = { moved: r.moved, stuck: r.stuck }; });
+    return out;
+  }
   let last = null;   // the outpost as last advanced (saved or a live copy)
 
   /** Advance the saved outpost to `now` inside a save update; returns the report. */
@@ -141,11 +154,12 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
      * settle the missions. → { outpost, report, away } — away: the away report's model ({ show, rows… }).
      */
     open(now) {
+      const migrated = migrateLayout();
       let report = null, settled = null, banked = {};
       const s = store.update((sv) => { report = advanceSaved(sv, now); banked = bankHopper(sv); settled = settle(sv, now); });
       last = s.outposts[planet] || null;
       if (report) report.banked = banked;
-      return { outpost: last, report, away: awayReportModel(report, planet, map, catalog), settled, banked };
+      return { outpost: last, report, away: awayReportModel(report, planet, map, catalog), settled, banked, migrated };
     },
 
     /**
@@ -155,6 +169,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
      * equals open(now). → Promise<{ outpost, report, away, settled }>
      */
     async openChunked(now, pause = async () => {}) {
+      const migrated = migrateLayout();
       const s0 = store.load(), o0 = s0.outposts && s0.outposts[planet];
       if (!o0) return api.open(now);
       const step = windowMs(OUTPOST), stop = Math.min(now, o0.t + OUTPOST.Away_Cap_Hours * 3_600_000);
@@ -171,7 +186,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
       const s = store.update((sv) => { banked = bankHopper(sv); settled = settle(sv, now); });
       last = s.outposts[planet] || null;
       if (merged) merged.banked = banked;
-      return { outpost: last, report: merged, away: awayReportModel(merged, planet, map, catalog), settled, banked };
+      return { outpost: last, report: merged, away: awayReportModel(merged, planet, map, catalog), settled, banked, migrated };
     },
 
     /**
@@ -264,6 +279,9 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
           }
         } };
       }
+      // advance only: act() has already run the outpost's clock to `now` (advanceSaved), which finishes what is due —
+      // a repair drone's work (d.repair.done), a build — so a visit settles them without leaving [MM-story_mwc9pkcd_2g]
+      case 'settle': return { outpost: o };
       case 'online': return confirmOnline(o, map, now);
       case 'sell': {
         const r = sell(o, ctx);
@@ -271,7 +289,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         if (!r.loads.length) return { error: 'no full load yet' };
         return { outpost: r.outpost, gold: r.gold, loads: r.loads };
       }
-      case 'place': return place(o, a.pad ? { pad: a.pad, kind: a.kind } : { cell: a.cell, kind: a.kind }, ctx);
+      case 'place': return place(o, a.pad || a.at ? { pad: a.pad, at: a.at, kind: a.kind } : { cell: a.cell, kind: a.kind }, ctx);
       case 'upgrade': return upgrade(o, a.pad, ctx);
       case 'repair': return repair(o, a.id, ctx);
       case 'repairAll': {

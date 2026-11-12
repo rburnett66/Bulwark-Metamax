@@ -83,7 +83,7 @@ const G = growSec('loam-grain') * 1000;
 
 /** The free farm spots nearest the outpost's hub, packed (src/farm/cells.js), taking what the farm already holds. */
 function nearSpots(o, n) {
-  const hub = map.pads.find((p) => o.pads[p.id] && o.pads[p.id].kind === 'hub');
+  const hub = map.hub;   // the landing pad (S2c.2: no map pads)
   const c = [hub.x + hub.w / 2, hub.y + hub.h / 2], taken = occupied(o, map);
   return packPlots(map, o).filter((r) => !walkwayHit(o, r) && !taken.some((t) => r.x < t.x + t.w && t.x < r.x + r.w && r.y < t.y + t.h && t.y < r.y + r.h))
     .sort((a, b) => Math.hypot(a.x - c[0], a.y - c[1]) - Math.hypot(b.x - c[0], b.y - c[1])).slice(0, n);

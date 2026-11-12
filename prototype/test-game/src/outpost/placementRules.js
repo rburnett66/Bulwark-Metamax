@@ -8,9 +8,10 @@
  *
  *   outpostPlacementRules(map) → [rule]; rule(state, def, cell) → reason | null
  */
-import { GUN_KINDS } from '../data/outpost.js';
+import { GUN_KINDS, HUB_CLEARANCE } from '../data/outpost.js';
 import { gunRefusalFor } from './model.js';
 import { ghostPower } from './view/conduits.js';
+import { spacingConflict } from '../sim/structures.js';
 
 const live = (state) => Array.from(state.structures.values()).filter((s) => s.lifecycle !== 'Destroyed' && s.lifecycle !== 'Selling');
 const kindOf = (s, getDef) => { try { return getDef(s.structId).outpostKind || null; } catch (e) { return null; } };
@@ -22,6 +23,21 @@ export function rigNeedsDeposit(map) {
     if (def.outpostKind !== 'rig') return null;
     return deposits.some((d) => d.x === cell.x && d.y === cell.y) ? null : 'needs a deposit';
   };
+}
+
+/**
+ * The landing pad's wider clearance (S2c.2 [MM-story_mwc9pmbn_2i]; owner 2026-11-11: "the mining station is too close
+ * to the landing pad"): every building and defense keeps `clearance` free cells (data/outpost.js HUB_CLEARANCE) from
+ * the hub's footprint. It IS the build-spacing rule (sim/structures.js spacingConflict, Chebyshev, the larger of the two
+ * spacings wins) with the hub standing in as a structure whose spacing is the clearance — no second checker. The hub is
+ * the live sim's base, not one of its structures, which is why it is passed here.
+ */
+export function hubClearance(map, clearance = HUB_CLEARANCE) {
+  const hub = map && map.hub;
+  if (!hub || !(clearance > 0)) return () => null;
+  const landingPad = [{ structId: 'OUT-hub', pos: { x: hub.x, y: hub.y }, footprint: { w: hub.w, h: hub.h } }];
+  const spacingOf = () => ({ spacing: clearance });
+  return (state, def, cell) => (spacingConflict(landingPad, def, cell, spacingOf) ? `keep ${clearance} cells clear of the landing pad` : null);
 }
 
 /** One more gun (MG or Cannon) only while the crew cap allows it: the hub's Gun_Cap plus the finished Habitat's tier. */
@@ -37,7 +53,13 @@ export function gunCrewCap(getDef) {
 
 /** The outpost's rules for a live outpost SimState on `map`. getDef = tables.getStructureDef. */
 export function outpostPlacementRules(map, getDef) {
-  return [rigNeedsDeposit(map), gunCrewCap(getDef)];
+  return [rigNeedsDeposit(map), hubClearance(map), gunCrewCap(getDef)];
+}
+
+/** The rules that say WHERE an outpost structure may stand (not whether the player may build one now): the rig on a
+ *  deposit and the hub clearance. siting.js places the starting kit and migrates saves by these. */
+export function outpostPositionRules(map) {
+  return [rigNeedsDeposit(map), hubClearance(map)];
 }
 
 // ── warnings: legal, but the player should know (sim/structures.js validatePlacement → state.placementWarnings) ────

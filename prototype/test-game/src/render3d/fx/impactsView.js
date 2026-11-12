@@ -40,6 +40,17 @@ export function farmEmberLook(p) {
 }
 
 /**
+ * A SMOKE particle's alpha. Gunsmoke / grey smoke: 0.55 fading out with age. Dust (`dusty` > 0): 0.45 × dusty, and a
+ * dusty value past the full-alpha cap (0.45 × dusty > 1, the build dust [MM-story_mwcrfnyf_3c]) HOLDS full alpha for
+ * longer before it fades — min(1, f × 0.45 × dusty) — so 2.2 (just under the cap) looks as before and 3.5 stays opaque
+ * for the first ~37 % of its life. Both fade in over the first sixth. Pure.
+ */
+export function smokeAlpha(p) {
+  const u = p.t / p.life, f = 1 - u, fadeIn = Math.min(1, u * 6);
+  return fadeIn * (p.dusty ? Math.min(1, f * 0.45 * Math.max(1, p.dusty)) : f * 0.55);
+}
+
+/**
  * createImpactsView(THREE, scene, { lodGroups, sunDir, caps })
  *   lodGroups — units3d.lodGroups(): { model: { group: { geo, pivot } } }
  *   caps      — the batch capacities (the model's caps limit what it fills; Low simply fills less)
@@ -129,7 +140,7 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
             break;
           }
           case K.SMOKE: {
-            const sz = p.size * (1 + (p.grow || 0.8) * u * 3), c = p.shade || 0.25, a = Math.min(1, u * 6) * f * (p.dusty ? Math.min(1, 0.45 * Math.max(1, p.dusty)) : 0.55);   // dusty > 1 = more opaque dust (build sites ×1.5)
+            const sz = p.size * (1 + (p.grow || 0.8) * u * 3), c = p.shade || 0.25, a = smokeAlpha(p);   // dusty > 1 = more opaque dust (build sites)
             smoke.push(p.x, p.y, p.z, 0, 0, 0, sz, 0, c * (p.dusty ? 1.5 : 1), c * (p.dusty ? 1.3 : 1), c * (p.dusty ? 1.1 : 1.05), a);
             break;
           }

@@ -3,10 +3,22 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { outpostMapFromForge } from '../outpostMap.js';
+import { positionCheck, nearestLegal } from '../siting.js';
+import { getStructureDef } from '../../data/tables.js';
 
 const FORGE = fileURLToPath(new URL('../../../content/maps/forge/ground-outpost.json', import.meta.url));
 export const forge = JSON.parse(readFileSync(FORGE, 'utf8'));
 export const map = outpostMapFromForge(forge, 'ground');
+
+/**
+ * A legal spot for a `kind` building on outpost `o` (S2c.2: no map pads — tests place where the shared rules allow):
+ * the nearest to `near` (default the landing pad's corner), by outpost/siting.js. → its rect { x, y, w, h }, or null.
+ */
+export function freeSpot(o, kind, { near = null, on = map } = {}) {
+  const fp = getStructureDef('OUT-' + kind).footprint;
+  const c = nearestLegal(positionCheck(o, on), on, kind, near || { x: on.hub.x, y: on.hub.y });
+  return c ? { x: c.x, y: c.y, w: fp.w, h: fp.h } : null;
+}
 
 export const MIN = 60_000, HOUR = 60 * MIN;
 export const T0 = Date.UTC(2026, 10, 7, 12, 0, 0);

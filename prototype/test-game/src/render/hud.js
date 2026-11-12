@@ -385,7 +385,7 @@ export function createHud(mountEl, callbacks) {
     if (key <= 9) icon.appendChild(el(doc, 'b', 'bw-bkey', String(key)));
     const costSpan = el(doc, 'span', 'bw-cost', String(def.cost && def.cost[0] != null ? def.cost[0] : '?') + 'g');
     btn.appendChild(icon);
-    btn.appendChild(el(doc, 'span', 'bw-bname', (buildIcon(structId) || {}).label || String(def.name || structId).toUpperCase()));
+    btn.appendChild(el(doc, 'span', 'bw-bname', (buildIcon(structId) || {}).label || def.label || String(def.name || structId).toUpperCase()));
     btn.appendChild(costSpan);
     btn.addEventListener('click', () => toggleBuild(structId));
     paletteRow.appendChild(btn);
@@ -1028,7 +1028,8 @@ export function updateHud(hud, state, ui) {
     hud.shpfill.style.width = (sfrac * 100).toFixed(1) + '%';
     hud.shptext.textContent = 'HP ' + Math.max(0, Math.ceil(s.hp)) + '/' + Math.ceil(s.maxHp);
 
-    const busy = s.lifecycle === 'Building' || s.lifecycle === 'Upgrading' || s.lifecycle === 'Selling' || s.lifecycle === 'Placing';
+    // a wreck (outpost only: battles never keep one) takes no panel command — the outpost's REPAIR ALL rebuilds it
+    const busy = s.lifecycle === 'Building' || s.lifecycle === 'Upgrading' || s.lifecycle === 'Selling' || s.lifecycle === 'Placing' || s.lifecycle === 'Wrecked';
     const maxTier = def && def.hp ? def.hp.length : 3;
     const upCost = (def && def.cost && s.tier < maxTier) ? def.cost[s.tier] : Infinity;
     // mirror the sim's campaign tier gate (structures.js canUpgrade) so a locked tier reads LOCKED

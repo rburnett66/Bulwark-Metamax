@@ -23,8 +23,8 @@
  * they land in the hopper; the save then marks the visit's stretch (o.liveHarvest) so the away closed form does not
  * count it again.
  *
- * Positions (S2c [MM-story_mwc9pmbn_2i]): a building on a map pad keeps that pad's id; one placed anywhere else is saved
- * under a new id ('f1', 'f2', …) carrying its own `at` rectangle, and model.buildingRect answers for both. Pure: no DOM,
+ * Positions (S2c [MM-story_mwc9pmbn_2i]): a building keeps its id; one placed during the visit is saved
+ * under a new id ('f1', 'f2', …) carrying its own `at` rectangle (no map pads since S2c.2), read by model.buildingRect. Pure: no DOM,
  * no clock (the caller passes `now`).
  */
 import { createSim } from '../sim/core.js';
@@ -45,6 +45,13 @@ const isBuilding = (kind) => OUTPOST_BUILDING_KINDS.includes(kind);
 const progressOf = (since, done, now) => (done > since ? clamp01((now - since) / (done - since)) : 1);
 const doneAt = (since, done, progress, now) => Math.round(now + (1 - progress) * (done - since));
 const sinceOf = (done, ms) => done - ms;   // a pad job records only `done`; its start is `done − its Build_Sec`
+
+/** sim/structures.js opt-in: an outpost DEFENSE the raid destroys stays as a wreck; a building is gone (as fromLiveSim saves). */
+function keepDefenseWreck(s) {
+  let def = null;
+  try { def = getStructureDef(s.structId); } catch (e) { return false; }
+  return !!(def && def.outpostKind && !isBuilding(def.outpostKind));
+}
 
 function addStructure(state, kind, cell, tier) {
   const id = outpostStructId(kind), def = getStructureDef(id);
@@ -102,12 +109,21 @@ export function toLiveSim(outpost, { map, now, gold = 0 }) {
     s.progress = progress;
     ids.set(s.id, { pad, extra, building: true });
   }
-  // defenses (a wreck at 0 HP stays out of the sim until it is repaired — as in a raid)
+  // defenses. A wreck at 0 HP is an inert 'Wrecked' structure (sim/structures.js opt-in wrecks): drawn, smoking and
+  // sparking (render3d/fx/structureFx.js), but it blocks no raider, is never targeted, never fires and draws no power
+  // in the sim — as a raid treats it. A defense a raid destroys during the visit becomes one the same tick
+  // (state.keepWreck), so it is in the save as a wreck, never lost between two reads [MM-story_mwcrfnyf_3c].
   const wrecks = [];
+  state.keepWreck = keepDefenseWreck;
   for (const d of outpost.defenses) {
-    if (!(d.hp > 0)) { wrecks.push(d); continue; }
     const { id, kind, tier, cell, hp, building, selling, ...extra } = d;
     const s = addStructure(state, kind, cell, tier);
+    if (!(hp > 0)) {
+      wrecks.push(d);
+      s.hp = 0; s.lifecycle = 'Wrecked';
+      ids.set(s.id, { defense: id, extra });
+      continue;
+    }
     s.hp = Math.min(hp, s.maxHp);
     s.lifecycle = s.hp < s.maxHp ? 'Damaged' : 'Complete';
     if (building) { s.lifecycle = 'Building'; s.progress = progressOf(building.since, building.done, now); }
@@ -242,8 +258,8 @@ export function syncHarvestPower(state, link) {
 }
 
 /**
- * The live SimState back into the save at `now`. → { outpost, gold }. Throws (loudly) for a building that stands on no
- * map pad — the pad-based save cannot hold it until S2c.
+ * The live SimState back into the save at `now`. → { outpost, gold }. A building placed during the visit gets a new
+ * free id and its own `at` rectangle.
  */
 export function fromLiveSim(state, link, now) {
   const { outpost: before, map, ids } = link;
@@ -252,12 +268,10 @@ export function fromLiveSim(state, link, now) {
   for (const [pad, b] of Object.entries(before.pads)) if (b.kind === 'hub') o.pads[pad] = clone(b);
   const padJobs = [], defenses = new Map(), newDefenses = [];
   let upgrading = null;
-  // a building placed during the visit: on a free map pad it takes that pad's id; anywhere else a new free id + its rect
+  // a building placed during the visit: a new free id + its own rectangle (S2c.2: the maps have no pads)
   const taken = new Set([...Object.keys(before.pads), ...(before.building || []).map((j) => j.pad)]);
   let nextFree = 1 + Math.max(0, ...[...taken].filter((id) => /^f\d+$/.test(id)).map((id) => +id.slice(1)));
   const placeOf = (s, def) => {
-    const p = map.pads.find((q) => q.x === s.pos.x && q.y === s.pos.y && q.w === def.footprint.w && q.h === def.footprint.h && !taken.has(q.id));
-    if (p) { taken.add(p.id); return { pad: p.id, extra: {} }; }
     const id = `f${nextFree++}`;
     taken.add(id);
     const extra = { at: { x: s.pos.x, y: s.pos.y, w: def.footprint.w, h: def.footprint.h } };
@@ -273,9 +287,10 @@ export function fromLiveSim(state, link, now) {
     const def = getStructureDef(s.structId), kind = def.outpostKind;
     if (!kind) continue;                       // not an outpost structure
     const e = ids.get(s.id) || null;
-    if (s.lifecycle === 'Destroyed') {
+    if (s.lifecycle === 'Destroyed' || s.lifecycle === 'Wrecked') {
       // a defense a raid destroyed stays in the save as a WRECK at 0 HP — repaired, it fights again (as in a raid);
-      // a sold one is gone from the sim altogether (structures.js deletes it) [MM-subtask_mwcij14c_33]
+      // a sold one is gone from the sim altogether (structures.js deletes it) [MM-subtask_mwcij14c_33]. 'Wrecked': a
+      // wreck from before the visit, or one the sim kept the tick it was destroyed (state.keepWreck)
       if (!isBuilding(kind)) {
         const id = e ? e.defense : `d${nextDefense++}`;
         const wreck = { id, kind, tier: s.tier, cell: [s.pos.x, s.pos.y], hp: 0, ...(e ? e.extra : {}) };
@@ -323,10 +338,7 @@ export function fromLiveSim(state, link, now) {
   padJobs.sort((a, b) => ((oldJobs.indexOf(jobKey(a)) + 1 || 1e9) - (oldJobs.indexOf(jobKey(b)) + 1 || 1e9)));
   o.building = padJobs;
   o.defenses = [];
-  for (const d of before.defenses) {
-    if (!(d.hp > 0)) o.defenses.push(clone(d));
-    else if (defenses.has(d.id)) o.defenses.push(defenses.get(d.id));
-  }
+  for (const d of before.defenses) if (defenses.has(d.id)) o.defenses.push(defenses.get(d.id));   // wrecks are live structures too
   o.defenses.push(...newDefenses);
   o.upgrading = upgrading || null;
   if (before.upgrading == null && upgrading == null && !('upgrading' in before)) delete o.upgrading;

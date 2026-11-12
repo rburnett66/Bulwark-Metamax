@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { outpostMapFromForge, draftOutpostMap } from '../outpost/outpostMap.js';
+import { outpostMapFromForge, draftOutpostMap, reservedRects } from '../outpost/outpostMap.js';
 import { referenceOutpost, surfaceFields, surfaceFieldGroups } from '../outpost/model.js';
 import { generateTerrain } from '../terrain/terrainGen.js';
 import { stampOutpost } from '../terrain/outpostPads.js';
@@ -29,7 +29,7 @@ test('the Verdance outpost map carries the farm-cell layer, read through outpost
 
 test('the layer is what the Forge derives from the stamped grid (mesa none, ramps slope, lanes, ponds, groves, fields)', () => {
   const g = generateTerrain({ cols: FORGE.cols, rows: FORGE.rows, seed: FORGE.seed, types: FORGE.types, water: FORGE.water });
-  stampOutpost(g, { mesa: FORGE.mesa, pads: FORGE.pads, spawns: FORGE.spawns, kitDefenses: FORGE.kitDefenses });
+  stampOutpost(g, { mesa: FORGE.mesa, deposits: FORGE.deposits, clearings: FORGE.clearings, spawns: FORGE.spawns, kitDefenses: FORGE.kitDefenses });
   assert.deepEqual(FORGE.farmCells, deriveFarmCells(FORGE, g.lanes));
   for (let i = 0; i < FORGE.farmCells.length; i++) {
     const t = FORGE.farmCells[i], x = i % W, y = (i / W) | 0;
@@ -54,21 +54,21 @@ test('at least 30 2 × 2 soil plots fit round the mesa (measured: 688 spots, 109
   }
 });
 
-test('placement refusals: off the map, mesa, pads, lanes, blocking, defenses, other farm things, not soil', () => {
+test('placement refusals: off the map, mesa, the landing pad / deposits / buildings, lanes, blocking, defenses, other farm things, not soil', () => {
   const [sx, sy] = plotSpots(map)[0];
   assert.equal(canPlacePlot(map, null, sx, sy), true);
   assert.equal(canPlacePlot(draftOutpostMap('ground'), null, 0, 0), 'no farm layer');
   assert.equal(canPlacePlot(map, null, -1, 0), 'off the map');
   assert.equal(canPlacePlot(map, null, W - 1, 0), 'off the map');
-  const hub = map.pads.find((p) => p.role === 'hub');
+  const hub = map.hub;
   assert.equal(canPlacePlot(map, null, hub.x, hub.y), 'on the mesa');
-  const r3 = map.pads.find((p) => p.id === 'r3');
-  assert.equal(canPlacePlot(map, null, r3.x, r3.y), 'on a pad', 'the remote rig in the lowland');
-  assert.equal(canPlacePlot(map, null, r3.x + r3.w, r3.y), 'on a pad', 'its 1-cell yard');
+  const r3 = map.deposits.find((d) => d.tier === 'rare');
+  assert.equal(canPlacePlot(map, null, r3.x, r3.y), 'on a building', 'the remote deposit in the lowland');
+  assert.equal(canPlacePlot(map, null, r3.x + 2, r3.y), 'on a building', 'its 1-cell yard');
   const [lx, ly] = [map.spawns[0].x, map.spawns[0].y];
   assert.equal(canPlacePlot(map, null, lx, ly), 'on a raid lane');
   const bi = map.blocking.findIndex((b, i) => b && map.heights[i] === 0 && map.farmCells[i] !== FARM_CELL.LANE
-    && !map.pads.some((p) => Math.abs(i % W - p.x) < 4 && Math.abs(((i / W) | 0) - p.y) < 4));
+    && !reservedRects(map).some((p) => Math.abs(i % W - p.x) < 4 && Math.abs(((i / W) | 0) - p.y) < 4));
   assert.equal(canPlacePlot(map, null, Math.min(bi % W, W - 2), Math.min((bi / W) | 0, 30), 1, 1), 'on blocking terrain');
   const o = { defenses: [{ id: 'd9', kind: 'mg', cell: [sx + 1, sy] }] };
   assert.equal(canPlacePlot(map, o, sx, sy), 'on a defense');

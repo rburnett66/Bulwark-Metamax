@@ -12,6 +12,7 @@
  * so the ring fog is off. Map size always comes from the map (never assumed).
  */
 import { buildTerrainMap } from '../../sim/mapgen.js';
+import { nearReserved } from '../outpostMap.js';
 
 /** The battle board for an outpost map (outpostMapFor's shape, with `forge`). bakeTune: the Forge's tf.bake.v1. */
 export function outpostBattleMap(om, { bakeTune = {} } = {}) {
@@ -21,8 +22,8 @@ export function outpostBattleMap(om, { bakeTune = {} } = {}) {
     cols: om.width, rows: om.height, terrain: om.terrain || new Array(om.width * om.height).fill(0),
     blocking: om.blocking || new Array(om.width * om.height).fill(0), base: null, spawns: om.spawns || [], decor: [], resources: [],
   };
-  const hub = (om.pads || []).find((p) => p.role === 'hub');
-  // the base the battle board needs sits on the hub pad's centre (the Forge export's base is the hub)
+  const hub = om.hub;
+  // the base the battle board needs sits on the landing pad's centre (the Forge export's base is the hub)
   const f = hub && !forge.base ? { ...forge, base: { pos: { x: Math.floor(hub.x + hub.w / 2), y: Math.floor(hub.y + hub.h / 2) } } } : forge;
   const m = buildTerrainMap(f, 1, { seed: 0, bakeTune });
   m.waveWindows = []; m.rings = []; m.openPlay = false;   // no waves at an outpost: the ring fog stays off
@@ -48,10 +49,9 @@ export async function bakedSlugFor(om, { base = '', fetch: f = globalThis.fetch 
   } catch (_) { return null; }
 }
 
-/** The surface resource fields to draw: the map's own, off the mesa and the pads (raw Forge resources). */
+/** The surface resource fields to draw: the map's own, off the mesa and the landing pad / deposits (raw Forge resources). */
 export function lowlandResources(om) {
   const cols = om.width, H = om.heights;
-  const onPad = (x, y) => (om.pads || []).some((p) => x >= p.x - 1 && x < p.x + p.w + 1 && y >= p.y - 1 && y < p.y + p.h + 1);
-  return (om.resources || []).filter((r) => !(H && H[r.y * cols + r.x] > 0) && !onPad(r.x, r.y))
+  return (om.resources || []).filter((r) => !(H && H[r.y * cols + r.x] > 0) && !nearReserved(om, r.x, r.y, 1))
     .map((r, i) => ({ id: `or${i}`, x: r.x, y: r.y, role: r.role, color: r.color, units: 1, remaining: 1 }));
 }

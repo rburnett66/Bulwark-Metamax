@@ -26,6 +26,7 @@
 import { createCrewKit, cfgFor, PLAYER_CFG, drivePose, walkSwing, rng } from '../../ship-interior/crew.js';
 import { buildNavGrid, findWalkerPath } from '../../sim/pathfinding.js';
 import { plotState } from '../model.js';
+import { takenRects } from '../../outpost/model.js';
 import { createQueue, queueStep, queueView, queueIdle } from './avatarQueue.js';
 
 /** The avatar's height on the surface: 0.45 of a battle cell (D44). */
@@ -67,11 +68,11 @@ export function standPoint(p, map, k = 0) {
   return front < map.height ? { x, z: front, yaw: Math.PI } : { x, z: p.y - 0.3, yaw: 0 };
 }
 
-/** Cells the farm's walkers keep off: the outpost pads, the farm buildings and the raised ground (the mesa). */
+/** Cells the farm's walkers keep off: the landing pad, deposits and outpost buildings, the farm buildings and the raised ground (the mesa). */
 export function walkerBlocked(o, map) {
   const out = [];
   const rect = (r) => { for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) out.push({ x, y }); };
-  for (const p of map.pads || []) rect(p);
+  for (const p of takenRects(o || {}, map)) rect(p);
   if (o.farm) for (const b of Object.values(o.farm.buildings || {})) rect(b);
   const H = map.heights;
   if (H) for (let i = 0; i < H.length; i++) if (H[i] > 0) out.push({ x: i % map.width, y: Math.floor(i / map.width) });

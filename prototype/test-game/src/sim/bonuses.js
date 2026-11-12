@@ -63,7 +63,7 @@ export function rollBonusOffer(state) {
 function healStructuresByKind(state, kind) {
   let n = 0;
   for (const s of state.structures.values()) {
-    if (s.kind !== kind || s.lifecycle === 'Destroyed') continue;
+    if (s.kind !== kind || s.lifecycle === 'Destroyed' || s.lifecycle === 'Wrecked') continue;
     if (s.hp < s.maxHp) { s.hp = s.maxHp; if (s.lifecycle === 'Damaged') s.lifecycle = 'Complete'; }
     n++;
   }

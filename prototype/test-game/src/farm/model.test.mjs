@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { referenceOutpost, advance, powerGrids } from '../outpost/model.js';
+import { referenceOutpost, advance, powerGrids, buildingRect } from '../outpost/model.js';
 import { DRAFT_LAYOUT as map } from '../outpost/draftLayout.js';
 import { FARM, yieldOf, growSec } from '../data/farm.js';
 import { TERRAIN } from '../terrain/terrainGen.js';
@@ -30,10 +30,15 @@ function freeSpots(o, n, w = 2, h = 2) {
 const go = (o, t) => advance(o, t, { map }).outpost;
 /** A free spot within the reference outpost's Power Station reach (so a farm building on it is powered). */
 function nearPower(o, w, h, near = null) {
-  const pw = map.pads.find((p) => o.pads[p.id] && o.pads[p.id].kind === 'power');
+  const pw = buildingRect(o, map, Object.keys(o.pads).find((id) => o.pads[id].kind === 'power'));
   const c = [pw.x + pw.w / 2, pw.y + pw.h / 2];
   return freeSpots(o, 400, w, h).filter((r) => Math.hypot(r.x + w / 2 - c[0], r.y + h / 2 - c[1]) <= 8)
     .sort((a, b) => (near ? Math.hypot(a.x - near.x, a.y - near.y) - Math.hypot(b.x - near.x, b.y - near.y) : 0))[0];
+}
+/** Is a 1 × 1 spot within the kit station's power reach (the station stands where outpost/siting.js puts it)? */
+function inStationReach(o, c) {
+  const pw = buildingRect(o, map, Object.keys(o.pads).find((k) => o.pads[k].kind === 'power'));
+  return Math.hypot(c.x + 0.5 - (pw.x + pw.w / 2), c.y + 0.5 - (pw.y + pw.h / 2)) <= 9;
 }
 /** A plot placed and prepped, the outpost advanced to planting time. → { o, id } */
 function prepped(method = 'traditional') {
@@ -138,7 +143,7 @@ test('Irrigated grows 1.5× with water in reach: a powered Pump or a natural wat
   const dry = go(o, t + g / 1.5 + MIN);
   assert.equal(plotState(dry, dry.farm.plots[id]), 'plant', 'no water: Traditional speed');
   const plot = o.farm.plots[id];
-  const pumpAt = freeSpots(o, 600, 1, 1).find((c) => Math.hypot(c.x + 0.5 - (plot.x + 1), c.y + 0.5 - (plot.y + 1)) <= 3);
+  const pumpAt = freeSpots(o, 600, 1, 1).find((c) => Math.hypot(c.x + 0.5 - (plot.x + 1), c.y + 0.5 - (plot.y + 1)) <= 3 && inStationReach(o, c));
   const p = placeFarmBuilding(o, { kind: 'pump', ...pumpAt }, { map, now: t - 2 * MIN, gold: 1e9 });
   // the reference outpost's Power Station I is fully drawn (supply 10): the Pump is last in priority, so it is off
   const short = go(p.outpost, t + g / 1.5 + MIN);
@@ -157,7 +162,7 @@ test('Irrigated grows 1.5× with water in reach: a powered Pump or a natural wat
 
 test('placing: refusals for taken ground, locked methods, gold, and the map rule passed in', () => {
   const o = base();
-  const pad = map.pads[0];
+  const pad = map.hub;
   assert.match(placePlot(o, { x: pad.x, y: pad.y }, { map, now: T0 }).error, /taken/);
   const [s] = freeSpots(o, 1);
   assert.match(placePlot(o, { ...s, method: 'irrigated' }, { map, now: T0 }).error, /not unlocked/);
@@ -243,7 +248,7 @@ test('level 5 needs a trick: a Traditional plot grows a level-5 crop at 4; an Ir
   assert.equal(plantLevel(o, lake, plot, 3).level, 3, 'below 5 the method never matters');
 
   // a finished, powered Pump in reach is water too
-  const pumpAt = freeSpots(o, 600, 1, 1).find((c) => Math.hypot(c.x + 0.5 - (plot.x + 1), c.y + 0.5 - (plot.y + 1)) <= 3);
+  const pumpAt = freeSpots(o, 600, 1, 1).find((c) => Math.hypot(c.x + 0.5 - (plot.x + 1), c.y + 0.5 - (plot.y + 1)) <= 3 && inStationReach(o, c));
   const p = placeFarmBuilding(o, { kind: 'pump', ...pumpAt }, { map, now: o.t - 2 * MIN, gold: 1e9 });
   const grid2 = structuredClone(p.outpost);
   for (const b of Object.values(grid2.pads)) if (b.kind === 'power') b.tier = 2;

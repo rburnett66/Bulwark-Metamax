@@ -1,15 +1,19 @@
 /**
- * src/outpost/view/outpostView.js — the outpost view: full screen, opened from the menu's OUTPOST button
- * [MM-story_mw5oeer7_n].
+ * src/outpost/view/outpostView.js — the entry the menu's OUTPOST and FARM buttons open [MM-story_mw5oeer7_n].
  *
- * Tech plan docs/tech-plan/Outpost.md §6.1–§6.5; design docs/16 Bulwark MM/design/Outpost-Design.md §4.3–§4.5, §5.3,
- * §8, §10. The planet's outpost map is drawn by the battle renderer (render3d/index.js, through outpostBoard.js: the
- * same buildTerrainMap board and baked-level ground a battle map gets); outpostScene.js adds the pads, buildings,
- * conduits, deposits and effects; hud.js is the HUD; session.js is the link to the save (every action goes through
- * src/outpost/model.js, then missionFlow.settleOutpost).
+ * One Battle UX S2.4d [MM-story_mwc9pkcd_2g] (TECH_PLAN::One-Battle-UX.md §4): THE OUTPOST IS THE BATTLE SESSION. The
+ * OUTPOST tab always opens sessionView.js (the battle's camera, input, build rail, placement, HUD and clock on a live
+ * SimState) — for every player, no URL flag (?outpost=session is still accepted and changes nothing). The old pad-based
+ * outpost view is gone.
  *
- *   const v = await openOutpostView({ planet, mount, tier });   // resolves once the view is up
- *   await v.closed;                                             // the player closed it
+ * What is left in this file is the FARM view only, until S6 puts the farm on the session too: the farm still runs on
+ * this file's own camera / pointer / placement loop and the old HUD (hud.js, buildMenu.js's placement reducer,
+ * layout.js), because farm/view/farmUi.js and the farm's placement are built on them. It opens on the FARM tab only;
+ * its OUTPOST tab hands over to the session view (the farm view closes, the session view opens, the menu's `closed`
+ * waits for both), so the outpost is never shown in two patterns.
+ *
+ *   const v = await openOutpostView({ planet, tab, mount, tier });   // resolves once the view is up
+ *   await v.closed;                                                  // the player closed it
  *
  * The wall clock (Date.now()) is read here only — on open (the away catch-up), on the live tick, and for each action —
  * and passed into the pure model. opts.now overrides it (the review page's clock).
@@ -20,7 +24,7 @@ import { outpostMapFor } from '../outpostMap.js';
 import { outpostBattleMap, bakedSlugFor, lowlandResources } from './outpostBoard.js';
 import { createOutpostScene } from './outpostScene.js';
 import { defenseStructures, planBuildings } from './conduits.js';
-import { createSession, onlineIssues } from './session.js';
+import { createSession } from './session.js';
 // the FARM tab (story A7 [MM-story_mwabgs3l_f]): the farm on this same view, map, session and build loop (owner rule 7)
 import { createFarmLayer } from '../../farm/view/farmLayer.js';
 import { createFarmEmbers } from '../../farm/view/embers.js';
@@ -29,10 +33,9 @@ import { createFarmCrew } from '../../farm/view/avatar.js';
 import { farmMenu, FARM_MENU, farmAt, farmPanelModel } from '../../farm/view/farmUi.js';
 import { storeCapacity } from '../../farm/model.js';
 import { statusModel } from './statusReport.js';
-import { constructionSites, damageSites, createConstructionFx } from './constructionFx.js';
 import { K as FXK } from '../../render3d/fx/impacts.js';
 import { hudModel, panelModel, KIND_NAME, fmtGold, fmtClock, rigHeadOf } from './hudModel.js';
-import { buildMenu, placementStep, aimValid, IDLE, MENU, DEFENSE_STRUCT, isResourceBay, kindOf } from './buildMenu.js';
+import { placementStep, aimValid, IDLE, DEFENSE_STRUCT, isResourceBay, kindOf } from './buildMenu.js';
 import { buildingWarnings, markerOf } from './warnings.js';
 import { renderMenuIcons } from './menuIcons.js';
 import { sellTimeline } from './sellTimeline.js';
@@ -40,35 +43,48 @@ import { layoutFor, framedCamera, focusCamera, VIEW_YAW } from './layout.js';
 import { mountHud } from './hud.js';
 import { loadSave, updateSave } from '../../save/save.js';
 import { loadMissionCatalog } from '../../save/missionCatalog.js';
-import { padAt } from '../../terrain/outpostPads.js';
+import { buildingRect } from '../model.js';
 import { structureDef } from '../../data/outpost.js';
 import { oresOf } from '../../data/ores.js';
 import { PLANETS } from '../../data/planets.js';
 import { loadChoice } from '../../render3d/quality.js';
-import { harvestRunning, harvestPlan, surfaceFieldGroups, fieldStock, droneHome, droneFlightMs } from '../model.js';
-import { harvestRates } from '../../data/outpost.js';
-import { harvesterUnits } from './harvestDrive.js';
+import { surfaceFieldGroups, fieldStock, droneHome, droneFlightMs } from '../model.js';
 import { startProbe, probeDelay, probeWear, probeCells, probeBreached, PROBE_MAX_S } from './visitProbe.js';
 import { powerGrids } from '../model.js';
-import { buildNavGrid, findWalkerPath } from '../../sim/pathfinding.js';
 import { crumb, lastSessionCrashed } from '../../diag/errorLog.js';
 import { reportButton } from '../../diag/reportPanel.js';
-import { openOutpostSessionView, sessionViewWanted } from './sessionView.js';
+import { openOutpostSessionView } from './sessionView.js';
 
 const ROOT = new URL('../../../', import.meta.url).href;   // the game root (prototype/test-game/)
 const LIVE_TICK = 1;   // seconds between live advances of the outpost
 
 /**
- * opts: { planet, mount (element; default document.body), tier ('high' | 'standard' | 'low' | null = auto),
- *         store ({ load, update }; default the save), now (() => ms; default Date.now), catalog (missions; default
- *         loaded), raidHook (override the seam; tests / review), map (override outpostMapFor), reduced, onChange }
+ * opts: { planet, tab ('outpost' | 'farm'; default 'outpost'), mount (element; default document.body), tier ('high' |
+ *         'standard' | 'low' | null = auto), store ({ load, update }; default the save), now (() => ms; default
+ *         Date.now), catalog (missions; default loaded), raidHook (override the seam; tests / review), map (override
+ *         outpostMapFor), reduced, onChange }
  * → { closed: Promise, close(), handle } — handle exposes state and hooks for the review page and measurements.
  */
 export async function openOutpostView(opts = {}) {
-  // One Battle UX S2.4a [MM-subtask_mwciiylh_31]: ?outpost=session opens the outpost on the shared battle session
-  // (sessionView.js); this view stays the default until the owner's playtest, then S2.4d deletes it
-  const doc0 = (opts.mount && opts.mount.ownerDocument) || (typeof document !== 'undefined' ? document : null);
-  if (doc0 && doc0.defaultView && sessionViewWanted(doc0.defaultView)) return openOutpostSessionView(opts);
+  // S2.4d: the outpost is the battle session (sessionView.js), for everyone
+  if (opts.tab !== 'farm') return openOutpostSessionView(opts);
+  return handOver(await openFarmView(opts), opts);
+}
+
+/** The farm view's OUTPOST tab closes it with { to: 'outpost' }: then open the session view, and wait for it too. */
+function handOver(farm, opts) {
+  let current = farm;
+  const closed = (async () => {
+    const how = await farm.closed;
+    if (!how || how.to !== 'outpost') return;
+    current = await openOutpostSessionView({ ...opts, tab: 'outpost' });
+    await current.closed;
+  })();
+  return { closed, close: () => current.close(), get handle() { return current.handle; } };
+}
+
+/** The FARM view (the old view's own loop, kept for the farm until S6). */
+async function openFarmView(opts) {
   // never a dead end (owner 2026-11-08, iPhone: stuck on LANDING AT THE OUTPOST…, nothing answered): the loading screen
   // names the step it is on and offers BACK after a while; a failure shows what failed, with BACK
   const stage = { step: 'starting', host: null, loading: null };
@@ -202,8 +218,9 @@ async function openOutpostViewInner(opts, stage) {
   const opened = await session.openChunked(clockNow(), nextFrame);
   onChange();
   let o = opened.outpost;
-  // the tab: OUTPOST or FARM (the menu's FARM button opens this view on FARM); the FARM tab exists once there is a farm
-  let tab = opts.tab === 'farm' && o.farm ? 'farm' : 'outpost';
+  // the FARM tab only (S2.4d): the outpost itself is the session view; with no farm yet, hand straight over to it
+  const tab = 'farm';
+  let handoff = o.farm ? null : 'outpost';
   farm.sync(o, clockNow());
   crew.sync(o);
   const slugs = new Set(['hub', 'shuttle', 'power', 'storage', ...oresOf(planet).map((x) => `rig_${x.rig}`), 'resourceBay', 'upgradeBay', 'habitat']);
@@ -225,32 +242,6 @@ async function openOutpostViewInner(opts, stage) {
   const syncDefenses = () => { state.structures = new Map(defenseStructures(o, map, clockNow()).map((s) => [s.id, s])); };
   syncDefenses();
 
-  // ── the Resource Bay's harvesters (story O10): the battle's own miner, driven along a route from the bay to its field
-  // (harvestDrive.js); the hopper's numbers are the model's closed form, this is the picture of it. The routes walk the
-  // battle board (ramps and all) once per bay / field, on the view's animation clock (never the wall clock).
-  const HRATES = harvestRates();
-  const routeCache = new Map();
-  let nav = null, driveClock = 0;
-  function routeFor(h) {
-    const key = `${h.from.join(',')}>${h.field.join(',')}`;
-    if (routeCache.has(key)) return routeCache.get(key);
-    nav = nav || buildNavGrid(board, [], []);
-    const from = { x: Math.floor(h.from[0]), y: Math.floor(h.from[1]) }, to = { x: h.field[0], y: h.field[1] };
-    let path = null;
-    try { path = findWalkerPath(nav, from, to); } catch (e) { path = null; }
-    const route = path && path.length ? [from, ...path.map((c) => ({ x: c.x, y: c.y }))] : [from, to];
-    routeCache.set(key, route);
-    return route;
-  }
-  function syncHarvesters() {
-    for (const id of [...state.units.keys()]) if (String(id).startsWith('oh')) state.units.delete(id);
-    const plan = harvestPlan(o, map);
-    if (!plan.length) return;
-    const running = harvestRunning(o, map).length > 0, routes = {};
-    for (const h of plan) routes[h.i] = routeFor(h);
-    for (const u of harvesterUnits(plan, routes, HRATES, driveClock, { running })) state.units.set(u.id, u);
-  }
-  syncHarvesters();
   // ── repair drones (owner 2026-11-10: "the repair drone need to travel from the base and repair defenses")
   //    [MM-story_mwb3y511_20]: each defense with a repair under way (model.js repair: d.repair { at, arrive, done }) has the
   //    battle's repair unit (isRepairTroop) in the scene: it flies out from the hub, works at the defense (the battle's
@@ -323,7 +314,7 @@ async function openOutpostViewInner(opts, stage) {
     onRepair: (id) => act({ type: 'repair', id }, (res) => `Repair drone launched · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
     onSellStructure: (target) => {
       // where it stood, for the green "$N" the battle's sale pops (goldPopups.js)
-      const pad = target.pad && map.pads.find((p) => p.id === target.pad), d = target.defense != null && o.defenses.find((x) => x.id === target.defense);
+      const pad = target.pad && buildingRect(o, map, target.pad), d = target.defense != null && o.defenses.find((x) => x.id === target.defense);
       const pos = pad ? { x: pad.x + (pad.w - 1) / 2, y: pad.y + (pad.h - 1) / 2 } : d ? { x: d.cell[0], y: d.cell[1] } : null;
       act({ type: 'sellStructure', target }, (res) => {
         if (pos && r.gold) r.gold.feed([{ type: 'build', phase: 'sold', refund: res.earned, pos }], board);
@@ -372,14 +363,10 @@ async function openOutpostViewInner(opts, stage) {
   }
 
   // ── the FARM tab (story A7): the switch and the farm's actions (all through session.act, as every outpost action)
+  // the OUTPOST tab hands over to the session view (S2.4d): this view closes with { to: 'outpost' }
   function setTab(t) {
-    if (t === tab || (t === 'farm' && !o.farm)) return;
-    tab = t;
-    if (pl.phase !== 'idle') cancelPlacing();
-    select(null);
-    hud.tabs(!!o.farm, tab);
-    refreshMenu(true);
-    hud.online(tab === 'farm' ? null : onlineChecks());
+    if (t === tab) return;
+    if (t === 'outpost') { handoff = 'outpost'; close(); }
   }
   const FARM_TEXT = {
     prep: () => 'Prepping the plot',
@@ -433,7 +420,7 @@ async function openOutpostViewInner(opts, stage) {
     const key = JSON.stringify([tab, o.pads, o.building.map((b) => [b.pad, b.kind]), o.defenses.map((d) => [d.cell, d.kind]), o.harvesters ?? null, o.online, ctx.gold, ctx.unlockedTiers, [...(ctx.unlocks || [])], [...(ctx.techOwned || [])].filter((x) => /^dock/.test(x)),
       tab === 'farm' && o.farm ? [Object.values(o.farm.plots).map((q) => [q.x, q.y]), Object.values(o.farm.buildings).map((q) => [q.x, q.y]), ctx.methods] : null]);
     if (force || key !== menuKey) {
-      menuKey = key; menuItems = tab === 'farm' ? farmMenu(o, map, ctx) : buildMenu(o, map, ctx);
+      menuKey = key; menuItems = farmMenu(o, map, ctx);
       if (pl.phase !== 'idle') {
         const it = armedItem();
         if (!it || it.locked) { const why = it && it.why; cancelPlacing(); if (why) hud.toast(why, true); } else applyPlacement();
@@ -472,8 +459,7 @@ async function openOutpostViewInner(opts, stage) {
   /** Bring the scene and the banner to the placement state. */
   function applyPlacement() {
     const it = pl.phase === 'idle' ? null : armedItem();
-    if (!it) { scene.showPads(null); scene.showCells(null); scene.showGhost(null); farm.showTargets(null); farm.showGhost(null); hud.banner(null); ui3d = idleUi(); hud.online(tab === 'farm' ? null : onlineChecks()); return; }
-    hud.online(null);
+    if (!it) { scene.showPads(null); scene.showCells(null); scene.showGhost(null); farm.showTargets(null); farm.showGhost(null); hud.banner(null); ui3d = idleUi(); return; }
     const T = it.targets || [], valid = aimValid(pl, T), price = it.cost != null ? ` · ${fmtGold(it.cost)} gold` : '';
     if (it.what) {   // a FARM item: a w × h piece of farm ground (story A7)
       scene.showPads(null); scene.showGhost(null); scene.showCells(null); ui3d = {};
@@ -531,7 +517,7 @@ async function openOutpostViewInner(opts, stage) {
     if (!it) return null;
     const cell = screenToCell(r, px, py);
     if (!cell) return null;
-    if (it.place === 'pad') { const p = padAt(map, cell.x, cell.y); return p ? { pad: p.id } : null; }
+    if (it.place === 'pad') return null;   // no map pads (S2c.2): the outpost builds on the session view
     if (it.what) {   // a farm piece: the valid top-left whose rect holds the pointed cell, nearest first, else the cell
       const T = it.targets || [];
       for (let dy = 0; dy < it.size.h; dy++) for (let dx = 0; dx < it.size.w; dx++) {
@@ -582,7 +568,7 @@ async function openOutpostViewInner(opts, stage) {
     } else scene.showReach(null);
     if (focus || next.pad || next.defense) {
       const L = layoutFor(r._w || win.innerWidth, r._h || win.innerHeight);
-      const target = next.pad ? map.pads.find((p) => p.id === next.pad) : (() => { const d = o.defenses.find((x) => x.id === next.defense); return d ? { x: d.cell[0] - 1, y: d.cell[1] - 1, w: 3, h: 3 } : null; })();
+      const target = next.pad ? buildingRect(o, map, next.pad) : (() => { const d = o.defenses.find((x) => x.id === next.defense); return d ? { x: d.cell[0] - 1, y: d.cell[1] - 1, w: 3, h: 3 } : null; })();
       if (target) glideTo(focusCamera(target, r.cam.yaw, L));
     }
   }
@@ -651,7 +637,7 @@ async function openOutpostViewInner(opts, stage) {
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return;
     if (e.key === 'Escape') { if (hud.reportOpen) hud.report(null); else if (pl.phase !== 'idle') cancelPlacing(); else if (sel) select(null); else close(); return; }
     if (hud.reportOpen) return;
-    const LIST = tab === 'farm' ? FARM_MENU : MENU;
+    const LIST = FARM_MENU;
     if (/^[0-9]$/.test(e.key) && LIST[(+e.key + 9) % 10]) { pickItem(LIST[(+e.key + 9) % 10].id); e.preventDefault(); return; }   // 1–9, then 0 for the tenth
     if (e.key === 'Enter' && pl.phase === 'aimed') { placeEvent({ type: 'confirm' }); e.preventDefault(); }
     // the battle's action keys on the selection panel: U upgrade, X sell, R repair
@@ -678,24 +664,10 @@ async function openOutpostViewInner(opts, stage) {
     if (cell) {
       const d = o.defenses.find((x) => x.cell[0] === cell.x && x.cell[1] === cell.y);
       if (d) return select({ defense: d.id }, true);
-      const p = padAt(map, cell.x, cell.y);
-      if (p) return select({ pad: p.id }, true);
+      const id = Object.keys(o.pads).sort().find((k) => { const p = buildingRect(o, map, k); return p && cell.x >= p.x && cell.x < p.x + p.w && cell.y >= p.y && cell.y < p.y + p.h; });
+      if (id) return select({ pad: id }, true);
     }
     if (sel) select(null);
-  }
-
-  // ── the online card ─────────────────────────────────────────────────────────────────────────────────────────
-  function onlineChecks() {
-    if (o.online) return null;
-    const issues = onlineIssues(o, map), probs = hudModel(o, map).problems;
-    const kinds = ['hub', 'power', 'rig', 'storage'];
-    const checks = kinds.map((k) => {
-      const pads = Object.keys(o.pads).filter((id) => o.pads[id].kind === k);
-      const ok = pads.length > 0 && !probs.some((p) => pads.some((id) => p.startsWith(id + ' ')));
-      return { label: KIND_NAME[k], ok };
-    });
-    checks.push({ label: 'Power grid', ok: !issues.some((x) => /power/.test(x)) });
-    return checks;
   }
 
   // ── the frame loop ────────────────────────────────────────────────────────────────────────────────────────────
@@ -703,13 +675,12 @@ async function openOutpostViewInner(opts, stage) {
   function refreshHud(force = false) {
     const h = hudModel(o, map, { gold: bank(), now: clockNow(), unlocks: ctxNow().unlocks });
     hud.update(h, saleRun ? shownGold : bank());
-    hud.online(pl.phase !== 'idle' || tab === 'farm' ? null : onlineChecks());   // the GO ONLINE card steps aside while placing (and on the FARM tab)
+    hud.online(null);   // no GO ONLINE card on the farm (the outpost goes online in the session view)
     scene.setWarnings(buildingWarnings(o, map), markerOf);
     { const off = powerGrids(o, map).off; scene.setDefenseWarnings(o.defenses.filter((d) => off[d.id]).map((d) => ({ id: d.id, cell: d.cell }))); }
     refreshMenu();
     if (force) refreshPanel();
   }
-  const siteFx = createConstructionFx({ seed: 41 });
   let frameNo = 0;
 
   // ── probes (visitProbe.js; owner 2026-11-09): now and then a light tank and a trooper come at the online outpost, on the
@@ -780,16 +751,12 @@ async function openOutpostViewInner(opts, stage) {
     farm.sync(o, clockNow()); farm.update(dt);
     crew.shelter(!!probe);   // a raid: the avatar and the farmhands wait it out at the Farmhouse (§10); never targets
     crew.update(dt);
-    driveClock += dt;
-    syncHarvesters();
     syncRepairDrones();
     stepProbe(dt);
     if (liveAcc === 0) syncFieldStock();
     const out = scene.update(dt, o);
-    // dust and welding sparks on every building under construction (constructionFx.js, the battle's build + repair FX)
+    // construction dust, welding and damage sparks + smoke are the shared render3d FX (fx/structureFx.js, one engine)
     if (r.impacts) {
-      siteFx.step(dt, constructionSites(o, map, clockNow()), r.impacts.emit, FXK, r.impacts.ring, r.tier.key);
-      siteFx.stepDamage(dt, damageSites(o), r.impacts.emit, FXK);   // red sparks off damaged defenses (owner 2026-11-09)
       farmFx.step(dt, o, r.impacts, FXK);   // a few embers drifting off each Fruited plot (none in safe mode)
     }
     if (saleRun) {
@@ -851,15 +818,14 @@ async function openOutpostViewInner(opts, stage) {
     hud.dispose();
     host.remove();
     onChange();
-    resolveClosed();
+    resolveClosed(handoff ? { to: handoff } : undefined);
   }
 
   autoFit();
-  hud.tabs(!!o.farm, tab);
+  hud.tabs(true, tab);
   refreshHud(true);
-  if (tab === 'farm') hud.online(null);
   clearTimeout(stage.watchdog);
-  if (stage.abandoned) { close(); return { closed: closedP, close, handle }; }
+  if (stage.abandoned || handoff) { close(); return { closed: closedP, close, handle: null }; }
   loading.remove();
   crumb(`outpost: open · ${gpuLine(r)}${safe ? ' · SAFE MODE' : ''}`);
   if (opened.away.show) hud.report(opened.away, { reduced });
@@ -868,10 +834,6 @@ async function openOutpostViewInner(opts, stage) {
 
   const handle = {
     get outpost() { return o; }, map, session, scene, r, hud, opened,
-    /** The harvesters drawn now (review): [{ id, pos, state, tier }]. */
-    get harvesters() { return [...state.units.values()].filter((u) => u.isHarvester).map((u) => ({ id: u.id, pos: { ...u.pos }, state: u.state, tier: u.tier })); },
-    /** Run the harvesters' trip clock forward (review screenshots). */
-    driveTo(sec) { driveClock = sec; syncHarvesters(); },
     select, sell: doSell, close,
     /** The FARM tab (review / screenshots): switch tabs, run a farm action, read the farm picture's counts. */
     setTab, farmAct, get tab() { return tab; }, farm,

@@ -1,35 +1,13 @@
 /**
- * src/outpost/view/buildMenu.js — the outpost's build menu, as data, and its placement state machine
- * [MM-story_mw6k9xec_5].
+ * src/outpost/view/buildMenu.js — what is left of the old outpost build menu: the FARM view's placement state machine
+ * and a few shared names [MM-story_mw6k9xec_5].
  *
- * Owner 2026-11-07: "building an outpost should be done the same way the tower defense game works. An icon list with
- * cost on the left side of the screen with icons and prices. The user start with the base building and use their own
- * gold to build power and a mining station. Harvester can be purchased and there is a limited set of defenses - wall,
- * machine gun, turret tower." Follow-ups: the Storage Tower is a required purchase; the turret tower is the battle's
- * Cannon Tower; harvesters are bought from the list but only once the Resource Bay (the renamed Harvester Bay) stands.
- *
- * The battle's build palette (render/hud.js, input/input.js) is the pattern: a column of picture + name + price
- * buttons down the left; pick one to arm it; the ghost follows the pointer, cyan where it fits and red where it does
- * not; a tap on a lit spot builds; picking it again, Esc or right-click disarms. On a touch screen the outpost asks for
- * a second tap (or CONFIRM) before spending gold, because a pad building costs thousands.
- *
- * Pure: no DOM, no clock. Prices come from the data (structureDef → MAPDATA), so a price change in the workbook flows
- * in; which pads or cells take an item is asked of the model itself (model.place on a copy), so the menu never
- * disagrees with the rules. Story O16 changes those rules (a hub-only contract, gold-bought buildings, the Resource Bay,
- * buyHarvester); every O16 API is read optionally here, so this works before and after it lands:
- *   - model.buyHarvester(o, ctx) → { outpost, cost } | { error }  (absent → the harvester stays locked)
- *   - model.harvesterRefusal(o, ctx) → reason | null; the count is o.harvesters; price and cap from data
- *     harvesterDef() → { cost, cap, max } (absent → OUTPOST.Harvester_Cap / the 'harvester' structure row)
- *   - kind 'resourceBay' (absent → 'harvesterBay'; a built 'harvesterBay' counts as a Resource Bay)
- * (O16 landed at 60d65ee with all of these; the fallbacks stay so an old save or a trimmed data file still draws.)
+ * The outpost builds on the battle rail and the battle's placement since S2.4d [MM-story_mwc9pkcd_2g]; with the map
+ * pads gone (S2c.2 [MM-story_mwc9pmbn_2i]) the old menu's item list and its pad targets were deleted. The farm view
+ * (outpostView.js, until S6) still arms, aims and confirms its pieces with placementStep below, and farm/view/farmUi.js
+ * shapes its list like the old one. Pure: no DOM, no clock.
  */
-import * as M from '../model.js';
-import * as D from '../../data/outpost.js';
-import { structureDef, OUTPOST, DEFENSE_KINDS } from '../../data/outpost.js';
-
-const harvesterDef = D.harvesterDef;   // O16 (src/data/outpost.js): { cost, value, cap, max }
-import { oresOf } from '../../data/ores.js';
-import { defenseRing } from '../../terrain/outpostPads.js';
+import { structureDef, DEFENSE_KINDS } from '../../data/outpost.js';
 
 /** The Resource Bay's kind in the data: 'resourceBay' once O16 renames it, else 'harvesterBay'. */
 export const bayKind = () => (structureDef('resourceBay', 1) ? 'resourceBay' : 'harvesterBay');
@@ -59,121 +37,12 @@ export const ICON_SLUG = Object.freeze({ power: 'power', storage: 'storage', rig
 /** The guns the gun cap counts (story O15): their list items show n / cap. */
 export const GUN_ITEMS = Object.freeze(['mg', 'cannon']);
 
-const has = (ctx, id) => (ctx.unlocks instanceof Set ? ctx.unlocks.has(id) : (ctx.unlocks || []).includes(id));
-const nice = (s) => String(s).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-const fmt = (n) => Math.round(n || 0).toLocaleString('en-US');
 
 /** A finished Resource Bay stands (either name). */
 export const hasResourceBay = (o) => Object.values(o.pads || {}).some((b) => isResourceBay(b.kind));
-/** Something of this kind is built or under construction. */
-const present = (o, kind) => Object.values(o.pads || {}).some((b) => b.kind === kind || (isResourceBay(kind) && isResourceBay(b.kind)))
-  || (o.building || []).some((b) => b.kind === kind || (isResourceBay(kind) && isResourceBay(b.kind)));
-
-// ── the harvester (O16's API read optionally) ─────────────────────────────────────────────────────────────────────
-/**
- * → { count, max (what the Resource Bay holds now: Harvester_Cap), price (null when the data has none), api
- *   (buyHarvester is exported), refusal (model.harvesterRefusal's reason ignoring gold, or null) }
- */
-export function harvesterInfo(o, model = M, ctx = {}) {
-  const h = o.harvesters;
-  const count = Array.isArray(h) ? h.length : typeof h === 'number' ? h : (h && typeof h.count === 'number') ? h.count : 0;
-  const def = typeof harvesterDef === 'function' ? harvesterDef() : null;
-  // the cap now (O10): Harvester_Cap, raised by Dock 3 / Dock 4 through the Upgrade Bay (model.harvesterCap)
-  const max = typeof model.harvesterCap === 'function' ? model.harvesterCap(o, ctx) : (def && (def.cap ?? def.max)) ?? OUTPOST.Harvester_Cap ?? OUTPOST.Harvester_Max ?? 4;
-  const price = def ? def.cost : (structureDef('harvester', 1) || {}).cost ?? null;
-  const refusal = typeof model.harvesterRefusal === 'function' ? model.harvesterRefusal(o, { ...ctx, gold: Infinity }) : null;
-  return { count, max, price, api: typeof model.buyHarvester === 'function', refusal };
-}
-
-// ── where an item can go ─────────────────────────────────────────────────────────────────────────────────────────
-/**
- * The targets an item can be built on now, ignoring the price: pads ({ pad }) or defense cells ({ cell: [x, y] }).
- * Asked of model.place on a copy with unlimited gold, so the rules decide (pad roles, deposits and their unlocks, a
- * taken cell, a gun cap). → { targets: [...], error (the model's reason when there are none) }
- */
-export function validTargets(o, map, id, ctx = {}, model = M) {
-  const item = MENU.find((m) => m.id === id);
-  if (!item || item.place === 'buy') return { targets: [], error: null };
-  const kind = kindOf(id);
-  const probe = { ...ctx, map, gold: Infinity, now: ctx.now ?? o.t };
-  let error = null;
-  const ok = (what) => { const r = model.place(o, what, probe); if (r && !r.error) return true; error = error || (r && r.error) || 'cannot build here'; return false; };
-  if (item.place === 'pad') {
-    const free = map.pads.filter((p) => !o.pads[p.id] && !(o.building || []).some((b) => b.pad === p.id));
-    return { targets: free.filter((p) => ok({ pad: p.id, kind })).map((p) => ({ pad: p.id })), error };
-  }
-  const taken = new Set(o.defenses.map((d) => d.cell.join(',')));
-  const cells = defenseRing(map).filter((c) => !taken.has(c.join(',')));
-  return { targets: cells.filter((c) => ok({ cell: c, kind })).map((c) => ({ cell: [...c] })), error };
-}
-
 /** Is target t one of the targets (same pad / same cell)? */
 export const sameTarget = (a, b) => !!(a && b && (a.pad ? a.pad === b.pad : a.cell && b.cell && a.cell[0] === b.cell[0] && a.cell[1] === b.cell[1]));
 export const targetIn = (targets, t) => !!t && targets.some((x) => sameTarget(x, t));
-
-/** The model's refusal, worded for the player. */
-export function whyText(error, id, o) {
-  const e = String(error || '');
-  if (!e) return null;
-  let m;
-  if ((m = e.match(/not unlocked \((?:tech:)?([^)]+)\)/))) return `Needs ${nice(m[1])}`;
-  if ((m = e.match(/the (\w+) ore is not unlocked/))) { const ore = oresOf(o.planet).find((x) => x.tier === m[1]); return `${ore ? ore.name : nice(m[1])} is not unlocked yet`; }
-  if (id === 'rig') return 'No free deposit';   // (a storage tower refused a rig pad is 'No free pad', below)
-  if (/crew/i.test(e)) return e.replace(/^./, (c) => c.toUpperCase());   // the gun cap (O15): the model's words name the next step
-  if (/taken|cannot go on/.test(e)) return 'No free pad';
-  return e.replace(/^./, (c) => c.toUpperCase());
-}
-
-// ── the menu ─────────────────────────────────────────────────────────────────────────────────────────────────────
-/**
- * The build menu's items, in order. ctx: { gold, unlockedTiers, unlocks, now }.
- * → [{ id, kind, label, place, cost, poor, locked, why, enabled, targets, count?, max?, guide, key }]
- *   cost: the price (null when the data has none); poor: cost > gold (greyed, price red — the battle palette's bw-poor);
- *   locked: no target, not unlocked, the harvester's bay missing or its cap reached — why says which;
- *   enabled: can be picked now (not locked, not poor); guide: the item the first-run guidance points at.
- */
-export function buildMenu(o, map, ctx = {}, model = M) {
-  const gold = ctx.gold ?? Infinity;
-  const guide = guideStep(o);
-  return MENU.map((m, i) => {
-    const kind = kindOf(m.id);
-    const out = { id: m.id, kind, label: m.label, place: m.place, key: i < 10 ? String((i + 1) % 10) : null, guide: guide === m.id };
-    if (m.place === 'buy') {
-      const h = harvesterInfo(o, model, ctx);
-      Object.assign(out, { cost: h.price, count: h.count, max: h.max, targets: [] });
-      if (!hasResourceBay(o)) out.why = 'Build a Resource Bay first';
-      else if (!h.api) out.why = 'Harvesters are not for sale yet';
-      else if (h.count >= h.max) out.why = `The Resource Bay is full (${h.count}/${h.max})`;
-      else if (h.refusal) out.why = h.refusal.replace(/^./, (c) => c.toUpperCase());
-      out.locked = !!out.why;
-    } else {
-      const def = structureDef(kind, 1);
-      out.cost = def ? def.cost : null;
-      if (!def) { out.locked = true; out.why = 'Not available yet'; out.targets = []; } else {
-        const { targets, error } = validTargets(o, map, m.id, ctx, model);
-        out.targets = targets;
-        out.locked = !targets.length;
-        out.why = out.locked ? whyText(error, m.id, o) || 'No free pad' : null;
-      }
-      if (GUN_ITEMS.includes(m.id) && typeof model.gunCount === 'function') { out.count = model.gunCount(o); out.max = model.gunCap(o); }
-    }
-    out.poor = out.cost != null && out.cost > gold;
-    if (!out.locked && out.poor) out.why = `Costs ${fmt(out.cost)} gold`;
-    out.enabled = !out.locked && !out.poor && (m.place !== 'buy' || out.cost != null);
-    return out;
-  });
-}
-
-/**
- * First-run guidance (subtle, like the battle's pulsing hint): until the outpost is online, point at the first of
- * Power Station → Mining Station → Storage Tower the outpost lacks (built or building). → menu id or null.
- * (Contract step 1 asks for all three, though a rig without storage still mines, at a tiny capacity — owner 07:33.)
- */
-export function guideStep(o) {
-  if (o.online) return null;
-  for (const id of ['power', 'rig', 'storage']) if (!present(o, id)) return id;
-  return null;
-}
 
 // ── the placement state machine ──────────────────────────────────────────────────────────────────────────────────
 /**

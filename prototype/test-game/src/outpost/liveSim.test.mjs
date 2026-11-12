@@ -1,7 +1,8 @@
 // The outpost save ↔ a live battle SimState [MM-task_mwcdvk4o_2s] (TECH_PLAN::One-Battle-UX.md S2.2).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { map, T0 } from './view/fixtures.mjs';
+import { map, T0, freeSpot } from './view/fixtures.mjs';
+import { reservedRects } from './outpostMap.js';
 import { referenceOutpost, defaultPads, buildingRect, advance, powerGrids } from './model.js';
 import { raidSimMap } from './raid.js';
 import { structureDef } from '../data/outpost.js';
@@ -15,8 +16,8 @@ const strip = (o) => JSON.parse(JSON.stringify(o));
 function busyOutpost() {
   const o = referenceOutpost('ground', { seed: 1234, map, now: T0 });
   const pads = defaultPads(map);
-  const spare = map.pads.find((p) => p.role !== 'hub' && !Object.values(pads).includes(p.id) && !o.pads[p.id]);
-  o.building.push({ pad: spare.id, kind: 'storage', tier: 1, done: T0 + 600 });                    // 0.6 s left
+  const spare = freeSpot(o, 'storage');
+  o.building.push({ pad: 'f1', kind: 'storage', tier: 1, done: T0 + 600, at: spare });               // 0.6 s left
   o.pads[pads.power].tier = 1;
   o.building.push({ pad: pads.power, kind: 'power', tier: 2, done: T0 + 400 });                     // upgrade under way
   const guns = o.defenses.filter((d) => d.kind === 'mg' || d.kind === 'cannon');
@@ -47,11 +48,13 @@ test('the live state is the battle sim: buildings and defenses are OUT- structur
   const ids = [...state.structures.values()].map((s) => s.structId);
   assert.ok(ids.every((id) => id.startsWith('OUT-')), ids.join(','));
   assert.ok(!ids.includes('OUT-hub'), 'the hub is state.base, not a structure');
-  const hub = map.pads.find((p) => p.role === 'hub');
+  const hub = map.hub;
   assert.equal(state.base.pos.x, Math.floor(hub.x + hub.w / 2));
   const lifecycles = new Set([...state.structures.values()].map((s) => s.lifecycle));
   for (const l of ['Complete', 'Damaged', 'Building', 'Upgrading']) assert.ok(lifecycles.has(l), `has a ${l} structure`);
-  assert.equal([...state.structures.values()].filter((s) => s.structId === 'OUT-mg' && s.hp <= 0).length, 0, 'wrecks stay out');
+  // a wreck is in the live state as an inert 'Wrecked' hulk (no longer left out) [MM-story_mwcrfnyf_3c]
+  const wrecked = [...state.structures.values()].filter((s) => s.hp <= 0);
+  assert.ok(wrecked.length >= 1 && wrecked.every((s) => s.lifecycle === 'Wrecked'), 'wrecks are inert Wrecked structures');
   assert.ok(state.placementRules && state.placementRules.length >= 2, 'the outpost rules are on the shared placement');
 });
 
@@ -62,29 +65,29 @@ test('jobs finish on the sim clock and the save sees them finished', () => {
   const { outpost: back } = fromLiveSim(state, link, T0 + 2000);
   assert.equal(back.building.length, 0, 'the construction and the pad upgrade are done');
   const job = o.building.find((j) => j.kind === 'storage');
-  assert.deepEqual(back.pads[job.pad], { kind: 'storage', tier: 1 });
+  assert.deepEqual(back.pads[job.pad], { kind: 'storage', tier: 1, at: job.at });
   const power = o.building.find((j) => j.kind === 'power');
   assert.equal(back.pads[power.pad].tier, 2, 'Power Station II');
   assert.equal(back.upgrading, null, 'the gun upgrade landed');
 });
 
-test('a building placed during the visit is saved on its pad; gold moves through the battle economy', () => {
+test('a building placed during the visit is saved at its spot under a new id; gold moves through the battle economy', () => {
   const o = referenceOutpost('ground', { seed: 7, map, now: T0 });
-  const pads = defaultPads(map);
-  const free = map.pads.find((p) => p.role !== 'hub' && !Object.values(pads).includes(p.id) && !o.pads[p.id]);
+  const free = freeSpot(o, 'storage');
   const { state, link } = toLiveSim(o, { map, now: T0, gold: 10000 });
   const res = applyCommand(state, { type: 'place', structId: 'OUT-storage', cell: { x: free.x, y: free.y } });
   assert.equal(res.ok, true, res.reason);
   const { outpost: back, gold } = fromLiveSim(state, link, T0);
   assert.equal(gold, 10000 - structureDef('storage', 1).cost, 'paid the outpost price');
   assert.equal(back.building.length, 1);
-  assert.equal(back.building[0].pad, free.id);
+  assert.equal(back.building[0].pad, 'f1');
+  assert.deepEqual(back.building[0].at, free);
   assert.equal(back.building[0].kind, 'storage');
 });
 
-/** Place a 2×2 building off every map pad (a free spot the old pads never offered). → its cell, or null. */
+/** Place a building away from the landing pad and the deposits (an open spot). → its cell, or null. */
 function placeOffPads(state, structId) {
-  const near = new Set(map.pads.flatMap((p) => { const c = []; for (let y = p.y - 2; y <= p.y + p.h + 1; y++) for (let x = p.x - 2; x <= p.x + p.w + 1; x++) c.push(`${x},${y}`); return c; }));
+  const near = new Set(reservedRects(map).flatMap((p) => { const c = []; for (let y = p.y - 2; y <= p.y + p.h + 1; y++) for (let x = p.x - 2; x <= p.x + p.w + 1; x++) c.push(`${x},${y}`); return c; }));
   for (let y = 2; y < state.map.rows - 3; y++) for (let x = 2; x < state.map.cols - 3; x++) {
     if (near.has(`${x},${y}`) || near.has(`${x + 1},${y + 1}`)) continue;
     if (applyCommand(state, { type: 'place', structId, cell: { x, y } }).ok) return { x, y };

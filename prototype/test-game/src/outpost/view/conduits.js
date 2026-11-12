@@ -9,7 +9,7 @@
  *
  * Pure (no three.js): outpostScene.js turns these plans into meshes.
  */
-import { powerGrids, unlitChains, bayCapacity, depositOf, upgradeBayShows, buildingRect } from '../model.js';
+import { powerGrids, unlitChains, bayCapacity, depositAt, upgradeBayShows, buildingRect } from '../model.js';
 import { structureDef, DEFENSE_KINDS } from '../../data/outpost.js';
 import { POWER_NODE_KINDS } from '../../data/outpostStructures.js';
 import { oresOf } from '../../data/ores.js';
@@ -286,18 +286,17 @@ export function planBuildings(o, map, now) {
   const storage = Object.keys(o.pads).find((id) => o.pads[id].kind === 'storage');
   const coreOn = o.online && hub && powered.has(hub) && storage && powered.has(storage);
   const out = [];
-  // the map's pads in order, then the buildings placed freely (their own `at` rectangle, model.buildingRect) — every
-  // building gets its model, wherever it stands [MM-subtask_mwcij28k_34] (owner 2026-11-11: placed buildings drew as
-  // low-detail blocks on the shared battle screen)
-  const freeIds = [...new Set([...Object.keys(o.pads), ...o.building.map((x) => x.pad)])]
-    .filter((id) => !map.pads.some((q) => q.id === id) && buildingRect(o, map, id)).sort();
-  const spots = [...map.pads, ...freeIds.map((id) => buildingRect(o, map, id))];
+  // every building where it stands (its own `at` rectangle, the hub on the landing pad; model.buildingRect), by id —
+  // every building gets its model, wherever it stands [MM-subtask_mwcij28k_34] (owner 2026-11-11: placed buildings
+  // drew as low-detail blocks on the shared battle screen). No map pads since S2c.2.
+  const spots = [...new Set([...Object.keys(o.pads), ...o.building.map((x) => x.pad)])].sort()
+    .map((id) => buildingRect(o, map, id)).filter(Boolean);
   for (const p of spots) {
     const b = o.pads[p.id], job = o.building.find((x) => x.pad === p.id);
     if (!b && !job) continue;
     const kind = (b || job).kind;
     const rigHead = kind === 'rig' ? rigHeadFor(o, map, p.id) : null;
-    const item = { pad: p.id, rect: { id: p.id, x: p.x, y: p.y, w: p.w, h: p.h }, kind, tier: b ? b.tier : job.tier, rigHead, tint: TINT.none, rise: 1, glow: o.online ? 1 : 0.32, working: false, mk2: false };
+    const item = { pad: p.id, rect: { id: p.id, x: p.x, y: p.y, w: p.w, h: p.h, ...(kind === 'hub' ? { role: 'hub' } : {}) }, kind, tier: b ? b.tier : job.tier, rigHead, tint: TINT.none, rise: 1, glow: o.online ? 1 : 0.32, working: false, mk2: false };
     if (!b) {
       const def = structureDef(kind, job.tier), total = Math.max(1, (def ? def.buildSec : 1) * 1000);
       const progress = Math.max(0, Math.min(1, 1 - (job.done - now) / total));
@@ -325,22 +324,27 @@ export function planBuildings(o, map, now) {
 /** The rig head (model) for a rig pad, from its deposit's ore. */
 export function rigHeadFor(o, map, pad) {
   const job = (o.building || []).find((x) => x.pad === pad);
-  const tier = (o.pads[pad] && o.pads[pad].deposit) || (job && job.deposit) || depositOf(map, pad);
+  const tier = (o.pads[pad] && o.pads[pad].deposit) || (job && job.deposit) || depositAt(map, buildingRect(o, map, pad));
   const ore = oresOf(o.planet).find((x) => x.tier === tier);
   return ore ? ore.rig : 'auger';
 }
 
 /**
- * The deposits: [{ tier, pad, x, z (centre, cells), colour, ore, locked, mined (a rig stands on it) }].
+ * The deposits: [{ tier, pad (the rig standing on it, or a stable 'dep-<tier>' key), x, z (centre of its 2 × 2 cells),
+ * rect, colour, ore, locked, mined (a rig stands on it) }].
  * unlockedTiers: the ore tiers the contracts have opened (contract.outpostUnlocks).
  */
 export function planDeposits(o, map, unlockedTiers = ['common']) {
-  const pads = new Map(map.pads.map((p) => [p.id, p]));
+  const ids = [...new Set([...Object.keys(o.pads), ...o.building.map((b) => b.pad)])].sort();
   return (map.deposits || []).map((d) => {
-    const p = pads.get(d.pad), ore = oresOf(o.planet).find((x) => x.tier === d.tier);
-    const [x, z] = p ? centre(p) : [d.x + 0.5, d.y + 0.5];
-    const mined = !!(o.pads[d.pad] || o.building.some((b) => b.pad === d.pad && b.kind === 'rig'));
-    return { tier: d.tier, pad: d.pad, x, z, colour: ore ? ore.colour : '#8a8f96', ore: ore ? ore.id : null, locked: !unlockedTiers.includes(d.tier), mined };
+    const ore = oresOf(o.planet).find((x) => x.tier === d.tier);
+    const rect = { x: d.x, y: d.y, w: 2, h: 2 };
+    const rig = ids.find((id) => {
+      const kind = (o.pads[id] || o.building.find((b) => b.pad === id) || {}).kind, r = buildingRect(o, map, id);
+      return kind === 'rig' && r && r.x === d.x && r.y === d.y;
+    });
+    const [x, z] = centre(rect);
+    return { tier: d.tier, pad: rig || `dep-${d.tier}`, x, z, rect, colour: ore ? ore.colour : '#8a8f96', ore: ore ? ore.id : null, locked: !unlockedTiers.includes(d.tier), mined: !!rig };
   });
 }
 
@@ -349,7 +353,7 @@ export function defenseStructures(o, map = null, now = null) {
   // the Upgrade Bay's pad (owner 2026-11-07: "the upgrade pad in the outpost should always show the unit being
   // upgraded"): the defense on the bay stands on its pad, off its cell; an idle bay shows the last unit it upgraded
   const bayId = Object.keys(o.pads || {}).sort().find((id) => o.pads[id].kind === 'upgradeBay');
-  const pad = bayId && map && map.pads ? map.pads.find((p) => p.id === bayId) : null;
+  const pad = bayId && map ? buildingRect(o, map, bayId) : null;
   const padSpot = pad ? { x: pad.x + pad.w - 1, y: pad.y + Math.floor(pad.h / 2) } : null;   // the pad's open right side, beside the hangar's craft
   const shows = pad ? upgradeBayShows(o) : null;
   const one = (d, tier, at, extra = {}) => {

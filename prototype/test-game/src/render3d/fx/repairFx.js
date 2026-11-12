@@ -41,11 +41,7 @@ export function createRepairFx({ seed = 11 } = {}) {
     return { x: sx + dx * r, z: sz + dz * r, dx, dz };
   }
 
-  function spark(emit, K, w, k = 1) {
-    const sp = lerp(REPAIR_FX.speed) * k, side = (rnd() - 0.5) * 2.2;
-    const vx = (w.dx + -w.dz * side * 0.6) * sp, vz = (w.dz + w.dx * side * 0.6) * sp;
-    emit(K.SPARK, w.x, lerp(REPAIR_FX.weldY), w.z, vx, lerp(REPAIR_FX.up) * k, vz, lerp(REPAIR_FX.life), REPAIR_FX.size * (0.8 + rnd() * 0.5), 0, SPARK_TINT.repair);
-  }
+  const spark = (emit, K, w, k = 1) => emitWeldSpark(emit, K, w, rnd, { k });
 
   return {
     /** Emit this frame's repair sparks. emit = impacts.emit, K = impacts' kinds. Returns sparks emitted. */
@@ -82,5 +78,18 @@ export function createRepairFx({ seed = 11 } = {}) {
   };
 }
 
+/**
+ * One welding spark off weld point `w` ({ x, z, dx, dz } — dx/dz the outward face; optional y): it leaves along the
+ * face with a sideways scatter, arcs up, bounces and cools (impactsView reads `tint`). The one welding emitter —
+ * repairs (above) and construction / damage sparks (fx/structureFx.js) all call it. `rnd` is the caller's seeded
+ * PRNG; `y` defaults to a draw from REPAIR_FX.weldY; `k` scales speed and lift.
+ */
+export function emitWeldSpark(emit, K, w, rnd, { k = 1, tint = SPARK_TINT.repair, y = null } = {}) {
+  const lerp = (r) => r[0] + (r[1] - r[0]) * rnd();
+  const sp = lerp(REPAIR_FX.speed) * k, side = (rnd() - 0.5) * 2.2;
+  const vx = (w.dx + -w.dz * side * 0.6) * sp, vz = (w.dz + w.dx * side * 0.6) * sp;
+  emit(K.SPARK, w.x, y == null ? lerp(REPAIR_FX.weldY) : y, w.z, vx, lerp(REPAIR_FX.up) * k, vz, lerp(REPAIR_FX.life), REPAIR_FX.size * (0.8 + rnd() * 0.5), 0, tint);
+}
+
 /** impacts particle `shade` values the view reads as a tint for SPARK / FLASH (0 = the default hot white-orange). */
-export const SPARK_TINT = Object.freeze({ repair: 1, damage: 2 });   // 2: a damaged structure's red sparks (outpost, owner 2026-11-09)
+export const SPARK_TINT = Object.freeze({ repair: 1, damage: 2 });   // 2: a damaged structure's red sparks (fx/structureFx.js, owner 2026-11-09)
