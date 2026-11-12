@@ -57,8 +57,9 @@ export function resourceInfoModel(state, nodeId, planet) {
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[ch]);
 
-/** The card's rows: [label, value]. */
+/** The card's rows: [label, value]. A mode's card (hud.js cbs.resourceInfo) may carry its own `rows`. */
 export function resourceInfoRows(m) {
+  if (Array.isArray(m.rows)) return m.rows;
   const rows = [];
   if (!m.revealed) rows.push(['Status', `Opens in wave ${m.revealWave}`]);
   rows.push(['Field', `${f(m.left)} of ${f(m.total)} left · ${m.cells} crystal${m.cells === 1 ? '' : 's'}`]);

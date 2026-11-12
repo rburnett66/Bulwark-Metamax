@@ -40,7 +40,7 @@ test('a farm plot tap still shows its farm panel: it selects no structure, so th
   const INPUT = strip(readFileSync(new URL('../../input/input.js', import.meta.url), 'utf8'));
   assert.match(INPUT, /handle\.onGroundTap\(cell, ui\)\) \{\s*ui\.selectedStructureId = null;/);
   // … and the farm panel lives in the outpost panel, shown while a plot is selected
-  assert.match(SV, /onGroundTap: \(cell\) => tapFarm\(cell\)/);
+  assert.match(SV, /onGroundTap: \(cell, tapUi\) => tapFarm\(cell, tapUi\)/);
   assert.match(SV, /panel\.appendChild\(farmBox\)/);
   assert.match(SV, /farmBox\.style\.display = fm \? 'flex' : 'none'/);
 });
@@ -69,7 +69,7 @@ test('outpost extras on the live state: a building gets its status line and its 
   assert.ok(rig, 'the reference outpost has a Mining Station');
   const r = outpostSelectionExtras(rig, ctx);
   assert.equal(r.lines.length, 1, 'a building shows its status line');
-  assert.match(r.lines[0], /online|power|waiting/i);
+  assert.match(r.lines[0], /^Mining · outpost offline$/, "offline is not unpowered: a powered rig mines (model.runningRigs)");
   const sell = r.actions.find((a) => /^SELL RESOURCES/.test(a.label));
   assert.ok(sell, 'a building that holds ore offers SELL RESOURCES');
   assert.equal(sell.enabled, false, 'offline: nothing to sell yet');

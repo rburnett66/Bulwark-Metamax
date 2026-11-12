@@ -26,7 +26,7 @@ import { growFarm } from './grow.js';
 import { powerGrids } from '../outpost/model.js';
 import { podCount } from './pods.js';
 import { podsUnlocked, unlockUnits } from './unlock.js';
-import { farmingOpen, hasFarm } from './contract.js';
+import { farmGate, hasFarm } from './contract.js';
 import { PLANETS } from '../data/planets.js';
 
 const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -65,10 +65,10 @@ export function farmRailTab(save, planet) {
  */
 export function farmGateReason(save, planet, ship = null) {
   if (hasFarm(save, planet)) return null;
-  const P = (PLANETS[planet] || {}).name || planet, aboard = ship || `the ${P} capital ship`;
-  if (!farmContractOf(planet, 'F1')) return `Farming is not open on ${P} yet`;
-  if (!farmingOpen(save, planet)) return `Farming opens with a Mining Rig Mk II — then see the Factor at the Trade Station aboard ${aboard}`;
-  return `Farming is open — accept the farming contract from the Factor at the Trade Station aboard ${aboard}`;
+  if (!farmContractOf(planet, 'F1')) return `Farming is not open on ${(PLANETS[planet] || {}).name || planet} yet`;
+  // the one wording of the gate, step by step (farm/contract.js farmGate): the OUTPOST panel's line reads it too
+  const g = farmGate(save, planet, { ship });
+  return g ? g.text : `Farming opens with a Mining Rig Mk II — then see the Factor at the Trade Station aboard ${ship || `the ${(PLANETS[planet] || {}).name || planet} capital ship`}`;
 }
 
 /**

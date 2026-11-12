@@ -219,7 +219,7 @@ function onPointerDown(handle, ev) {
     return;
   }
   if (state.resourceNodes && findStructureAtCell(state, cell) === null) {
-    const node = state.resourceNodes.find((n) => n.x === cell.x && n.y === cell.y && (n.remaining > 0 || n.respawns));
+    const node = state.resourceNodes.find((n) => n.x === cell.x && n.y === cell.y && (n.remaining > 0 || n.respawns || n.regrow > 0));   // a regrowing field (the outpost's) keeps its card
     if (node) {
       ui.selectedResourceId = node.id;   // open its description card — the harvest order below still goes out
       ui.selectedStructureId = null;

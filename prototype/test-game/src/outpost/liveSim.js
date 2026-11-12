@@ -33,7 +33,7 @@ import { buildNavGrid } from '../sim/pathfinding.js';
 import { getStructureDef } from '../data/tables.js';
 import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../data/outpostStructures.js';
 import { structureDef, surfaceResource, surfaceStock } from '../data/outpost.js';
-import { buildingRect, surfaceFieldGroups, fieldStock, harvestPlan, resourceBayPad, powerGrids, hopperUnits, hopperCap, upgradeRefusal } from './model.js';
+import { buildingRect, surfaceFieldGroups, fieldStock, harvestPlan, resourceBayPad, powerGrids, hopperUnits, hopperCap, upgradeRefusal, rigExtraction } from './model.js';
 import { resourceNode, spawnHarvester, initContract } from '../sim/harvest.js';
 import { raidSimMap } from './raid.js';
 import { outpostPlacementRules } from './placementRules.js';
@@ -82,7 +82,9 @@ export function toLiveSim(outpost, { map, now, gold = 0, unlocks = null, techOwn
   state.economy.money = gold;
   state.economy.incomePerSec = 0;            // an outpost earns by mining and kills, not a battle's passive income
   state.placementRules = outpostPlacementRules(map, getStructureDef);
-  const link = { outpost, map, ids: null, wrecks: null, now, harvest: null };
+  // rigs: what the rigs have mined during this visit (stepLiveOutpost), per sim structure id → { item: units }, and the
+  // sim-clock moment (ms) it was last stepped to
+  const link = { outpost, map, ids: null, wrecks: null, now, harvest: null, rigs: { at: now, got: new Map() } };
   // the battle's upgrade command on an outpost structure asks the outpost's own rule (model.upgradeRefusal: tech
   // unlocks, the Upgrade Bay and its power, the tree's tiers) — the save's rule, not a copy [MM-task_mwcunn53_3f]
   state.upgradeRules = [outpostUpgradeRule(link, { unlocks: unlocks || [], techOwned: techOwned || [] })];
@@ -257,21 +259,38 @@ function saveHarvest(o, state, link, now) {
       if (o.lifetime) o.lifetime.harvested[t] = (o.lifetime.harvested[t] || 0) + add;
     }
   }
-  if (now > link.now) {
-    const prev = o.liveHarvest;
-    o.liveHarvest = { from: prev ? Math.min(prev.from, link.now) : link.now, to: Math.max(now, prev ? prev.to : now) };
-  }
+}
+/** Mark [from, to] as run live on the save (o.liveHarvest), merged with an earlier mark. Mutates o. */
+function markLive(o, from, to) {
+  const prev = o.liveHarvest;
+  o.liveHarvest = { from: prev ? Math.min(prev.from, from) : from, to: Math.max(to, prev ? prev.to : to) };
 }
 
 /**
- * Power changes during a visit (owner 2026-11-11): park the outpost's trucks when their Resource Bay has no power and
- * start them again when it has — a station built, sold or upgraded, a pylon placed. Reads the live state as the save
- * would see it (fromLiveSim → model.powerGrids), so it is the closed form's own power rule. The session calls it on the
- * sim's tick count (sessionView afterTick), never on the wall clock. → whether the bay is powered (null: no trucks).
+ * The outpost's own clock during a visit (owner 2026-11-12: "the miner is not mining"): the rigs mine on the sim's time,
+ * by the closed form's own rule (model.rigExtraction: finished, powered, into a bay with room — online or not), so the
+ * bays fill while the player watches and fromLiveSim saves what they mined; and power changes park or start the trucks
+ * (a station built, sold or upgraded, a pylon placed): parked when their Resource Bay has no power. Reads the live state
+ * as the save would see it (fromLiveSim → model.powerGrids), so it is the closed form's own power rule. The session
+ * calls it on the sim's tick count (sessionView afterTick), never on the wall clock. Mutates link.rigs and the trucks.
+ * → whether the bay is powered (null: no trucks).
  */
-export function syncHarvestPower(state, link) {
+export function stepLiveOutpost(state, link) {
+  const now = link.now + Math.round(state.time * 1000), where = new Map();
+  const o = fromLiveSim(state, link, now, where).outpost;
+  const rigs = link.rigs;
+  if (rigs && now > rigs.at) {
+    const simOf = new Map([...where].filter(([, w]) => w.pad).map(([sid, w]) => [w.pad, sid]));
+    for (const r of rigExtraction(o, link.map, now - rigs.at)) {
+      const sid = simOf.get(r.pad);
+      if (sid == null) continue;
+      const bag = rigs.got.get(sid) || {};
+      bag[r.item] = (bag[r.item] || 0) + r.got;
+      rigs.got.set(sid, bag);
+    }
+    rigs.at = now;
+  }
   if (!link.harvest || !link.harvest.trucks) return null;
-  const o = fromLiveSim(state, link, link.now + Math.round(state.time * 1000)).outpost;
   const bay = resourceBayPad(o);
   const powered = !!bay && powerGrids(o, link.map).powered.has(bay);
   for (const id of state.harvesterIds || []) {
@@ -280,13 +299,15 @@ export function syncHarvestPower(state, link) {
   }
   return powered;
 }
+/** The trucks' half of stepLiveOutpost (its earlier name, kept for its callers). */
+export const syncHarvestPower = stepLiveOutpost;
 
 /**
  * The live SimState back into the save at `now`. → { outpost, gold }. A building placed during the visit gets a new
  * free id and its own `at` rectangle. `where` (optional Map) is filled with each sim structure id → its place in the
  * save: { pad } for a building, { defense: id } for a defense (the upgrade rule above reads it).
  */
-export function fromLiveSim(state, link, now, where = null) {
+export function fromLiveSim(state, link, now, where = new Map()) {
   const { outpost: before, map, ids } = link;
   const o = clone(before);
   o.pads = {};
@@ -327,7 +348,7 @@ export function fromLiveSim(state, link, now, where = null) {
       if (s.lifecycle === 'Selling') continue;  // buildings sell at once
       const at = e ? { pad: e.pad, extra: e.extra } : placeOf(s, def);
       const pad = at.pad, extra = at.extra;
-      if (where) where.set(s.id, { pad });
+      where.set(s.id, { pad });
       if (s.lifecycle === 'Building') {
         const ms = structureDef(kind, 1).buildSec * 1000;
         const { deep, ...jobExtra } = extra;   // a job carries its spot and deposit; `deep` belongs to the finished rig
@@ -343,7 +364,7 @@ export function fromLiveSim(state, link, now, where = null) {
     }
     // a defense
     const id = e ? e.defense : `d${nextDefense++}`;
-    if (where) where.set(s.id, { defense: id });
+    where.set(s.id, { defense: id });
     const d = { id, kind, tier: s.tier, cell: [s.pos.x, s.pos.y], hp: s.hp, ...(e ? e.extra : {}) };
     if (s.lifecycle === 'Building') {
       const b = (e && e.building) || { since: now, done: now + def.buildTime * 1000 };
@@ -369,6 +390,15 @@ export function fromLiveSim(state, link, now, where = null) {
   o.defenses.push(...newDefenses);
   o.upgrading = upgrading || null;
   if (before.upgrading == null && upgrading == null && !('upgrading' in before)) delete o.upgrading;
+  // what the rigs mined during the visit (stepLiveOutpost), into their bays; a rig sold since takes its ore with it
+  for (const [sid, items] of (link.rigs && link.rigs.got) || []) {
+    const w = where.get(sid), pad = w && w.pad;
+    if (!pad || !o.pads[pad] || o.pads[pad].kind !== 'rig') continue;
+    const bay = (o.storage[pad] ||= {});
+    for (const [item, u] of Object.entries(items)) bay[item] = (bay[item] || 0) + u;
+  }
   if (link.harvest) saveHarvest(o, state, link, now);
+  // the visit's stretch ran live — the rigs on its clock, the trucks on the sim — so the away closed form skips it
+  if (now > link.now) markLive(o, link.now, now);
   return { outpost: o, gold: state.economy.money };
 }

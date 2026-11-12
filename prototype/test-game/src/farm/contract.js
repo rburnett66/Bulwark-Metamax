@@ -17,6 +17,8 @@ import { PLANETS } from '../data/planets.js';
 import { farmContractOf, cropOf, farmBuildingOf, methodOf } from '../data/farm.js';
 import { ensureFarm, occupied, placeFarmBuilding, plotState } from './model.js';
 import { grantPodCrate } from './pods.js';
+import { contractFor } from '../data/outpost.js';
+import { outpostUnlocks } from '../outpost/contract.js';
 
 const nameOf = (key) => (PLANETS[key] || {}).name || key;
 /** The farming quest line of a planet key: 'ground' → 'QL-VER-F'. */
@@ -29,6 +31,43 @@ export function farmingOpen(s, key) {
   const o = s.outposts && s.outposts[key];
   return !!o && Object.values(o.pads || {}).some((b) => b.kind === 'rig' && b.tier >= 2);
 }
+/**
+ * What the player must do next to farm on this planet — THE one wording of the farming gate (owner 2026-11-12: "I can't
+ * farm"; the FARM tab's padlocks, farm/farmRail.js farmGateReason, and the OUTPOST panel's line both read it, so they
+ * always agree). Each step of the one path: an outpost contract unlocks the Rig Mk II tech, the Tech Tree sells it, the
+ * outpost's Mining Station is upgraded to Mk II (farmingOpen), then the Factor at the Trade Station offers F1, whose
+ * ACCEPT makes the farm the player's. ship: the capital ship's name (the mission catalogue's capitalShips), else a
+ * generic one; factor: the Factor's name (farm/factor.js factorOf), else "the Factor". Reads the save; changes nothing.
+ * → null (no farming contract here, or the farm is the player's) | { step: 'tech' | 'buy' | 'upgrade' | 'upgrading' |
+ *   'ship' | 'factor', text }
+ */
+export function farmGate(s, key, { ship = null, factor = null } = {}) {
+  const c = farmContractOf(key, 'F1');
+  if (!c || hasFarm(s, key)) return null;
+  const o = (s.outposts || {})[key];
+  if (!o) return null;
+  const desk = `${factor || 'the Factor'} at the Trade Station aboard ${ship || `the ${nameOf(key)} capital ship`}`;
+  if (!farmingOpen(s, key)) {
+    const pre = (hint) => `Farming opens with a Mining Rig Mk II (${hint}) — then see ${desk}`;
+    if ((o.building || []).some((j) => j.kind === 'rig' && j.tier >= 2)) return { step: 'upgrading', text: pre('its upgrade is under way') };
+    const owned = !!((s.tech || {}).owned || {}).rig_mk2;
+    if (!owned && !outpostUnlocks(s, key).unlocks.has('rig_mk2')) return { step: 'tech', text: pre(`its tech comes with outpost contract ${contractStepUnlocking(key, 'rig_mk2') || 2}`) };
+    if (!owned) return { step: 'buy', text: pre('buy Rig Mk II in the Tech Tree') };
+    return { step: 'upgrade', text: pre('upgrade your Mining Station') };
+  }
+  const arrived = !!((s.capitalShips || {})[nameOf(key)] || {}).arrived;
+  return { step: arrived ? 'factor' : 'ship', text: `Farming is open — accept the farming contract from ${desk}` + (arrived ? '' : ' once it is in orbit') };
+}
+/** The outpost contract step whose unlocks name `tech`, or null. */
+function contractStepUnlocking(key, tech) {
+  for (let k = 1; k <= 9; k++) {
+    const c = contractFor(key, k);
+    if (!c) return null;
+    if ((c.unlocks.techs || []).includes(tech)) return k;
+  }
+  return null;
+}
+
 /** Has the player accepted a farming contract on this planet (the farm exists)? */
 export const hasFarm = (s, key) => !!(s.farmContracts && s.farmContracts[key] && s.farmContracts[key].state !== 'offered');
 

@@ -203,6 +203,24 @@ function roomLeft(state) {
   return state.harvestRoom - carried;
 }
 const held = (state, u) => !!u.parked || roomLeft(state) < 1 - 1e-9;
+/**
+ * Why a docked truck is not driving out (owner 2026-11-12: "the harvester is not harvesting" — the player must see why):
+ * the same rules stepOneHarvester holds it by. → null (it is working, or free to take an order) | { why: 'parked' }
+ * (u.parked: its board parked it) | { why: 'full' } (the store has no room) | { why: 'regrowing', inSec } (a field-locked
+ * truck whose field has no whole unit to pull: it waits for regrowth, inSec until the first cell holds one; null when the
+ * field does not regrow). Pure; battle trucks set none of these, so a battle truck answers null.
+ */
+export function harvesterHold(state, u) {
+  if (!u || !u.isHarvester || u.state !== 'harvestIdle') return null;
+  if (u.parked) return { why: 'parked' };
+  if (roomLeft(state) < 1 - 1e-9) return { why: 'full' };
+  if (!u.fieldLock || !u.fieldId) return null;
+  const cells = fieldCells(state, u.fieldId);
+  if (cells.some((n) => worthPulling(u, n))) return null;
+  const rate = cells.reduce((a, n) => a + (n.regrow > 0 ? n.regrow : 0), 0);
+  const best = cells.reduce((m, n) => Math.max(m, n.remaining || 0), 0);
+  return { why: 'regrowing', inSec: rate > 0 ? Math.max(0, (1 - best) / rate) : null };
+}
 // nearest field cell with anything left to pull, skipping cells another truck has claimed
 // (deterministic: distance, then id)
 function nextFieldTarget(state, u) {
