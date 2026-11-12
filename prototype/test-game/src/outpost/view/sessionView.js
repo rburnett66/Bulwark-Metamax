@@ -188,7 +188,7 @@ async function openSession(opts, opening) {
   if (opts.tab === 'farm') catalogue.setTab('farm');   // a deep link to the farm opens on its tab
   // before farming opens: every FARM item's lock is the gate's reason (the ship's name from the mission catalogue) — the one
   // wording (farm/contract.js farmGate), which the OUTPOST panel's line shows too; refreshPanel re-reads it on the live
-  // outpost, so a Rig Mk II finished this visit moves both on together
+  // outpost, so both move on together
   const shipName = (((catalog && catalog.capitalShips) || {})[(PLANETS[planet] || {}).name] || {}).ship || null;
   let gateText = farmed ? null : farmGateReason(save0, planet, shipName);
   const lockFarmGate = (why) => {
@@ -502,8 +502,7 @@ async function openSession(opts, opening) {
     }
     const v = view || fromLiveSim(sim, live.link, nowOf()).outpost;
     const gold = sim.economy.money, raid = !!(sim.waves && sim.waves.active);
-    // the save as last written (re-read when the save context is), with the outpost as it stands live: a Rig Mk II the
-    // live sim finished this visit opens farming before the player leaves
+    // the save as last written (re-read when the save context is), with the outpost as it stands live
     if (!farmed && gateSave.of !== ctxNow()) gateSave = { of: ctxNow(), s: store.load() };
     const gate = farmed ? null : farmGateReason({ ...gateSave.s, outposts: { ...(gateSave.s.outposts || {}), [planet]: v } }, planet, shipName);
     if (gate !== gateText) { gateText = gate; lockFarmGate(gate); }   // the rail's padlocks and the card's line: one text

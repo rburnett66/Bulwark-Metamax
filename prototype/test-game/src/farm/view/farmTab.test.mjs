@@ -24,6 +24,7 @@ function farmSave() {
   const s = defaultSave();
   s.carry = { gold: 20_000, structures: [] }; s.goldBank = 20_000;
   s.capitalShips = { Verdance: { arrived: true } };
+  s.planetMaps = { ...(s.planetMaps || {}), Verdance: Object.fromEntries(Array.from({ length: 9 }, (_, i) => [i + 1, { beaten: true }])) };   // Verdance finished: farming opens (owner 2026-11-12)
   let o = referenceOutpost('ground', { seed: 3, map, now: T0 });
   for (const b of Object.values(o.pads)) if (b.kind === 'rig' || b.kind === 'power') b.tier = 2;   // a Rig II draws 8: it needs Power Station II [MM-story_mwcp7u7b_3a]
   o = confirmOnline(o, map, T0).outpost;

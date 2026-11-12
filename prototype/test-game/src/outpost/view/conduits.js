@@ -9,7 +9,7 @@
  *
  * Pure (no three.js): outpostScene.js turns these plans into meshes.
  */
-import { powerGrids, unlitChains, bayCapacity, depositAt, upgradeBayShows, buildingRect } from '../model.js';
+import { powerGrids, unlitChains, bayCapacity, depositAt, upgradeBayShows, buildingRect, hopperCap, hopperUnits } from '../model.js';
 import { structureDef, DEFENSE_KINDS } from '../../data/outpost.js';
 import { POWER_NODE_KINDS } from '../../data/outpostStructures.js';
 import { oresOf } from '../../data/ores.js';
@@ -266,7 +266,9 @@ export function ghostPower(o, map, kind, rect) {
 /**
  * Each pad's look this frame: what stands on it and in which state.
  * → [{ pad, kind, tier, model: { kind, tier, rigHead }, rise, tint, glow, working, mk2, fill?, deep? }]
- * now: ms; fills: storage hologram height (0..1) for storage pads.
+ * now: ms. fill (0..1): a Storage Tower's — the rigs' bays pooled, units / cap, the OUTPOST panel's "Storage 60 / 1440"
+ * (hudModel storage.frac), so every tower shows the same pooled level on its hologram and its gauge — and a Resource
+ * Bay's: its hopper, units / cap (hudModel hopper.frac) [MM-task_mwd3zlwd_6].
  */
 export function planBuildings(o, map, now) {
   const { powered } = powerGrids(o, map);
@@ -277,6 +279,11 @@ export function planBuildings(o, map, now) {
   const hub = Object.keys(o.pads).find((id) => o.pads[id].kind === 'hub');
   const storage = Object.keys(o.pads).find((id) => o.pads[id].kind === 'storage');
   const coreOn = o.online && hub && powered.has(hub) && storage && powered.has(storage);
+  let hopper = null;   // the hopper's fill, worked out once and only when a Resource Bay stands
+  const hopperFill = () => {
+    if (hopper == null) { const hc = hopperCap(o, map); hopper = hc > 0 ? Math.min(1, hopperUnits(o) / hc) : 0; }
+    return hopper;
+  };
   const out = [];
   // every building where it stands (its own `at` rectangle, the hub on the landing pad; model.buildingRect), by id —
   // every building gets its model, wherever it stands [MM-subtask_mwcij28k_34] (owner 2026-11-11: placed buildings
@@ -307,6 +314,7 @@ export function planBuildings(o, map, now) {
       item.full = bayFull;
     }
     if (b && kind === 'storage') { item.fill = fill; item.working = !!coreOn; }
+    if (b && (kind === 'resourceBay' || kind === 'harvesterBay')) item.fill = hopperFill();
     if (b && kind === 'power') item.working = !!o.online;
     out.push(item);
   }

@@ -22,6 +22,88 @@ export const AMBER = Object.freeze([1.0, 0.45, 0.08]);
 export const TRIM = Object.freeze({ verdance: 0xeb5c0d, mk2: 0xffb328 });
 const LOD_DIST = [0, 26, 52];
 
+/**
+ * The capacity gauge on a building's outside (owner 2026-11-12: "the storage facility should have a capacity level
+ * indicator on the outside") [MM-task_mwd3zlwd_6]: a vertical glowing bar in a dark housing on the front face, rising
+ * with stored / capacity — green, amber from 80 %, red when full. Colours are linear RGB like CYAN (unlit, toneMapped
+ * off, the ship_glow language); the housing is a lit hull material so the sun shades it like the rest of the model.
+ */
+export const GAUGE = Object.freeze({
+  near: 0.8,
+  colors: Object.freeze({ ok: Object.freeze([0.1, 0.95, 0.28]), near: Object.freeze([1.0, 0.6, 0.04]), full: Object.freeze([1.0, 0.08, 0.05]) }),
+  /** dimmest the bar goes on an unpowered building: ore already stored is never lost, so the level stays readable */
+  minGlow: 0.4,
+});
+
+/**
+ * The gauge's level and colour band from (stored, cap). Pure. → { frac 0..1, band: 'ok' | 'near' | 'full', color }
+ * Full uses the rigs' own tolerance (a bay at cap - 1e-6 is full, conduits.js planBuildings).
+ */
+export function gaugeLevel(stored, cap) {
+  const s = Number(stored), c = Number(cap);
+  const frac = c > 0 && s > 0 ? Math.min(1, s / c) : 0;
+  const band = c > 0 && s >= c - 1e-6 ? 'full' : frac >= GAUGE.near ? 'near' : 'ok';
+  return { frac: band === 'full' ? 1 : frac, band, color: GAUGE.colors[band] };
+}
+
+/**
+ * Where each gauged model carries its gauge, in model units (the GLB's own space, +Z the front the default camera
+ * sees): x the bar's centre, y0..y1 its height, z the face it stands proud of, w its width, back (optional) where its
+ * housing reaches back to (a column that climbs past a set-back upper block stays attached). A slug with no mount has
+ * no gauge. Storage: a tall sight-glass column right of the door, from the plinth up past the lower block to the upper
+ * block, big enough to read on the phone's whole-map view; Resource Bay: between its two bay doors.
+ */
+export const GAUGE_MOUNTS = Object.freeze({
+  storage: Object.freeze({ x: 1.42, y0: 0.42, y1: 2.3, z: 1.57, w: 0.56, back: 0.6 }),
+  resourceBay: Object.freeze({ x: 0, y0: 0.3, y1: 1.02, z: 1.07, w: 0.24 }),
+});
+
+/**
+ * The gauge meshes for one mount. → { group, set(frac, glow), dispose() }. set() only scales the bar and recolours its
+ * material, so the scene's ~4×/s sync never rebuilds anything.
+ */
+export function buildGauge(THREE, mount) {
+  const { x, y0, y1, z, w } = mount, h = y1 - y0, pad = 0.06, depth = 0.08, back = Math.min(z, mount.back ?? z);
+  const group = new THREE.Group();
+  group.name = 'outpost-gauge';
+  const housingMat = new THREE.MeshStandardMaterial({ color: 0x2c3137, roughness: 0.7, metalness: 0.15 });
+  const housing = new THREE.Mesh(new THREE.BoxGeometry(w + pad * 2, h + pad * 2, z + depth - back).translate(x, y0 + h / 2, (back + z + depth) / 2), housingMat);
+  housing.castShadow = true; housing.receiveShadow = true;
+  const wellMat = new THREE.MeshBasicMaterial({ color: 0x0a1216 });
+  const well = new THREE.Mesh(new THREE.PlaneGeometry(w, h).translate(x, y0 + h / 2, z + depth + 0.002), wellMat);
+  const inset = 0.03, bh = h - inset * 2;
+  const barMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+  // the bar's geometry stands on its own base, so scale.y is the fill
+  const bar = new THREE.Mesh(new THREE.PlaneGeometry(w - inset * 2, bh).translate(0, bh / 2, 0), barMat);
+  bar.position.set(x, y0 + inset, z + depth + 0.004);
+  bar.name = 'outpost-gauge-bar';
+  // quarter ticks over the bar, so the level reads at a glance
+  const tickMat = new THREE.MeshBasicMaterial({ color: 0x0a1216 });
+  const ticks = [0.25, 0.5, 0.75].map((t) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w - inset * 2, Math.max(0.018, h * 0.022)).translate(x, y0 + inset + bh * t, z + depth + 0.006), tickMat);
+    return m;
+  });
+  group.add(housing, well, bar, ...ticks);
+  let last = null;
+  return {
+    group, bar,
+    get level() { return last; },
+    /** frac: stored / capacity (0..1); glow: the building's glow (unpowered dims it, never below GAUGE.minGlow). */
+    set(frac, glow = 1) {
+      const lv = gaugeLevel(frac, 1), g = Math.max(GAUGE.minGlow, Math.min(1, glow));
+      bar.scale.y = Math.max(0.001, lv.frac);
+      bar.visible = lv.frac > 0.005;
+      barMat.color.setRGB(lv.color[0] * g, lv.color[1] * g, lv.color[2] * g);
+      last = { ...lv, glow: g };
+      return last;
+    },
+    dispose() {
+      group.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+      for (const m of [housingMat, wellMat, barMat, tickMat]) m.dispose();
+    },
+  };
+}
+
 /** The model slug for an outpost building: rig → its ore's head; power tier 2 → power_ii. */
 export function modelSlug(kind, tier, rigHead) {
   if (kind === 'rig') return `rig_${rigHead || 'auger'}`;
@@ -128,6 +210,10 @@ export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader,
     const L = gltfs.map((g, i) => { const c = cloneLevel(g); lod.addLevel(c.root, LOD_DIST[levels[i]] * (tier === 'low' ? 0.75 : 1)); return c; });
     const holder = new THREE.Group();
     holder.add(lod);
+    // the capacity gauge (storage, the Resource Bay's hopper): outside the LOD so every level and tier carries it
+    const gauge = GAUGE_MOUNTS[slug] ? buildGauge(THREE, GAUGE_MOUNTS[slug]) : null;
+    let gaugeFrac = 0;
+    if (gauge) holder.add(gauge.group);
     // anchors and nodes from the most detailed level (positions are the same on every level)
     const anchors = {}, nodes = {};
     L[0].root.traverse((o) => {
@@ -138,7 +224,7 @@ export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader,
     const nodesOf = (name) => L.map((c) => { let f = null; c.root.traverse((o) => { if (o.userData && o.userData.node === name && (o.userData.pivot || !f)) f = o; }); return f; }).filter(Boolean);
     let working = false, mk2 = false, look = { tint: [1, 1, 1], glow: 1, rise: 1, trim };
     const api = {
-      object: holder, lod, slug, anchors, nodes, nodesOf, def: m,
+      object: holder, lod, slug, anchors, nodes, nodesOf, def: m, gauge,
       get working() { return working; }, get mk2() { return mk2; },
       setWorking(on) {
         if (on === working) return;
@@ -164,12 +250,20 @@ export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader,
           for (const o of c.mats.glow) o.material.color.setScalar(Math.max(0.05, look.glow));
         }
         lod.scale.set(1, Math.max(0.05, look.rise), 1);
+        if (gauge) { gauge.group.scale.y = lod.scale.y; gauge.set(gaugeFrac, look.glow); }
+      },
+      /** The capacity gauge's fill (stored / capacity, 0..1); a model with no gauge mount ignores it. → its level */
+      setGauge(frac) {
+        if (!gauge) return null;
+        gaugeFrac = Number.isFinite(frac) ? frac : 0;
+        return gauge.set(gaugeFrac, look.glow);
       },
       update(dt, camera) {
         if (camera) lod.update(camera);
         for (let i = 0; i < L.length; i++) if (L[i].mixer && working && L[i].root.visible) L[i].mixer.update(dt);
       },
       dispose() {
+        if (gauge) gauge.dispose();
         for (const c of L) c.root.traverse((o) => { if (o.isMesh) { if (o.userData.baseColors) o.geometry.dispose(); o.material.dispose(); } });
       },
     };
