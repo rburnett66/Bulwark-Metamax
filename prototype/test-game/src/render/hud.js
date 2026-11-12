@@ -3,6 +3,7 @@ import { createCatalogue } from '../battle/catalogue.js';
 import { SELPANEL_CSS, PALETTE_CSS, STRUCT_ICONS, railFit, applyRailFit, LOCK_SVG } from './buildPalette.js';
 import { STRUCTURES, ASSUMPTIONS, ABILITIES, getStructureDef, factionsInRoster } from '../data/tables.js';
 import { getSellValue } from '../sim/economy.js';
+import { upgradeRuleRefusal } from '../sim/structures.js';
 import { VERSION, VERSION_NOTE } from '../version.js';
 import { levelFromXp } from '../data/progression.js';
 import { resultsModel, mountResults } from './resultsScreen.js';
@@ -1074,9 +1075,13 @@ export function updateHud(hud, state, ui) {
     // instead of enabling on gold and silently failing (owner 2026-07-16 mobile playtest)
     const tierGroup = s.kind === 'antiGround' ? 'cannon' : s.kind === 'antiAir' ? 'flak' : 'wall';
     const tierLocked = !!(state.structTiers && s.tier + 1 > (state.structTiers[tierGroup] || 1));
-    hud.upgradeBtn.disabled = busy || s.tier >= maxTier || tierLocked || money < upCost;
+    // …and a mode's own upgrade rule (state.upgradeRules — the outpost's tech gate; battles set none) [MM-task_mwcunn53_3f]
+    const ruleWhy = busy || s.tier >= maxTier || tierLocked ? null : upgradeRuleRefusal(state, s);
+    hud.upgradeBtn.disabled = busy || s.tier >= maxTier || tierLocked || !!ruleWhy || money < upCost;
+    hud.upgradeBtn.title = ruleWhy || '';
     hud.upgradeBtn._label.textContent = ' ' + (s.tier >= maxTier ? 'Max Tier'
       : tierLocked ? 'T' + (s.tier + 1) + ' locked (campaign)'
+      : ruleWhy ? 'T' + (s.tier + 1) + ' locked'   // the reason is the button's title
       : 'Upgrade (' + upCost + 'g)');   // keep bold U
     let sellVal = 0;
     try { sellVal = getSellValue(s, STRUCTURES, ASSUMPTIONS); } catch (e) { sellVal = 0; }
