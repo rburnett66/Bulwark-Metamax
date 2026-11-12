@@ -180,8 +180,10 @@ export function panelModel(o, map, sel, ctx = {}) {
   let status = 'Online', tone = 'ok';
   if (!b) { status = `Building · ${fmtClock((job.done - now) / 1000)}`; tone = 'busy'; }
   else if (job) { status = `Upgrading to ${ROMAN[job.tier]} · ${fmtClock((job.done - now) / 1000)}`; tone = 'busy'; }
-  else if (off[pad.id]) { status = off[pad.id] === 'reach' ? 'No power: out of reach' : 'No power: grid short'; tone = 'off'; }
-  else if (!o.online) { status = 'Waiting to go online'; tone = 'warn'; }
+  else if (off[pad.id]) { status = noPowerStatus(o, map, pad.id, off[pad.id]); tone = 'off'; }
+  // offline is not unpowered (owner 2026-11-12: "the base is acting like it is under powered"): a powered building
+  // works offline — a rig mines (model.runningRigs) — so say it runs, and that the outpost itself is offline
+  else if (!o.online) { status = kind === 'rig' ? 'Mining · outpost offline' : kind === 'power' ? 'Supplying · outpost offline' : 'Powered · outpost offline'; tone = 'warn'; }
   const out = { title, sub: pad.id, status, tone, stats, kind, tier };
   // the building's warnings (owner 2026-11-07 07:33): no power, storage full, the storage tower's door shut
   const warn = b ? (buildingWarnings(o, map)[pad.id] || []) : [];
@@ -190,7 +192,7 @@ export function panelModel(o, map, sel, ctx = {}) {
   if (b && kind === 'rig') {
     const ore = oresOf(o.planet).find((x) => x.tier === b.deposit);
     const cap = bayCapacity(o, pad.id, map), units = bayUnits(o, pad.id);
-    const running = o.online && powered.has(pad.id) && !job;
+    const running = powered.has(pad.id) && !job;   // the model's rule (runningRigs): mining never waits to go online
     if (running && units >= cap - 1e-6) { out.status = 'Bay full: sell to resume'; out.tone = 'warn'; }
     stats.push(['Ore', ore ? `${ore.name}${b.deep ? ', deep grade' : ''}` : '—']);
     stats.push(['Rate', running ? fmtRate(rigRatePerMin(o, pad.id)) : 'stopped']);
@@ -266,6 +268,18 @@ function upgradeBlock(o, def, ctx) {
   if (u.startsWith('tech:') && !has(u.slice(5))) return `needs ${u.slice(5).replace(/_/g, ' ')}`;
   if (def.cost > (ctx.gold ?? Infinity)) return `costs ${fmtGold(def.cost)}`;
   return null;
+}
+/**
+ * Why a building has no power, for its status line: out of reach of every station, or its grid is short — and when
+ * another grid has the spare power it needs, that the stations are not linked (two stations apart are two grids:
+ * model.powerGrids links nodes only within reach), so a Pylon between them is the fix.
+ */
+export function noPowerStatus(o, map, padId, why) {
+  if (why === 'reach') return 'No power: out of reach of a station';
+  const b = o.pads[padId], need = b ? (structureDef(b.kind, b.tier) || {}).draw || 0 : 0;
+  // serveGrids is greedy: this building's own grid ended with less spare than it draws, so a grid with that spare is another
+  const spare = powerGrids(o, map).grids.some((g) => g.supply - g.draw >= need);
+  return spare ? 'No power: grid short · another station has spare but is not linked (add a Pylon)' : 'No power: grid short';
 }
 function powerGridOf(o, map, stationPad) {
   return powerGrids(o, map).grids.find((g) => g.stations.includes(stationPad)) || null;

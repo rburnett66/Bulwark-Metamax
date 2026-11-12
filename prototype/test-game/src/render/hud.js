@@ -1160,7 +1160,14 @@ export function updateHud(hud, state, ui) {
 
   // ---- Selected RESOURCE card (lower-middle; replaces the unit window while open) [MM-story_mw2xo93o_2] ----
   const rId = ui ? ui.selectedResourceId : null;
-  const rm = rId != null ? resourceInfoModel(state, rId, typeof hud.planet === 'function' ? hud.planet() : hud.planet) : null;
+  let rm = rId != null ? resourceInfoModel(state, rId, typeof hud.planet === 'function' ? hud.planet() : hud.planet) : null;
+  // A MODE'S RESOURCE CARD (cbs.resourceInfo(id, state, card) → a card model | null | undefined): the mode fills the
+  // battle's card with its own numbers (the outpost: its field's stock and regrowth, the trucks on it, a deposit and
+  // its rig) — undefined keeps the battle's card; null closes it. One card, one renderer (resourceInfoHtml). A battle sets none.
+  const rfn = hud.callbacks && hud.callbacks.resourceInfo;
+  if (rId != null && typeof rfn === 'function') {
+    try { const x = rfn(rId, state, rm); if (x !== undefined) rm = x; } catch (e) { console.warn('[hud] resource card', e); }
+  }
   if (hud.resPanel) {
     hud.resPanel._ui = ui;
     if (!rm) { if (ui && rId != null) ui.selectedResourceId = null; hud.resPanel.classList.remove('on'); }
@@ -1218,6 +1225,15 @@ export function updateHud(hud, state, ui) {
         ['Status', HARVEST_STATE[u.state] || u.state || '—'],
         ['Dock', u.homePos ? (u.homePos.x + ',' + u.homePos.y) : '—'],
       ];
+      // A MODE'S STATUS for the selected truck: the same selectionExtras hook the structure panel reads, asked with the
+      // unit (cbs.selectionExtras(unit, state) → { lines }): its first line says what the truck is doing instead (the
+      // outpost: "Waiting: field regrowing", "Parked: no power", "Hopper full"). A battle sets no hook: unchanged.
+      const xfn = hud.callbacks && hud.callbacks.selectionExtras;
+      if (typeof xfn === 'function') {
+        let ex = null;
+        try { ex = selectionExtrasModel(xfn(u, state)); } catch (e) { console.warn('[hud] harvester extras', e); }
+        if (ex && ex.lines.length) rows[rows.findIndex((r) => r[0] === 'Status')] = ['Status', ex.lines.join(' · '), 'wide'];
+      }
     } else {
       // u.shape is the unit's DISPLAY name — this readout is the only thing entitled to read it.
       // (It was called `u.kind` until DDD-7; `kind` on a STRUCTURE means 'antiGround'/'antiAir', and

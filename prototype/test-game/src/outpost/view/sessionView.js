@@ -48,13 +48,13 @@ import { applyCommand } from '../../sim/core.js';
 import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../../data/outpostStructures.js';
 import { DEFENSE_KINDS } from '../../data/outpost.js';
 import { getStructureDef } from '../../data/tables.js';
-import { toLiveSim, fromLiveSim, syncHarvestPower } from '../liveSim.js';
+import { toLiveSim, fromLiveSim, stepLiveOutpost } from '../liveSim.js';
 import { ghostPowerOf, powerWarning } from '../placementRules.js';
 import { createVisitRaids } from '../visitRaids.js';
 import { validatePlacement } from '../../sim/structures.js';
 import { isFarmStructId } from '../../data/farmStructures.js';
 import { cropOf } from '../../data/farm.js';
-import { hasFarm } from '../../farm/contract.js';
+import { hasFarm, farmGate } from '../../farm/contract.js';
 import { farmRailIds, farmRailLocks, farmGroundRule, farmThingAt, grownFarm, farmRailLabel } from '../../farm/farmRail.js';
 import { farmPanelModel, farmRailGlyph } from '../../farm/view/farmUi.js';
 import { storeCapacity } from '../../farm/model.js';
@@ -69,7 +69,10 @@ import { planBuildings, planPowerIcons, withCuts } from './conduits.js';
 import { createOutpostKit, modelSlug } from '../../render3d/outposts/outpostModels.js';
 import { renderMenuIcons, OUTPOST_GLYPHS } from './menuIcons.js';
 import { oresOf } from '../../data/ores.js';
+import { PLANETS } from '../../data/planets.js';
 import { createSession, onlineIssues, repairAllCost } from './session.js';
+import { outpostResourceCard, harvesterHoldText, depositCardId } from './resourceCard.js';
+import { harvesterHold } from '../../sim/harvest.js';
 import { upgradeGridShort } from '../model.js';
 import { hudModel, panelModel, sellButton, fmtGold, harvesterTile } from './hudModel.js';
 import { awayReportModel } from './awayReport.js';
@@ -107,6 +110,11 @@ export function outpostSelectionExtras(s, { ids, outpost, map, ctx = {}, now, go
     const sb = sellButton(hudModel(outpost, map, { gold, now }));
     actions.push({ label: 'SELL RESOURCES' + (sb.enabled ? ' · ' + sb.sub : ''), enabled: sb.enabled, title: sb.enabled ? '' : 'Sell: ' + sb.sub,
       run: () => act({ type: 'sell' }) });
+  }
+  // GO ONLINE on the hub (owner 2026-11-12: the OUTPOST panel and its GO ONLINE step aside while something is selected)
+  if (e.pad && m.kind === 'hub' && !outpost.online) {
+    const issues = onlineIssues(outpost, map);
+    actions.push({ label: 'GO ONLINE', enabled: !issues.length, title: issues.length ? 'Go online: ' + issues.join('; ') : '', run: () => act({ type: 'online' }) });
   }
   if (e.pad && m.deep) {
     const on = !m.deep.on;
@@ -204,6 +212,8 @@ async function openSession(opts, opening) {
   // the clock the save sees: the arrival time plus the sim's own time (the sim never reads the wall clock)
   const nowOf = () => t0 + Math.round(sim.time * 1000);
   let ui = createUiState();
+  // the planet's names for its resources (data/planets.js), as the resource card names them: the selected truck's Target
+  ui.resourceNames = Object.fromEntries(Object.entries((PLANETS[planet] || {}).resources || {}).map(([t, r]) => [t, r.name]));
   let closed = false;
   let hud = null;
   const submit = (cmd) => {
@@ -220,7 +230,7 @@ async function openSession(opts, opening) {
   const board = outpostBattleMap(map, { bakeTune });
   const slug = await bakedSlugFor(map, { base: ROOT });
   const session = createBattleSession(host, {
-    getSim: () => sim, getUi: () => ui, submit, mapId: 0, catalogue, onGroundTap: (cell) => tapFarm(cell),
+    getSim: () => sim, getUi: () => ui, submit, mapId: 0, catalogue, onGroundTap: (cell, tapUi) => tapFarm(cell, tapUi),
     mountOptions: () => ({ planet, landing: false, landingHeld: true,
       render3d: { baseUrl: ROOT, craft: false, landing: false, qualityQuery: opts.tier || null } }),
   });
@@ -235,7 +245,11 @@ async function openSession(opts, opening) {
     onBuyHarvesterUnit: () => { if (actOnSave({ type: 'buyHarvester' }).ok) flashMessage(hud, 'Harvester bought · it docks at the Resource Bay'); },
     // the battle's selection panel, with the outpost's extras inside it (render/hud.js selectionExtras) — no panel of its own
     selectionExtras: (s) => selectionExtras(s),
+    // the battle's resource card with the outpost's numbers (resourceCard.js): a field's stock, regrowth and trucks; a deposit
+    resourceInfo: (id, state, card) => outpostResourceCard(id, state, card, { outpost: view || fromLiveSim(sim, live.link, nowOf()).outpost,
+      map, planet, unlockedTiers: ctxNow().unlockedTiers }),
   });
+  if (hud.setPlanet) hud.setPlanet(planet);   // the card names the planet's resources (render/resourceInfo.js planetFor)
   // the outpost buildings' glyphs on the battle rail until their GLB pictures are rendered (below)
   const RAIL_KINDS = OUTPOST_BUILDING_KINDS.filter((k) => k !== 'hub');
   for (const k of RAIL_KINDS) if (OUTPOST_GLYPHS[k] && hud.setBuildPicture) hud.setBuildPicture(outpostStructId(k), { glyph: OUTPOST_GLYPHS[k] });
@@ -320,18 +334,27 @@ async function openSession(opts, opening) {
   // Re-read at most twice a second (the battle HUD asks every frame).
   // (a rebuild makes a new sim whose ids restart: the cache is the sim's too)
   let extrasOf = { sim: null, id: null, at: -1, out: null };
+  // A selected TRUCK asks the same hook (render/hud.js): why it is not driving (sim/harvest.js harvesterHold) as its status.
   function selectionExtras(s) {
-    if (extrasOf.sim === sim && extrasOf.id === s.id && sim.time - extrasOf.at < 0.5) return extrasOf.out;
-    extrasOf = { sim, id: s.id, at: sim.time, out: outpostExtras(s) };
+    const unit = !!s.isHarvester;
+    if (extrasOf.sim === sim && extrasOf.id === s.id && extrasOf.unit === unit && sim.time - extrasOf.at < 0.5) return extrasOf.out;
+    extrasOf = { sim, id: s.id, unit, at: sim.time, out: unit ? harvesterExtras(s) : outpostExtras(s) };
     return extrasOf.out;
   }
+  function harvesterExtras(u) {
+    const t = harvesterHoldText(harvesterHold(sim, u));
+    return t ? { lines: [t] } : null;
+  }
   function outpostExtras(s) {
-    const v = view || fromLiveSim(sim, live.link, nowOf()).outpost;
-    return outpostSelectionExtras(s, { ids: live.link.ids, outpost: v, map, ctx: ctxNow(), now: nowOf(), gold: sim.economy.money,
+    // where each live structure is in the save, built now: a building placed this visit has its save id too (the link's
+    // ids know only what was there on arrival — without this a new building's panel had no status line at all)
+    const where = new Map(), v = fromLiveSim(sim, live.link, nowOf(), where).outpost;
+    return outpostSelectionExtras(s, { ids: where, outpost: v, map, ctx: ctxNow(), now: nowOf(), gold: sim.economy.money,
       act: (action) => {
         const r = actOnSave(action);
         if (!r.ok) return;
         if (action.type === 'sell') flashMessage(hud, 'Sold · +' + fmtGold(r.earned != null ? r.earned : 0) + ' gold');
+        else if (action.type === 'online') flashMessage(hud, 'OUTPOST ONLINE · mining has begun. Raiders will come: hold the first one.');
         else if (action.type === 'deep') flashMessage(hud, action.on ? 'Deep seam: ¼ the speed, 5× the price' : 'Shallow seam');
       } });
   }
@@ -361,11 +384,15 @@ async function openSession(opts, opening) {
     return { ok: !!res.ok, reason: res.error };
   }
   /** The battle input's tap on open ground: a plot or a farm building there opens its panel. → whether it took the tap. */
-  function tapFarm(cell) {
+  function tapFarm(cell, tapUi = ui) {
     const hit = farmThingAt(farmNow(), cell.x, cell.y);
     farmSel = hit;
     if (farmLayer) farmLayer.select(farmRect(hit));
     panelSince = 1;
+    // an unbuilt ore deposit opens the battle's resource card with its ore (resourceCard.js); the tap is not taken, so
+    // the battle's own selection clears as for any open ground (input.js keeps the card it is handed)
+    const dep = hit ? null : (map.deposits || []).find((d) => cell.x >= d.x && cell.x < d.x + 2 && cell.y >= d.y && cell.y < d.y + 2);
+    if (dep && tapUi) tapUi.selectedResourceId = depositCardId(dep.tier);
     return !!hit;
   }
   function farmRect(sel) {
@@ -438,6 +465,8 @@ async function openSession(opts, opening) {
   const status = line('op-s-status');
   const threatLine = line('op-s-threat');   // raid threat: size · raids/day (hudModel.raidThreat) [MM-story_mwco8she_38]
   const storeLine = line('op-s-store');
+  const farmLine = line('op-s-farmgate');   // what opens farming here (farm/contract.js farmGate), until the farm is the player's
+  farmLine.style.color = '#c8b27a';
   const btn = (label, fn) => {
     const b = doc.createElement('button');
     b.className = 'bw-btn';
@@ -505,7 +534,7 @@ async function openSession(opts, opening) {
     rows.forEach((t, i) => { const d = doc.createElement(i ? 'div' : 'b'); d.textContent = t; rep.appendChild(d); });
   }
   session.addPanel(panel);
-  let panelSince = 1;
+  let panelSince = 1, gateSave = { of: null, s: null };
   function refreshPanel() {
     refreshFarmLocks();
     // a battle selection (a structure or a unit) or an armed tool replaces a farm selection
@@ -525,6 +554,12 @@ async function openSession(opts, opening) {
     title.textContent = 'OUTPOST';
     status.textContent = h.online ? (h.raidInbound ? 'Online · raid inbound' : 'Online') : ('Offline — ' + (issues.join('; ') || 'ready to go online'));
     threatLine.textContent = h.threat.text;
+    // the save as last written (re-read when the save context is), with the outpost as it stands live: a Rig Mk II the
+    // live sim finished this visit opens farming before the player leaves
+    if (!farmed && gateSave.of !== ctxNow()) gateSave = { of: ctxNow(), s: store.load() };
+    const gate = farmed ? null : farmGate({ ...gateSave.s, outposts: { ...(gateSave.s.outposts || {}), [planet]: v } }, planet);
+    farmLine.textContent = gate ? gate.text : '';
+    farmLine.style.display = gate ? '' : 'none';
     storeLine.textContent = 'Storage ' + Math.floor(h.storage.units) + ' / ' + Math.floor(h.storage.cap) + ' · ' + (h.loads || 0) + (h.loads === 1 ? ' load' : ' loads') + ' ready';
     onlineBtn.style.display = h.online ? 'none' : '';
     onlineBtn.disabled = issues.length > 0;
@@ -539,7 +574,7 @@ async function openSession(opts, opening) {
   session.start({
     paused: () => false,
     stopped: () => false,
-    // power changes during the visit start or park the trucks (S4 follow-up): checked on the sim's tick count, every 15 ticks (half a sim second)
+    // the outpost's own clock (liveSim.js stepLiveOutpost): the rigs mine, and power changes start or park the trucks — every 15 ticks
     // an upgrade (the battle's U command) that outgrows the grid goes ahead, flagged as the old view flags it: the save
     // model's own check on the live state written back (model.upgradeGridShort) [MM-story_mwcp7u7b_3a]
     afterStep: (s, evs) => {
@@ -557,7 +592,7 @@ async function openSession(opts, opening) {
         const cells = farmed ? raids.takeCells() : null;
         if (cells && cells.length) { const keep = ui.selectedStructureId; actOnSave({ type: 'trample', cells }, { keepTool: true }); ui.selectedStructureId = keep; }
       }
-      if (sim.tick % 15 === 0) syncHarvestPower(sim, live.link);
+      if (sim.tick % 15 === 0) stepLiveOutpost(sim, live.link);   // the rigs mine on the sim clock; power parks or starts the trucks
     },
     beforeFrame: (dtMs) => { dt = Math.min(dtMs / 1000, 0.25); },
     beforeHud: () => {
