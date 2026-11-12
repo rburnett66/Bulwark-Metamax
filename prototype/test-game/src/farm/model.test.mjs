@@ -6,6 +6,7 @@ import { referenceOutpost, advance, powerGrids, buildingRect } from '../outpost/
 import { DRAFT_LAYOUT as map } from '../outpost/draftLayout.js';
 import { FARM, yieldOf, growSec } from '../data/farm.js';
 import { TERRAIN } from '../terrain/terrainGen.js';
+import { getStructureDef } from '../data/tables.js';
 import {
   ensureFarm, occupied, plotState, placePlot, prep, plant, harvest, harvestAll, placeFarmBuilding, storeCapacity,
   outputPerHour, farmStatus, farmReportLines, walkwayHit, plantLevel,
@@ -28,6 +29,16 @@ function freeSpots(o, n, w = 2, h = 2) {
   return out;
 }
 const go = (o, t) => advance(o, t, { map }).outpost;
+/**
+ * The reference grid one short of a Pump: the kit drew 9 of its station's 10 while its guns drew 1 each; defenses need
+ * no power since owner 2026-11-11 [MM-task_mwcutmnk_3h], so the kit draws 7 and a Resource Bay (2, served before a
+ * Pump) in the station's reach takes it to 9 — the Pump's 2 no longer fits. → a copy of `o`.
+ */
+function shortGrid(o) {
+  const fp = getStructureDef('OUT-resourceBay').footprint;
+  const at = nearPower(o, fp.w, fp.h);
+  return { ...o, pads: { ...o.pads, b9: { kind: 'resourceBay', tier: 1, at: { x: at.x, y: at.y, w: fp.w, h: fp.h } } } };
+}
 /** A free spot within the reference outpost's Power Station reach (so a farm building on it is powered). */
 function nearPower(o, w, h, near = null) {
   const pw = buildingRect(o, map, Object.keys(o.pads).find((id) => o.pads[id].kind === 'power'));
@@ -145,7 +156,8 @@ test('Irrigated grows 1.5× with water in reach: a powered Pump or a natural wat
   const plot = o.farm.plots[id];
   const pumpAt = freeSpots(o, 600, 1, 1).find((c) => Math.hypot(c.x + 0.5 - (plot.x + 1), c.y + 0.5 - (plot.y + 1)) <= 3 && inStationReach(o, c));
   const p = placeFarmBuilding(o, { kind: 'pump', ...pumpAt }, { map, now: t - 2 * MIN, gold: 1e9 });
-  // the reference outpost's Power Station I is fully drawn (supply 10): the Pump is last in priority, so it is off
+  // the reference outpost's Power Station I nearly drawn (shortGrid: 9 of 10): the Pump is last in priority, so it is off
+  p.outpost = shortGrid(p.outpost);
   const short = go(p.outpost, t + g / 1.5 + MIN);
   assert.equal(powerGrids(short, map).off[p.id], 'supply');
   assert.equal(plotState(short, short.farm.plots[id]), 'plant', 'an unpowered Pump gives no water');
@@ -250,6 +262,7 @@ test('level 5 needs a trick: a Traditional plot grows a level-5 crop at 4; an Ir
   // a finished, powered Pump in reach is water too
   const pumpAt = freeSpots(o, 600, 1, 1).find((c) => Math.hypot(c.x + 0.5 - (plot.x + 1), c.y + 0.5 - (plot.y + 1)) <= 3 && inStationReach(o, c));
   const p = placeFarmBuilding(o, { kind: 'pump', ...pumpAt }, { map, now: o.t - 2 * MIN, gold: 1e9 });
+  p.outpost = shortGrid(p.outpost);                        // the Pump off on Power Station I (see shortGrid)
   const grid2 = structuredClone(p.outpost);
   for (const b of Object.values(grid2.pads)) if (b.kind === 'power') b.tier = 2;
   const pumped = go(grid2, o.t + 2 * MIN);

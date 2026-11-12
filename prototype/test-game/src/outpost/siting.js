@@ -19,7 +19,7 @@ import { outpostPositionRules } from './placementRules.js';
 import { validatePlacement } from '../sim/structures.js';
 import { outpostStructId } from '../data/outpostStructures.js';
 import { getStructureDef } from '../data/tables.js';
-import { structureDef } from '../data/outpost.js';
+import { structureDef, GUN_KINDS } from '../data/outpost.js';
 
 /** The layout rules a save was last sited by. Bump it when a position rule changes, and every save re-sites once. */
 export const LAYOUT_VERSION = 1;
@@ -104,9 +104,11 @@ export function referenceKit(map) {
     if (c !== at) moved.push({ kind: k.kind, from: [at.x, at.y], to: [c.x, c.y] });
     defenses.push({ kind: k.kind, cell: [c.x, c.y] });
   }
-  // 3. the station, reaching the landing pad, the rig and the powered defenses
+  // 3. the station, reaching the landing pad, the rig and the kit's guns. The guns need no power (owner 2026-11-11
+  //    [MM-task_mwcutmnk_3h]); reaching them is kept as a LAYOUT rule only, so the starter layout (and old saves read
+  //    by it, model.js kitAt) stand where they always have — a station central to the kit.
   const rigC = centreOf(buildingRect(o, map, 'r1'));
-  const drawing = defenses.filter((d) => ((structureDef(d.kind, 1) || {}).draw || 0) > 0).map((d) => [d.cell[0] + 0.5, d.cell[1] + 0.5]);
+  const drawing = defenses.filter((d) => GUN_KINDS.includes(d.kind)).map((d) => [d.cell[0] + 0.5, d.cell[1] + 0.5]);
   const inReach = (c, fp, pts) => pts.every((q) => Math.hypot(c.x + fp.w / 2 - q[0], c.y + fp.h / 2 - q[1]) <= reach);
   const fpP = footprintOf('power');
   const mid = { x: Math.round((hubC[0] + rigC[0]) / 2 - fpP.w / 2), y: Math.round((hubC[1] + rigC[1]) / 2 - fpP.h / 2) };

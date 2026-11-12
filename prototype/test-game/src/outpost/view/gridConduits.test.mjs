@@ -72,9 +72,9 @@ test('the ghost: powered, no power in reach, or grid short — from powerGrids o
   for (let i = 0; i < Math.floor(P1.supply / RIG.draw); i++) pads['r' + i] = at('rig', 3 * i, 3);
   const full = { ...o, pads };
   assert.equal(ghostPower(full, free, 'rig', { x: 0, y: -3, w: 2, h: 2 }).reason, 'supply');
-  // a defense ghost is a defense consumer (its cell)
-  const mg = ghostPower(o, free, 'mg', { x: 100, y: 0, w: 1, h: 1 });
-  assert.equal(mg.reason, 'reach');
+  // a defense ghost was a defense consumer ('reach' out here); defenses need no power since owner 2026-11-11
+  // [MM-task_mwcutmnk_3h]: no power answer, so no amber ghost and no warning, anywhere
+  for (const kind of ['mg', 'cannon', 'wall']) assert.equal(ghostPower(o, free, kind, { x: 100, y: 0, w: 1, h: 1 }), null, kind);
   assert.ok(!Object.keys(o.pads).includes(GHOST_ID), 'the outpost is never touched');
 });
 
