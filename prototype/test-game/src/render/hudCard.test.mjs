@@ -37,7 +37,7 @@ test('hudCardModel / hudCardHtml: title, status, sections (items · rows · gaug
   assert.match(html, /class="bw-card-status t-ok">Online</);
   assert.match(html, /class="bw-card-h"><span>Gathering<\/span><span>per hour<\/span>/);
   assert.match(html, /class="bw-card-item" style="--c:#c0c0c0">.*<span class="n">Iron<\/span>.*--p:40\.0%.*>12<\/span>.*\+30\/h/);
-  assert.match(html, /<b class="bw-key">S<\/b> <span>Sell<\/span><small>2 loads<\/small>/);
+  assert.match(html, /<b class="bw-key">S<\/b> <span>SELL<\/span><small>2 loads<\/small>/);
   assert.match(html, /class="bw-btn primary" data-i="1" disabled/);
   assert.match(html, /<span class="k">Storage<\/span>/);
 });
@@ -85,8 +85,8 @@ test('the battle selection panel is a HudCard in the right column, with U / X / 
   assert.equal(hud.selPanel.style.display, 'flex');
   assert.match(hud.sname.textContent, / T1$/);
   assert.equal(hud.shpfill.style.width, '75.0%');
-  assert.match(hud.upgradeBtn._label.textContent, /Upgrade \(\d+g\)/);
-  assert.match(hud.sellBtn._label.textContent, /Sell \(\+\d+g\)/);
+  assert.match(hud.upgradeBtn._label.textContent, /UPGRADE \(\d+g\)/);
+  assert.match(hud.sellBtn._label.textContent, /SELL \(\+\d+g\)/);
   // the same width / place token as the mode cards
   assert.match(HUD_CARD_CSS, new RegExp('width:' + HUD_CARD_W + 'px'));
 });
@@ -108,4 +108,11 @@ test('toasts: error (today\'s red) by default, ok (green), info; a long one stay
   const CSS = readFileSync(new URL('./hud.js', import.meta.url), 'utf8');
   assert.match(CSS, /\.bw-toast \{[^}]*rgba\(60,20,20,0\.92\)/, 'the error toast is unchanged');
   assert.match(CSS, /\.bw-toast\.bw-toast-ok \{ background:rgba\(16,40,26,0\.92\); border-color:#57a057; color:#c8f5cf; \}/);
+});
+
+test('card button labels are uppercase but gold amounts keep a small g (owner 2026-11-12: "Small g since it uses less width")', async () => {
+  const { cardLabelText } = await import('./hudCard.js');
+  assert.equal(cardLabelText('Upgrade (750g)'), 'UPGRADE (750g)');
+  assert.equal(cardLabelText(' Sell (+120g)'), ' SELL (+120g)');
+  assert.equal(cardLabelText('Max Tier'), 'MAX TIER');
 });

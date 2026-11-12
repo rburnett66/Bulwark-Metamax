@@ -80,6 +80,7 @@ ${aaaTicksCss('.bw-card', 12, 'var(--gold)')}
   color:#dfe7ef; font-family:${AAA_FONT_BODY}; font-size:11.5px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; line-height:1.1; white-space:nowrap; }
 .bw-card .bw-btn:hover:not(:disabled) { background:rgba(30,38,50,.95); border-color:#6b7a8c; color:#fff; }
 .bw-card .bw-btn:focus-visible { outline:2px solid var(--cyan); outline-offset:1px; }
+.bw-card .bw-btn > span { text-transform:none; }   /* cardLabelText uppercases it, keeping the gold 'g' small */
 .bw-card .bw-btn .bw-key { color:var(--gold-hi); font-family:${AAA_FONT_NUM}; font-weight:900; font-size:10px; margin-right:1px; }
 .bw-card .bw-btn small { display:block; font-size:9.5px; font-weight:600; letter-spacing:.06em; text-transform:none; color:#9aa6b4; margin-top:1px; }
 .bw-card .bw-btn.primary { color:#1a1206; border-color:var(--gold-hi); background:linear-gradient(180deg, #f6d27e, #D9A441 55%, #b9852c); }
@@ -129,7 +130,17 @@ export function hudCardHtml(model) {
     '<div class="bw-card-rule"></div>' + hudCardBodyHtml(m) +
     (m.actions.length ? '<div class="bw-card-actions">' + m.actions.map((a, i) => '<button class="bw-btn' + (a.primary ? ' primary' : '') + (a.wide ? ' wide' : '') + '" data-i="' + i + '"' +
       (a.enabled ? '' : ' disabled') + (a.title ? ' title="' + esc(a.title) + '"' : '') + '>' + (a.key ? '<b class="bw-key">' + esc(a.key) + '</b> ' : '') +
-      '<span>' + esc(a.label) + '</span>' + (a.sub ? '<small>' + esc(a.sub) + '</small>' : '') + '</button>').join('') + '</div>' : '') + '</div>';
+      '<span>' + esc(cardLabelText(a.label)) + '</span>' + (a.sub ? '<small>' + esc(a.sub) + '</small>' : '') + '</button>').join('') + '</div>' : '') + '</div>';
+}
+
+/** A button label in the card's uppercase, with gold amounts kept as a small "g" (owner 2026-11-12: "Small g since it
+ * uses less width"): 'Upgrade (750g)' → 'UPGRADE (750g)'. */
+export const cardLabelText = (s) => String(s).toUpperCase().replace(/(\d)G(?![A-Z])/g, '$1g');
+
+/** Rewrite a card button's label (b._label) in the card's case. */
+export function setCardLabel(b, label) {
+  const t = cardLabelText(label);
+  if (b._label.textContent !== t) b._label.textContent = t;
 }
 
 /**
@@ -141,7 +152,7 @@ export function hudCardButton(doc, label, key) {
   b.className = 'bw-btn';
   if (key) { const k = doc.createElement('b'); k.className = 'bw-key'; k.textContent = key; b.appendChild(k); }
   const lbl = doc.createElement('span');
-  lbl.textContent = (key ? ' ' : '') + label;
+  lbl.textContent = cardLabelText((key ? ' ' : '') + label);
   b.appendChild(lbl);
   b._label = lbl;
   return b;

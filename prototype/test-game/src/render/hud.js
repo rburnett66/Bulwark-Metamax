@@ -8,7 +8,7 @@ import { VERSION, VERSION_NOTE } from '../version.js';
 import { levelFromXp } from '../data/progression.js';
 import { resultsModel, mountResults } from './resultsScreen.js';
 import { mountWaveReport, mountAwayReport } from './waveReport.js';
-import { HUD_CARD_CSS, HUD_CARD_W, createHudCard, hudCardButton } from './hudCard.js';
+import { HUD_CARD_CSS, HUD_CARD_W, createHudCard, hudCardButton, setCardLabel } from './hudCard.js';
 import { AAA_VARS, ensureAaaFonts } from './uiTokens.js';
 import { fogWindow, insideWindow } from '../render3d/overlays/fogModel.js';
 import { createFpsMeter, loadFpsChoice, saveFpsChoice, FPS_CSS } from './fpsMeter.js';
@@ -1292,14 +1292,14 @@ export function updateHud(hud, state, ui) {
     const ruleWhy = busy || s.tier >= maxTier || tierLocked ? null : upgradeRuleRefusal(state, s);
     hud.upgradeBtn.disabled = busy || s.tier >= maxTier || tierLocked || !!ruleWhy || money < upCost;
     hud.upgradeBtn.title = ruleWhy || '';
-    hud.upgradeBtn._label.textContent = ' ' + (s.tier >= maxTier ? 'Max Tier'
+    setCardLabel(hud.upgradeBtn, ' ' + (s.tier >= maxTier ? 'Max Tier'
       : tierLocked ? 'T' + (s.tier + 1) + ' locked (campaign)'
       : ruleWhy ? 'T' + (s.tier + 1) + ' locked'   // the reason is the button's title
-      : 'Upgrade (' + upCost + 'g)');   // keep bold U
+      : 'Upgrade (' + upCost + 'g)'));   // keep bold U
     let sellVal = 0;
     try { sellVal = getSellValue(s, STRUCTURES, ASSUMPTIONS); } catch (e) { sellVal = 0; }
     hud.sellBtn.disabled = busy;
-    hud.sellBtn._label.textContent = ' Sell (+' + Math.floor(sellVal) + 'g)';   // keep bold X
+    setCardLabel(hud.sellBtn, ' Sell (+' + Math.floor(sellVal) + 'g)');   // keep bold X
     hud.repairBtn.disabled = busy || s.hp >= s.maxHp;
   }
 
