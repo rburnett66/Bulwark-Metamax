@@ -1,11 +1,9 @@
-// The outpost view's pure parts (story O6) [MM-story_mw5oeer7_n]: HUD model and formatting, layout and framing,
-// the SELL timeline from sell()'s per-load entries, the scene plans (conduits, buildings, deposits, defenses) and the
-// battle board the renderer draws.
+// The outpost view's pure parts (story O6) [MM-story_mw5oeer7_n]: HUD model and formatting, the scene plans (conduits,
+// buildings, deposits, defenses) and the battle board the renderer draws. (The old view's layout / framing and SELL
+// timeline went with it in S6.)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { hudModel, sellButton, panelModel, defenseOptions, fmtGold, fmtUnits, fmtRate, fmtClock } from './hudModel.js';
-import { layoutFor, framedCamera, frameRect, padsRect, focusCamera, VIEW_YAW } from './layout.js';
-import { sellTimeline, SELL, MAX_POPS, popColour } from './sellTimeline.js';
 import { conduitRoute, planConduits, planBuildings, planDeposits, defenseStructures, TINT } from './conduits.js';
 import { outpostBattleMap, bakedSlugOf, lowlandResources } from './outpostBoard.js';
 import { referenceOutpost, confirmOnline, advance, sell, place } from '../model.js';
@@ -80,80 +78,6 @@ test('S2c.2: no empty pads to build on — a panel is for a building or a defens
 });
 
 // ── layout and framing ─────────────────────────────────────────────────────────────────────────────────────────
-test('layouts: phone portrait, phone landscape, desktop', () => {
-  assert.equal(layoutFor(390, 844).mode, 'portrait');
-  assert.equal(layoutFor(844, 390).mode, 'landscape');
-  assert.equal(layoutFor(1280, 800).mode, 'desktop');
-  assert.equal(layoutFor(800, 1280).mode, 'portrait');
-  assert.ok(layoutFor(844, 390).insets.right > 0, 'landscape keeps the action column clear');
-});
-
-test('the mesa frames inside the clear part of the screen in every layout (tech plan §6.1, §6.6)', () => {
-  for (const [w, h] of [[390, 844], [844, 390], [1280, 800], [1920, 1080]]) {
-    const L = layoutFor(w, h), cam = framedCamera(map, w, h), box = clearBox(w, h, L.insets), R = cam.rect;
-    if (L.mode !== 'portrait') assert.deepEqual(R, frameRect(map), `${w}×${h} frames the whole mesa`);
-    else assert.ok([padsRect(map, 1), padsRect(map, 0)].some((x) => JSON.stringify(x) === JSON.stringify(R)), 'portrait frames the mesa\'s buildings (the pitch is fixed, the distance capped)');
-    assert.equal(cam.yaw, VIEW_YAW);
-    for (const [x, z] of [[R.x0, R.z0], [R.x1, R.z0], [R.x0, R.z1], [R.x1, R.z1]]) {
-      const p = groundToNdc(cam, w / h, x, z);
-      assert.ok(p && p.x >= box.x0 - 1e-6 && p.x <= box.x1 + 1e-6 && p.y >= box.y0 - 1e-6 && p.y <= box.y1 + 1e-6, `${w}×${h}: corner ${x},${z} on screen`);
-    }
-  }
-  // portrait: the mesa fills the width (design: the mesa must frame on a 390 × 844 phone)
-  const cam = framedCamera(map, 390, 844), R = cam.rect;
-  const a = groundToNdc(cam, 390 / 844, R.x0, (R.z0 + R.z1) / 2), b = groundToNdc(cam, 390 / 844, R.x1, (R.z0 + R.z1) / 2);
-  assert.ok(b.x - a.x > 1.3, 'the buildings span most of a portrait phone\'s width');
-  const hub = map.hub;
-  const f = focusCamera(hub, VIEW_YAW, layoutFor(390, 844));
-  assert.ok(f.dist < cam.dist, 'tapping a building moves in');
-});
-
-// ── the SELL timeline ──────────────────────────────────────────────────────────────────────────────────────────
-test('the SELL timeline follows the §6.5 table, from sell()\'s per-load entries', () => {
-  const o = advance(online(), T0 + 20 * MIN, quiet).outpost;
-  const s = sell(o, {});
-  assert.equal(s.loads.length, 4);
-  const tl = sellTimeline(s.loads, { goldFrom: 1000 });
-  const at = (type) => tl.beats.find((b) => b.type === type).t;
-  assert.equal(at('drain'), 0); assert.equal(at('crates'), 0);
-  assert.equal(at('engines'), 0.6); assert.equal(at('lift'), 0.6); assert.equal(at('shake'), 0.6);
-  assert.equal(at('splatter'), 0.8);
-  assert.equal(at('arc'), SELL.arc[0]);
-  assert.deepEqual(tl.pops.map((p) => +p.t.toFixed(2)), [0.9, 1.02, 1.14, 1.26], 'one "$N" per load, staggered 0.12 s');
-  assert.deepEqual(tl.pops.map((p) => p.gold), s.loads.map((l) => l.gold));
-  assert.equal(tl.pops[0].colour, '#8a4b32', 'in the ore colour');
-  assert.equal(tl.total, s.gold);
-  assert.equal(tl.countAt(0), 1000);
-  assert.equal(tl.countAt(1.4), 1000);
-  assert.equal(tl.countAt(tl.duration), 1000 + s.gold);
-  let prev = 0;
-  for (let t = 0; t <= tl.duration; t += 0.05) { const g = tl.countAt(t); assert.ok(g >= prev); prev = g; }
-  assert.equal(tl.shuttleAt(0.5).on, false);
-  assert.ok(tl.shuttleAt(1.0).lift > 0 && tl.shuttleAt(1.0).arc === 0);
-  assert.ok(tl.shuttleAt(2.5).arc > 0.3 && tl.shuttleAt(3.0).arc === 1);
-  assert.equal(tl.drainAt(0), 1);
-  assert.equal(tl.drainAt(SELL.drainFor), 0);
-});
-
-test('reduced motion keeps the pops and the count-up only; a big sale shares pops but pays every load', () => {
-  const loads = Array.from({ length: 30 }, (_, i) => ({ pad: 'r1', item: i % 2 ? 'iron' : 'iron_deep', units: 15, gold: 60 + i }));
-  const tl = sellTimeline(loads, { reduced: true });
-  assert.deepEqual([...new Set(tl.beats.map((b) => b.type))].sort(), ['count', 'pop']);
-  assert.equal(tl.shuttleAt(1.5).on, false);
-  assert.ok(tl.pops.length <= MAX_POPS);
-  assert.equal(tl.pops.reduce((a, p) => a + p.gold, 0), loads.reduce((a, l) => a + l.gold, 0));
-  assert.equal(tl.pops.reduce((a, p) => a + p.loads, 0), 30);
-  assert.ok(tl.pops[tl.pops.length - 1].t < SELL.arc[1], 'the stagger ends while the shuttle is still in view');
-});
-
-test('pop colours: a dark ore is lifted bright, keeping its hue', () => {
-  const c = popColour('#8a4b32');
-  const n = parseInt(c.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
-  assert.ok(r > 200 && r > g && g > b, `${c} is a light rust`);
-  assert.equal(popColour('nope'), '#ffd76a');
-});
-
-// ── the scene plans ────────────────────────────────────────────────────────────────────────────────────────────
 test('conduit routes leave the station\'s edge and arrive at the building\'s edge', () => {
   const a = { x: 0, y: 0, w: 4, h: 4 }, b = { x: 10, y: 6, w: 4, h: 4 };
   const r = conduitRoute(a, b);

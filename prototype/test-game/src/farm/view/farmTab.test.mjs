@@ -1,4 +1,5 @@
 // [MM-story_mwabgs3l_f] The FARM tab's model and its actions through the outpost session, on the real Verdance map.
+// S6 [MM-story_mwc9q1y6_2n]: the FARM tab is the shared battle rail's (farm/farmRail.js); places come from its ground rule.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -10,7 +11,9 @@ import { FARM, growSec } from '../../data/farm.js';
 import { podCount } from '../pods.js';
 import { acceptFarmContract, measureCropDelivered } from '../contract.js';
 import { cellRule } from '../cells.js';
-import { FARM_MENU, farmMenu, farmAt, farmPanelModel, plantChoices, sellable } from './farmUi.js';
+import { farmPanelModel, plantChoices, sellable, farmRailGlyph } from './farmUi.js';
+import { farmRailIds, farmRailLocks, farmRefusal, farmThingAt } from '../farmRail.js';
+import { getStructureDef } from '../../data/tables.js';
 
 const CATALOG = JSON.parse(readFileSync(new URL('../../../content/missions/missions.json', import.meta.url), 'utf8'));
 const map = outpostMapFromForge(JSON.parse(readFileSync(new URL('../../../content/maps/forge/ground-outpost.json', import.meta.url), 'utf8')), 'ground');
@@ -31,6 +34,14 @@ function farmSave() {
 }
 function memStore(s) { let cur = s; return { load: () => structuredClone(cur), update: (fn) => { const x = structuredClone(cur); fn(x); cur = x; return structuredClone(cur); } }; }
 const noRaid = () => ({ result: 'held', defenses: [] });
+/** The places a FARM item can take now (the shared placement's farm rule, farmRail.js), top-left cells, row by row. */
+function farmSpots(o, ctx, id = 'FARM-traditional') {
+  const def = getStructureDef(id), out = [];
+  for (let y = 0; y + def.footprint.h <= map.height; y++) for (let x = 0; x + def.footprint.w <= map.width; x++) {
+    if (farmRefusal(o, map, def, { x, y }, { now: ctx.now ?? T0, cellOk: ctx.cellOk }) === null) out.push({ cell: [x, y] });
+  }
+  return out;
+}
 
 test('the Farmhouse F1 grants stands on farm soil, off the mesa and the pads', () => {
   const s = farmSave(), o = s.outposts.ground, fh = Object.values(o.farm.buildings)[0];
@@ -38,18 +49,27 @@ test('the Farmhouse F1 grants stands on farm soil, off the mesa and the pads', (
   assert.equal(cellRule(map, o)({ x: fh.x, y: fh.y, w: fh.w, h: fh.h }), null, 'the map\'s rule accepts where it stands');
 });
 
-test('the FARM build list: plots and buildings, locked until unlocked, targets only on farm soil', () => {
-  const s = farmSave(), o = s.outposts.ground;
-  const items = farmMenu(o, map, { gold: 20_000, now: T0, methods: ['traditional'], cellOk: cellRule(map, o) });
-  assert.deepEqual(items.map((i) => i.id), FARM_MENU.map((m) => m.id));
-  const trad = items.find((i) => i.id === 'traditional'), irr = items.find((i) => i.id === 'irrigated');
-  assert.ok(trad.enabled && trad.targets.length > 30, `${trad.targets.length} places for a plot`);
-  assert.equal(trad.cost, FARM.Prep_Gold);
-  assert.ok(irr.locked && /not unlocked/.test(irr.why));
-  const rule = cellRule(map, o);
-  for (const t of trad.targets.slice(0, 50)) assert.equal(rule({ x: t.cell[0], y: t.cell[1], w: 2, h: 2 }), null);
-  const poor = farmMenu(o, map, { gold: 50, now: T0, methods: ['traditional'], cellOk: rule });
-  assert.match(poor.find((i) => i.id === 'silo').why, /Costs 800 gold/);
+test('the FARM tab: plots, the Silo and Pump, the planet\'s crops; locks for what is not unlocked; places only on farm soil', () => {
+  const s0 = farmSave(), o = s0.outposts.ground;
+  const ids = farmRailIds(s0, 'ground');
+  assert.deepEqual(ids.slice(0, 4), ['FARM-traditional', 'FARM-irrigated', 'FARM-silo', 'FARM-pump']);
+  const crops = ids.filter((id) => id.startsWith('FARM-crop-'));
+  assert.ok(crops.includes('FARM-crop-loam-grain') && crops.length >= 4, 'the planet\'s own crops');
+  for (const id of ids) { assert.ok(getStructureDef(id), id); assert.ok(farmRailGlyph(id), `${id} has a rail picture`); }
+  assert.equal(getStructureDef('FARM-traditional').cost[0], FARM.Prep_Gold);
+  assert.equal(getStructureDef('FARM-silo').cost[0], 800);
+  const locks = farmRailLocks(s0, { methods: ['traditional'] }, ids);
+  assert.match(locks['FARM-irrigated'], /not unlocked/);
+  assert.equal(locks['FARM-traditional'], undefined);
+  assert.equal(locks['FARM-crop-loam-grain'], undefined, 'the Pod Crate\'s crop can be planted');
+  assert.ok(Object.keys(locks).some((k) => k.startsWith('FARM-crop-') && /seed pods/.test(locks[k])), 'a crop without pods says why');
+  const rule = cellRule(map, o), spots = farmSpots(o, { cellOk: rule });
+  assert.ok(spots.length > 30, `${spots.length} places for a plot`);
+  for (const t of spots.slice(0, 50)) assert.equal(rule({ x: t.cell[0], y: t.cell[1], w: 2, h: 2 }), null);
+  // an outpost building is refused on the farm's ground; a crop needs a prepped plot
+  const fh = Object.values(o.farm.buildings)[0];
+  assert.match(farmRefusal(o, map, getStructureDef('OUT-power'), { x: fh.x, y: fh.y }), /farm building/);
+  assert.match(farmRefusal(o, map, getStructureDef('FARM-crop-loam-grain'), { x: 0, y: 0 }), /prepped plot/);
 });
 
 test('the loop through the outpost session: place, prep, plant from the Pod Crate, harvest into the store, deliver, sell', () => {
@@ -57,7 +77,7 @@ test('the loop through the outpost session: place, prep, plant from the Pod Crat
   const ses = createSession({ store, planet: 'ground', map, catalog: CATALOG, raidHook: noRaid });
   const ctx0 = ses.ctx(T0);
   assert.deepEqual(ctx0.methods, ['traditional', 'irrigated'], 'F1 accepted: Irrigated is unlocked');
-  const spot = farmMenu(ses.outpost(), map, ctx0).find((i) => i.id === 'traditional').targets[0];
+  const spot = farmSpots(ses.outpost(), ctx0)[0];
   let r = ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: spot.cell }, T0);
   assert.ok(r.ok, r.error);
   const plotId = r.farm.placed;
@@ -98,15 +118,15 @@ test('the panels: a prepped plot offers the pods held; a Fruited plot HARVEST; t
   assert.match(fh.actions[2].label, /24\/24/);
   assert.equal(sellable({ 'loam-grain': 30, 'rootsong-seeds': 5 }).gold, 30, 'common sells at 1; rare is kept');
   const b = Object.values(o.farm.buildings)[0];
-  assert.deepEqual(farmAt(o, b.x, b.y), { farm: fhId });
-  assert.equal(farmAt(o, 0, 0), null);
+  assert.deepEqual(farmThingAt(o, b.x, b.y), { farm: fhId });
+  assert.equal(farmThingAt(o, 0, 0), null);
 });
 
 test('a full store blocks HARVEST in the panel and the session; plants keep growing (owner rule 4)', () => {
   const s0 = farmSave();
   s0.stores.farm.ground = { 'loam-grain': 10_000 };
   const store = memStore(s0), ses = createSession({ store, planet: 'ground', map, catalog: CATALOG, raidHook: noRaid });
-  const spot = farmMenu(ses.outpost(), map, ses.ctx(T0)).find((i) => i.id === 'traditional').targets[0];
+  const spot = farmSpots(ses.outpost(), ses.ctx(T0))[0];
   const plotId = ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: spot.cell }, T0).farm.placed;
   const t1 = T0 + FARM.Prep_Sec * 1000;
   ses.act({ type: 'plant', plot: plotId, pick: 'loam-grain' }, t1);
@@ -125,7 +145,7 @@ test('PLANT grows at the crop\'s tech level; a plot keeps its level when the tre
   s0.tech.owned.crop_loam_grain_2 = true;
   const store = memStore(s0), ses = createSession({ store, planet: 'ground', map, catalog: CATALOG, raidHook: noRaid });
   assert.equal(ses.ctx(T0).levels['loam-grain'], 2, 'the session hands the FARM tab every crop\'s level');
-  const targets = farmMenu(ses.outpost(), map, ses.ctx(T0)).find((i) => i.id === 'traditional').targets;
+  const targets = farmSpots(ses.outpost(), ses.ctx(T0));
   const a = ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: targets[0].cell }, T0).farm.placed;
   const t1 = T0 + FARM.Prep_Sec * 1000;
   const p1 = ses.act({ type: 'plant', plot: a, pick: 'loam-grain' }, t1);
@@ -133,7 +153,7 @@ test('PLANT grows at the crop\'s tech level; a plot keeps its level when the tre
   assert.equal(p1.farm.level, 2);
   assert.equal(ses.outpost().farm.plots[a].level, 2);
   store.update((sv) => { sv.tech.owned.crop_loam_grain_3 = true; sv.tech.owned.crop_loam_grain_4 = true; });   // upgraded on the tech tree
-  const spot = farmMenu(ses.live(t1).outpost, map, ses.ctx(t1)).find((i) => i.id === 'traditional').targets[0];
+  const spot = farmSpots(ses.live(t1).outpost, ses.ctx(t1))[0];
   const b = ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: spot.cell }, t1).farm.placed;
   const t2 = t1 + FARM.Prep_Sec * 1000;
   const panel = farmPanelModel(ses.live(t2).outpost, map, { plot: b }, ses.ctx(t2));
@@ -161,7 +181,7 @@ test('PLANT on a Traditional plot shows the level-5 cap and why', () => {
   const s0 = farmSave();
   for (const L of [2, 3, 4, 5]) s0.tech.owned['crop_loam_grain_' + L] = true;
   const store = memStore(s0), ses = createSession({ store, planet: 'ground', map, catalog: CATALOG, raidHook: noRaid });
-  const spot = farmMenu(ses.outpost(), map, ses.ctx(T0)).find((i) => i.id === 'traditional').targets[0];
+  const spot = farmSpots(ses.outpost(), ses.ctx(T0))[0];
   const id = ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: spot.cell }, T0).farm.placed;
   const t1 = T0 + FARM.Prep_Sec * 1000;
   const panel = farmPanelModel(ses.live(t1).outpost, map, { plot: id }, ses.ctx(t1));

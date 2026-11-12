@@ -1,89 +1,43 @@
 /**
- * src/farm/view/farmUi.js — what the FARM tab shows: its build list and its panels [MM-story_mwabgs3l_f].
+ * src/farm/view/farmUi.js — what a selected plot or farm building shows, and the FARM tab's pictures [MM-story_mwabgs3l_f].
  *
- * The outpost view's FARM tab (Farming-Design §2.3: "a tab switches between OUTPOST and FARM on the same map"). It is the
- * outpost's own build list, placement loop and panel (src/outpost/view/buildMenu.js, hud.js), fed farm items: nothing
- * of the outpost view is rebuilt (owner rule 7). The model is src/farm/model.js; the map's ground rule is
- * src/farm/cells.js (passed in as ctx.cellOk).
+ * Since S6 [MM-story_mwc9q1y6_2n] the farm is on the outpost's battle session: its build list is the shared rail's FARM
+ * tab (farm/farmRail.js, data/farmStructures.js) and its placement the battle's own; what is left here is the panel a
+ * selected plot or farm building shows (outpost/view/sessionView.js renders it), the rail's farm pictures and the
+ * crop sale. The model is src/farm/model.js; the map's ground rule is src/farm/cells.js (passed in as ctx.cellOk).
  *
  * Pure: (outpost, map, ctx) → plain objects the HUD renders. ctx: { gold, now, methods, cellOk, pods, levels, held,
  * room, delivered, f1 } — pods: the save's s.pods ({ cropId: count }; pods have no level, owner rule 9); levels: every
  * crop's tech-tree level ({ cropId: 1–5 }, src/farm/levels.js cropLevels); held: the farm store for this planet.
  */
 import { methodOf, farmBuildingOf, cropOf, podLevel, yieldOf, prepCost, CROPS } from '../../data/farm.js';
-import { occupied, plotState, storeCapacity, farmStatus, walkwayHit, plantLevel } from '../model.js';
+import { plotState, storeCapacity, farmStatus, plantLevel } from '../model.js';
 import { podRowCount } from '../pods.js';
 import { windowSec } from '../grow.js';
+import { OUTPOST_GLYPHS } from '../../outpost/view/menuIcons.js';
 
-/** The FARM tab's build list, top to bottom: the two Phase A methods, then the farm buildings the player buys. */
-export const FARM_MENU = Object.freeze([
-  { id: 'traditional', label: 'TRADITIONAL PLOT', what: 'plot' },
-  { id: 'irrigated', label: 'IRRIGATED PLOT', what: 'plot' },
-  { id: 'silo', label: 'SILO', what: 'building' },
-  { id: 'pump', label: 'PUMP', what: 'building' },
-].map(Object.freeze));
+/** A ripe crop's colour by category (the scale prototype's grain gold; the others read apart at a glance). */
+export const RIPE = Object.freeze({ Grain: 0xe8c860, Vegetable: 0xb05ad8, Fruit: 0xff7a3a, Materials: 0xf2a33a, Minerals: 0xcfd8e0, Gems: 0x7ad8ff });
+
+/**
+ * The picture of a FARM-tab item on the shared battle rail (S6, hud.setBuildPicture's glyph): the farm glyphs the old
+ * farm menu drew (outpost/view/menuIcons.js OUTPOST_GLYPHS) for plots and buildings; a crop is its seed head in its
+ * category's ripe colour. → an SVG fragment (24 × 24), or null.
+ */
+export function farmRailGlyph(structId) {
+  const id = String(structId || '').replace(/^FARM-/, '');
+  if (OUTPOST_GLYPHS[id]) return OUTPOST_GLYPHS[id];
+  if (!id.startsWith('crop-')) return null;
+  const c = cropOf(id.slice(5));
+  if (!c) return null;
+  const col = '#' + (RIPE[c.category] || RIPE.Grain).toString(16).padStart(6, '0');
+  return `<path d="M12 21V11" stroke="#4f9a37" stroke-width="2"/><path d="M12 15c-3-1-5-3-5-6 3 0 5 2 5 6zM12 15c3-1 5-3 5-6-3 0-5 2-5 6z" fill="#7bc24a"/><ellipse cx="12" cy="7" rx="3.2" ry="4.4" fill="${col}"/>`;
+}
 
 const fmt = (n) => Math.round(n || 0).toLocaleString('en-US');
-const sizeOf = (it) => (it.what === 'plot' ? methodOf(it.id) : farmBuildingOf(it.id));
 const STATE_NAME = { prepping: 'Prepping', prepped: 'Prepped: ready to plant', planted: 'Planted', sprout: 'Sprout', plant: 'Growing', fruited: 'Fruited: harvest now', dead: 'Dead: harvest for the pods back', harvested: 'Harvested: prep to plant again' };
 const TONE = { prepping: 'busy', prepped: 'ok', planted: 'busy', sprout: 'busy', plant: 'busy', fruited: 'ok', dead: 'warn', harvested: 'warn' };
 const clock = (sec) => { sec = Math.max(0, Math.round(sec)); const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60; return h ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}:${String(s).padStart(2, '0')}`; };
-
-/**
- * Where an item can go: the top-left cells where it fits — on the map, off everything that takes ground (pads,
- * defenses, the farm's own things: model.occupied) and on ground the map's rule allows (ctx.cellOk, src/farm/cells.js).
- * The same tests the model's place* run, without cloning the outpost per cell (a 64 × 32 map is 2,048 spots per item).
- * → { targets: [{ cell }], error } (error: the first refusal, when there is no target)
- */
-export function farmTargets(o, map, id, ctx = {}) {
-  const it = FARM_MENU.find((m) => m.id === id);
-  if (!it) return { targets: [], error: 'unknown item' };
-  const sz = sizeOf(it), taken = occupied(o, map), targets = [];
-  let error = null;
-  for (let y = 0; y + sz.h <= map.height; y++) {
-    for (let x = 0; x + sz.w <= map.width; x++) {
-      const r = { x, y, w: sz.w, h: sz.h };
-      const hit = taken.find((t) => r.x < t.x + t.w && t.x < r.x + r.w && r.y < t.y + t.h && t.y < r.y + r.h);
-      const crowd = hit ? null : walkwayHit(o, r);   // the walkway between farm things (owner 2026-11-10)
-      const why = hit ? `the ground is taken (${hit.what})` : crowd ? `keep a walkway clear of the ${crowd.what.replace(/ \S+$/, '')}` : ctx.cellOk ? ctx.cellOk(r) : null;
-      if (why) { error = error || why; continue; }
-      targets.push({ cell: [x, y] });
-    }
-  }
-  return { targets, error: targets.length ? null : error };
-}
-
-/**
- * The FARM tab's build list, in the outpost build list's shape (buildMenu.js), so the HUD's rail and the placement
- * reducer take it as they are. → [{ id, kind, label, place: 'cell', cost, poor, locked, why, enabled, targets, size, key }]
- */
-export function farmMenu(o, map, ctx = {}) {
-  const gold = ctx.gold ?? Infinity, methods = ctx.methods || ['traditional'];
-  return FARM_MENU.map((m, i) => {
-    const sz = sizeOf(m);
-    const out = { id: m.id, kind: m.id, label: m.label, place: 'cell', what: m.what, size: { w: sz.w, h: sz.h }, key: String(i + 1) };
-    out.cost = m.what === 'plot' ? prepCost(m.id).gold : sz.cost;
-    if (m.what === 'plot' && !methods.includes(m.id)) { out.locked = true; out.why = `${sz.name} is not unlocked yet`; out.targets = []; }
-    else {
-      const t = farmTargets(o, map, m.id, ctx);
-      out.targets = t.targets; out.locked = !t.targets.length;
-      out.why = out.locked ? (t.error || 'No free ground').replace(/^./, (c) => c.toUpperCase()) : null;
-    }
-    out.poor = out.cost > gold;
-    if (!out.locked && out.poor) out.why = `Costs ${fmt(out.cost)} gold`;
-    out.enabled = !out.locked && !out.poor;
-    return out;
-  });
-}
-
-/** What farm thing stands on a cell: { plot: id } | { farm: id } | null. */
-export function farmAt(o, x, y) {
-  if (!o.farm) return null;
-  const inR = (r) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
-  for (const p of Object.values(o.farm.plots)) if (inR(p)) return { plot: p.id };
-  for (const [id, b] of Object.entries(o.farm.buildings)) if (inR(b)) return { farm: id };
-  return null;
-}
 
 /**
  * The crops this plot could be planted with now (owner rule 9): one choice per crop with a plot's worth of pods (one

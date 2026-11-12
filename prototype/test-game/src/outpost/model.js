@@ -964,17 +964,33 @@ export function place(outpost, what, ctx) {
 }
 
 /**
+ * THE outpost's upgrade rule [MM-task_mwcunn53_3f]: why the building on a pad ({ pad }) or a defense ({ defense: id })
+ * cannot go to its next tier now, or null. One rule, two callers: the save's upgrade / upgradeDefense, and the live
+ * sim's upgrade command on a visit (liveSim.js installs it as state.upgradeRules, read by sim/structures.js
+ * startUpgrade). A building's tier needs its Unlock (tech:<node> owned, a tree tier with an Upgrade Bay); a defense's
+ * goes through defenseUpgradeRefusal (a finished, powered Upgrade Bay, the tree tier). Gold is asked only when
+ * ctx.gold is given (the live sim pays from its own economy). ctx: { map?, gold?, unlocks, techOwned }.
+ */
+export function upgradeRefusal(o, target, ctx = {}) {
+  if (target && target.defense != null) return defenseUpgradeRefusal(o, target.defense, ctx);
+  const padId = target && target.pad, b = o.pads[padId];
+  if (!b) return `nothing on ${padId}`;
+  if ((o.building || []).some((x) => x.pad === padId)) return `${padId} is already building`;
+  const def = structureDef(b.kind, b.tier + 1);
+  if (!def) return `${b.kind} has no tier ${b.tier + 1}`;
+  if (def.cost > (ctx.gold ?? Infinity)) return `costs ${def.cost} gold`;
+  if (!unlocked(def, ctx, o)) return `${b.kind} tier ${b.tier + 1} is not unlocked (${def.unlock})`;
+  return null;
+}
+
+/**
  * Upgrade the building on a pad to its next tier (Power Station II, Rig Mk II, Storage Tower II).
  * -> { outpost, cost, warning? } or { error } (warning: upgradeGridShort, when ctx.map is given)
  */
 export function upgrade(outpost, padId, ctx) {
-  const b = outpost.pads[padId];
-  if (!b) return { error: `nothing on ${padId}` };
-  if (outpost.building.some((x) => x.pad === padId)) return { error: `${padId} is already building` };
-  const def = structureDef(b.kind, b.tier + 1);
-  if (!def) return { error: `${b.kind} has no tier ${b.tier + 1}` };
-  if (def.cost > (ctx.gold ?? Infinity)) return { error: `costs ${def.cost} gold` };
-  if (!unlocked(def, ctx, outpost)) return { error: `${b.kind} tier ${b.tier + 1} is not unlocked (${def.unlock})` };
+  const why = upgradeRefusal(outpost, { pad: padId }, ctx);
+  if (why) return { error: why };
+  const b = outpost.pads[padId], def = structureDef(b.kind, b.tier + 1);
   const o = clone(outpost);
   o.building.push({ pad: padId, kind: b.kind, tier: b.tier + 1, done: ctx.now + def.buildSec * 1000 });
   return withGridWarning({ outpost: o, cost: def.cost }, ctx.map);
@@ -1061,7 +1077,7 @@ export function defenseUpgradeRefusal(o, id, ctx = {}) {
  * -> { outpost, cost, done, warning? } or { error } (warning: upgradeGridShort, when ctx.map is given)
  */
 export function upgradeDefense(outpost, id, ctx = {}) {
-  const why = defenseUpgradeRefusal(outpost, id, ctx);
+  const why = upgradeRefusal(outpost, { defense: id }, ctx);
   if (why) return { error: why };
   const o = clone(outpost), d = o.defenses.find((x) => x.id === id);
   const next = structureDef(d.kind, d.tier + 1);
