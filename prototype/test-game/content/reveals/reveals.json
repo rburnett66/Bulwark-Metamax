@@ -63,6 +63,30 @@
         { "beat": "warning", "line": "Not every part of the hive wants a single stalk keeping its own stores. Some will come to that mesa. Bring up the sulfur for the whole, and the Ark will pay well.", "intent": "statement" }
       ]
     },
+    "farm": {
+      "_source": "Farming-Design §2.2 [MM-story_mwcuzyf7_3k]. The farming contract is offered in person by the planet faction's Factor, its Neutral (N) character, at the Trade Station (src/farm/factor.js). DRAFT LINES FOR OWNER REVIEW, written in the Factor's own voice (voicepacks.json phrases and motivation). One set per planet with a farming contract (Phase A: Verdance F1). gate: farming is shut (no Mining Rig Mk II yet), so the Factor says what to bring. offer: F1 is on offer, then the contract card. accept / later: the reply to the card. farm: the contract is the player's.",
+      "ground": {
+        "gate": [
+          { "line": "Quartermaster's desk. Everything that comes aboard Halbrecht's Oath goes through my ledger, and everything that goes down to Verdance comes out of it.", "intent": "statement" },
+          { "line": "Land to farm? The regiments eat, so I'm listening. But a farm needs a supply line, and yours is one rig deep.", "intent": "statement" },
+          { "line": "Bring your Verdance mine up to a Mining Rig Mk II and come see me. I'll have the paperwork ready.", "intent": "statement" }
+        ],
+        "offer": [
+          { "line": "Your rig made Mk II. I watched the tonnage come through; the numbers hold.", "intent": "statement" },
+          { "line": "So here's a line item for you. The regiments need bread, and your outpost leaves free ground at the mesa's foot.", "intent": "statement" },
+          { "line": "I'll sign over a Farmhouse and a crate of Loam Grain seed. Plant it, bring the harvest aboard, and the ledger pays. Do we have a deal?", "intent": "question" }
+        ],
+        "accept": [
+          { "line": "Noted. Filed. The Farmhouse is on its way down. Don't make me write it off.", "intent": "statement" }
+        ],
+        "later": [
+          { "line": "Suit yourself. It stays in the ledger until you want it. Flags don't balance the books, and neither does an empty field.", "intent": "statement" }
+        ],
+        "farm": [
+          { "line": "The Farmhouse is on the books. Bring the Loam Grain aboard when it's in; I count every sack.", "intent": "statement" }
+        ]
+      }
+    },
     "room": "helm",
     "greet": "phrase",
     "offer": "reward"

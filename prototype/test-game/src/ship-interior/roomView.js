@@ -13,6 +13,7 @@
  *   view.ship.setAll('dim', 'bar'); view.ship.setState('bar', 'highlight');
  *   view.focus('bar', 0.6) / view.focus(null)            // ease the camera
  *   view.pick(clientX, clientY, rect) → room | null;  view.walkPlayerTo('bar', onArrive);  view.screenBox('bar', rect)
+ *   view.setMark('trade', true)                           // a room's offer flag: a chevron over its post's character
  *
  * Deterministic presentation: every random draw comes from crew.js rng(seed), time is accumulated dt.
  */
@@ -109,6 +110,14 @@ export function createRoomView(THREE, { renderer, layout: L, standing = {}, seed
 
   // chevron over the patron (FLASH)
   const chevron = makeChevron(THREE); chevron.visible = false; scene.add(chevron);
+  // a room's offer flag: the same chevron, held over its post's character while something is on offer there (the
+  // Factor's farming contract at the Trade Station) [MM-story_mwcuzyf7_3k]
+  const marks = new Map();
+  function setMark(roomId, on) {
+    const has = marks.get(roomId);
+    if (on && !has && posts.has(roomId)) { const m = makeChevron(THREE); scene.add(m); marks.set(roomId, m); }
+    else if (!on && has) { scene.remove(has); has.geometry.dispose(); has.material.dispose(); marks.delete(roomId); }
+  }
 
   function startWalk(a) {
     const steps = 1 + Math.floor(R() * 3);
@@ -216,13 +225,19 @@ export function createRoomView(THREE, { renderer, layout: L, standing = {}, seed
         chevron.material.opacity = Math.min(1, flash * 1.4);
       }
     }
+    for (const [id, m] of marks) {
+      const a = posts.get(id);
+      m.position.set(a.g.position.x, a.g.position.y + 7.0 * (SCALE / 1.4) + (reduce ? 0 : Math.sin(time * 4 + 1) * 0.35), 6);
+    }
     if (draw) renderer.render(scene, cam);
   }
 
   return {
     scene, camera: cam, ship, agents, player,
     get patron() { return patronAgent; }, posts,
-    resize, frame, focus, pick, screenBox, walkPlayerTo,
+    resize, frame, focus, pick, screenBox, walkPlayerTo, setMark,
+    /** The rooms flagged with an offer right now. */
+    marked: () => [...marks.keys()],
     /** The patron turns to face the camera (beat 8). */
     patronTurn() { if (patronAgent) { patronAgent.baseYaw = 0; patronAgent.state = 'sit'; } },
     dispose() { ship.dispose(); kit.dispose(); scene.clear(); },
