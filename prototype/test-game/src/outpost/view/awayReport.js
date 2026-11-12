@@ -7,6 +7,7 @@
  */
 import { oreById } from '../../data/ores.js';
 import { PLANETS } from '../../data/planets.js';
+import { resourceId } from '../../data/resourceIcons.js';
 
 const HOUR = 3_600_000, MIN = 60_000;
 import { OUTPOST_KIND_NAME as KIND_NAME } from '../../data/outpostStructures.js';   // the one name table
@@ -42,7 +43,8 @@ export function harvestRows(report, planet, catalog) {
   const banked = report.banked || {};
   return ['common', 'uncommon'].map((tier) => {
     const r = res(tier), units = Math.floor(((report.harvested || {})[tier] || 0) + 1e-9);
-    return { tier, name: r ? r.name : `${tier} surface resource`, colour: TIER_COLOUR[tier], units, banked: (r && banked[r.id]) || 0 };
+    // icon: the resource's picture id (data/resourceIcons.js) when the catalogue names it — the report card shows it
+    return { tier, name: r ? r.name : `${tier} surface resource`, colour: TIER_COLOUR[tier], units, banked: (r && banked[r.id]) || 0, icon: r ? resourceId(r.name) : null };
   }).filter((x) => x.units > 0 || x.banked > 0);
 }
 

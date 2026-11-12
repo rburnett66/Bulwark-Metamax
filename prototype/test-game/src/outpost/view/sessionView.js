@@ -14,10 +14,13 @@
  *   4. draws the outpost's own art on that 3D view: the building models, conduits and deposits (outpostScene.js), fed
  *      from the live state;
  *   5. on leaving, writes the live state back (fromLiveSim) and banks the gold.
- *   6. shows the outpost's OWN controls as a battle-HUD panel (session.addPanel, S2.4b [MM-subtask_mwciizyc_32]):
- *      online status + GO ONLINE, storage and loads + SELL, REPAIR ALL, the away report, LEAVE. Those are outpost
- *      economy (no battle equivalent), so they run the save session's own rules (session.js act) — the live state is
- *      written back first and rebuilt after, never a second copy of those rules.
+ *   6. shows the outpost's OWN controls in the battle HUD's shared pieces (AAA UX pass [MM-story_mwcuyrqr_3j], spec
+ *      docs/16 Bulwark MM/design/Outpost-AAA-UX.md): the top bar's readouts (status / raid clock, power, storage, threat)
+ *      and LEAVE as its primary action; the outpost CARD (render/hudCard.js — the selection panel's card) with what is
+ *      gathered, the gauges and GO ONLINE · S SELL · R REPAIR ALL (data from outpostCard.js); the away report as the
+ *      wave report's takeover on arrival. Those are outpost economy (no battle equivalent), so they run the save
+ *      session's own rules (session.js act) — the live state is written back first and rebuilt after, never a second
+ *      copy of those rules. The camera opens framed on the base (outpostBoard.js baseFrameRect → render3d frameRect).
  *   7. fog of war (S5 [MM-story_mwc9q0yy_2m]): the battle's own — render3d's fog tracker runs on the live state as in a
  *      battle (fogWindow(state, map)); this view adds no fog code. The outpost has no wave windows, so the whole board
  *      is the play area and the battle's open-board cloud bank rings the map's edge (no enemy is hidden as a contact).
@@ -40,10 +43,10 @@
  *       A plot or farm building is not a sim structure: its tap (9) selects none, so the panel — with its farm section —
  *       stays in the corner; selecting a structure clears the farm selection (refreshPanel).
  */
-import { createBattleSession } from '../../battle/session.js';
+import { createBattleSession, createModeHost } from '../../battle/session.js';
 import { createCatalogue, lockRule } from '../../battle/catalogue.js';
 import { createUiState } from '../../input/input.js';
-import { flashMessage } from '../../render/hud.js';
+import { flashMessage, showAwayReport } from '../../render/hud.js';
 import { applyCommand } from '../../sim/core.js';
 import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../../data/outpostStructures.js';
 import { DEFENSE_KINDS } from '../../data/outpost.js';
@@ -64,7 +67,8 @@ import { createFarmEmbers } from '../../farm/view/embers.js';
 import { createFarmCrew } from '../../farm/view/avatar.js';
 import { K as FXK } from '../../render3d/fx/impacts.js';
 import { outpostMapFor } from '../outpostMap.js';
-import { outpostBattleMap, bakedSlugFor } from './outpostBoard.js';
+import { outpostBattleMap, bakedSlugFor, baseFrameRect } from './outpostBoard.js';
+import { outpostCardModel, outpostReadouts, farmCardModel, threatInfo } from './outpostCard.js';
 import { createOutpostScene } from './outpostScene.js';
 import { planBuildings, planPowerIcons, withCuts } from './conduits.js';
 import { createOutpostKit, modelSlug } from '../../render3d/outposts/outpostModels.js';
@@ -162,10 +166,7 @@ async function openSession(opts, opening) {
   crumb('outpost: session view');
 
   // the full-screen host the battle session mounts in
-  const host = doc.createElement('div');
-  host.className = 'outpost-view outpost-session';
-  Object.assign(host.style, { position: 'fixed', inset: '0', zIndex: '2000', background: '#0f1412', overflow: 'hidden', touchAction: 'none' });
-  mount.appendChild(host);
+  const host = createModeHost(mount, 'outpost-view outpost-session');   // styled by the battle HUD's sheet
   opening.host = host;
 
   const map = opts.map || await outpostMapFor(planet);
@@ -234,7 +235,7 @@ async function openSession(opts, opening) {
     const warn = cmd && cmd.type === 'place' ? ui.hoverWarn : null;
     const res = applyCommand(sim, cmd);
     if (!res.ok && res.reason && hud) flashMessage(hud, res.reason);
-    else if (res.ok && warn && hud) flashMessage(hud, 'Built unpowered · ' + warn);
+    else if (res.ok && warn && hud) flashMessage(hud, 'Built unpowered · ' + warn, 'info');
     return res;
   };
 
@@ -242,10 +243,12 @@ async function openSession(opts, opening) {
   try { const t = JSON.parse(win.localStorage.getItem('tf.bake.v1')); if (t && typeof t === 'object') bakeTune = t; } catch (_) { /* default */ }
   const board = outpostBattleMap(map, { bakeTune });
   const slug = await bakedSlugFor(map, { base: ROOT });
+  // the camera opens framed on the base (spec §9, D7): its footprint + 6 cells, fixed at arrival (render3d frameRect)
+  const frame = baseFrameRect(sim, board);
   const session = createBattleSession(host, {
     getSim: () => sim, getUi: () => ui, submit, mapId: 0, catalogue, onGroundTap: (cell, tapUi) => tapFarm(cell, tapUi),
     mountOptions: () => ({ planet, landing: false, landingHeld: true,
-      render3d: { baseUrl: ROOT, craft: false, landing: false, qualityQuery: opts.tier || null } }),
+      render3d: { baseUrl: ROOT, craft: false, landing: false, qualityQuery: opts.tier || null, frameRect: () => frame } }),
   });
   // the battle rail's HARVESTER tile sells the OUTPOST's harvesters (S4 follow-up, owner 2026-11-11): its price and
   // refusals from the model, the purchase through the save session (act 'buyHarvester'), the live state rebuilt with the truck
@@ -255,7 +258,7 @@ async function openSession(opts, opening) {
     // re-read after every action (actOnSave), so a planting or a harvest updates the count at once
     railLabel: (id) => farmRailLabel(id, ctxNow().pods),
     harvesterTile: () => harvesterTile(view || fromLiveSim(sim, live.link, nowOf()).outpost, ctxNow(), sim.economy.money),
-    onBuyHarvesterUnit: () => { if (actOnSave({ type: 'buyHarvester' }).ok) flashMessage(hud, 'Harvester bought · it docks at the Resource Bay'); },
+    onBuyHarvesterUnit: () => { if (actOnSave({ type: 'buyHarvester' }).ok) flashMessage(hud, 'Harvester bought · it docks at the Resource Bay', 'ok'); },
     // the battle's selection panel, with the outpost's extras inside it (render/hud.js selectionExtras) — no panel of its own
     selectionExtras: (s) => selectionExtras(s),
     // the battle's resource card with the outpost's numbers (resourceCard.js): a field's stock, regrowth and trucks; a deposit
@@ -263,6 +266,10 @@ async function openSession(opts, opening) {
       map, planet, unlockedTiers: ctxNow().unlockedTiers }),
   });
   if (hud.setPlanet) hud.setPlanet(planet);   // the card names the planet's resources (render/resourceInfo.js planetFor)
+  // THE OUTPOST HEADER (spec §1, D2 D4) [MM-story_mwcuyrqr_3j]: the battle's own top bar — the hub's HP, the gold — with
+  // the outpost's readouts (refreshPanel) in place of the wave count and clock, and LEAVE in Start Wave's slot
+  hud.setTopbar({ hpLabel: 'Hub', clock: false, wave: false });
+  hud.setPrimaryAction({ label: 'LEAVE ▸', title: 'Leave the outpost (the visit is saved)', onClick: () => close() });
   // the outpost buildings' glyphs on the battle rail until their GLB pictures are rendered (below)
   const RAIL_KINDS = OUTPOST_BUILDING_KINDS.filter((k) => k !== 'hub');
   for (const k of RAIL_KINDS) if (OUTPOST_GLYPHS[k] && hud.setBuildPicture) hud.setBuildPicture(outpostStructId(k), { glyph: OUTPOST_GLYPHS[k] });
@@ -366,9 +373,7 @@ async function openSession(opts, opening) {
       act: (action) => {
         const r = actOnSave(action);
         if (!r.ok) return;
-        if (action.type === 'sell') flashMessage(hud, 'Sold · +' + fmtGold(r.earned != null ? r.earned : 0) + ' gold');
-        else if (action.type === 'online') flashMessage(hud, 'OUTPOST ONLINE · mining has begun. Raiders will come: hold the first one.');
-        else if (action.type === 'deep') flashMessage(hud, action.on ? 'Deep seam: ¼ the speed, 5× the price' : 'Shallow seam');
+        okToast(action, r);
       } });
   }
 
@@ -393,7 +398,7 @@ async function openSession(opts, opening) {
       return { ok: true };
     }
     const res = actOnSave({ type: 'farmPlace', what: def.farmItem, id: def.farmId, cell: [cmd.cell.x, cmd.cell.y] }, { keepTool: true });
-    if (res.ok && hud) flashMessage(hud, def.farmItem === 'plot' ? `${def.name} placed · prepping` : `${def.name} under construction`);
+    if (res.ok && hud) flashMessage(hud, def.farmItem === 'plot' ? `${def.name} placed · prepping` : `${def.name} under construction`, 'ok');
     return { ok: !!res.ok, reason: res.error };
   }
   /** The battle input's tap on open ground: a plot or a farm building there opens its panel. → whether it took the tap. */
@@ -433,7 +438,7 @@ async function openSession(opts, opening) {
     farmSel = keep;
     if (!res.ok) return res;
     const text = FARM_TEXT[action.type] ? FARM_TEXT[action.type](res) : null;
-    if (text && hud) flashMessage(hud, text);
+    if (text && hud) flashMessage(hud, text, 'ok');
     const r3 = session.view3d;
     if (farmFx && r3 && r3.impacts && res.farm && res.farm.plots) farmFx.harvest(res.farm.plots, store.load().outposts[planet], r3.impacts, FXK);
     panelSince = 1;
@@ -447,12 +452,12 @@ async function openSession(opts, opening) {
       : a === 'deliver' ? { type: 'deliver', crop: arg } : { type: a };
     if (AVATAR_WORK.has(action.type) && action.plot && crew) {
       crew.enqueue(action);
-      if (hud) flashMessage(hud, a === 'plant' ? `Planting ${(cropOf(arg) || { name: arg }).name}` : a === 'prep' ? 'Prepping the plot' : 'Harvesting');
+      if (hud) flashMessage(hud, a === 'plant' ? `Planting ${(cropOf(arg) || { name: arg }).name}` : a === 'prep' ? 'Prepping the plot' : 'Harvesting', 'info');
       return;
     }
     if (action.type === 'harvestAll' && crew) {
       const ids = crew.harvestable(nowOf());
-      if (ids.length) { for (const id of ids) crew.enqueue({ type: 'harvest', plot: id }); if (hud) flashMessage(hud, `Harvesting ${ids.length} plot${ids.length > 1 ? 's' : ''}`); return; }
+      if (ids.length) { for (const id of ids) crew.enqueue({ type: 'harvest', plot: id }); if (hud) flashMessage(hud, `Harvesting ${ids.length} plot${ids.length > 1 ? 's' : ''}`, 'info'); return; }
     }
     landFarm(action);
   }
@@ -467,86 +472,23 @@ async function openSession(opts, opening) {
     for (const id of farmIds) delete all[id];
     catalogue.setLocks({ ...all, ...locks });
   }
-  const panel = doc.createElement('div');
-  panel.className = 'bw-panel op-session-panel';
-  Object.assign(panel.style, { position: 'absolute', right: '8px', top: '56px', width: '210px', padding: '8px',
-    display: 'flex', flexDirection: 'column', gap: '6px', font: '600 12px/1.3 Rajdhani, system-ui, sans-serif', color: '#cfd6dd', zIndex: '20' });
-  const line = (cls) => { const d = doc.createElement('div'); d.className = cls; panel.appendChild(d); return d; };
-  const title = line('op-s-title');
-  title.style.font = '900 13px/1.2 Orbitron, sans-serif';
-  title.style.letterSpacing = '.14em';
-  const status = line('op-s-status');
-  const threatLine = line('op-s-threat');   // raid threat: size · raids/day (hudModel.raidThreat) [MM-story_mwco8she_38]
-  const storeLine = line('op-s-store');
-  const farmLine = line('op-s-farmgate');   // what opens farming here (farmRail.js farmGateReason → farm/contract.js farmGate)
-  farmLine.style.color = '#c8b27a';
-  const btn = (label, fn) => {
-    const b = doc.createElement('button');
-    b.className = 'bw-btn';
-    b.textContent = label;
-    b.addEventListener('click', fn);
-    panel.appendChild(b);
-    return b;
-  };
-  const onlineBtn = btn('GO ONLINE', () => {
-    if (actOnSave({ type: 'online' }).ok) flashMessage(hud, 'OUTPOST ONLINE · mining has begun. Raiders will come: hold the first one.');
-  });
-  const sellBtn = btn('SELL', () => {
-    const r = actOnSave({ type: 'sell' });
-    if (r.ok) flashMessage(hud, 'Sold · +' + fmtGold(r.earned != null ? r.earned : 0) + ' gold');
-  });
-  const repairBtn = btn('REPAIR ALL', () => {
-    const r = actOnSave({ type: 'repairAll' });
-    if (r.ok) flashMessage(hud, 'Repair drones launched · −' + fmtGold(r.cost || 0) + ' gold');
-  });
-  btn('LEAVE', () => close());
-  // the selected plot's / farm building's panel (S6): this panel's farm section, from the farm's own panel model
-  // (farm/view/farmUi.js farmPanelModel); its buttons run farmAct. The outpost lines hide while it is open.
-  const farmBox = doc.createElement('div');
-  farmBox.className = 'op-s-farm';
-  Object.assign(farmBox.style, { display: 'none', flexDirection: 'column', gap: '5px' });
-  panel.appendChild(farmBox);
-  let farmKey = '';
-  function renderFarmPanel(m) {
-    const key = JSON.stringify(m);
-    if (key === farmKey) return;
-    farmKey = key;
-    farmBox.innerHTML = '';
-    if (!m) return;
-    const row = (text, style = {}) => { const d = doc.createElement('div'); d.textContent = text; Object.assign(d.style, style); farmBox.appendChild(d); return d; };
-    row(m.title, { font: '900 13px/1.2 Orbitron, sans-serif', letterSpacing: '.1em' });
-    if (m.status) row(m.status, { color: m.tone === 'ok' ? '#8cf22e' : m.tone === 'warn' || m.tone === 'off' ? '#ffb43c' : '#9ab' });
-    for (const [k, v] of m.stats || []) row(k + ' · ' + v);
-    for (const w of m.warnings || []) row(w.text, { color: '#ffb43c' });
-    for (const a of m.actions || []) {
-      const b = doc.createElement('button');
-      b.className = 'bw-btn';
-      b.textContent = a.label;
-      b.disabled = !a.enabled;
-      if (a.why) b.title = a.why;
-      b.addEventListener('click', () => farmAct(a.act, a.arg));
-      farmBox.appendChild(b);
-    }
-    if (m.note) row(m.note, { color: '#8a96a3', fontWeight: '500' });
-    const x = doc.createElement('button');
-    x.className = 'bw-btn';
-    x.textContent = 'CLOSE';
-    x.addEventListener('click', () => { farmSel = null; if (farmLayer) farmLayer.select(null); panelSince = 1; });
-    farmBox.appendChild(x);
+  // ── THE OUTPOST CARD (spec §2, D3 D10) [MM-story_mwcuyrqr_3j]: a HudCard in the battle HUD's right column (render/hudCard.js,
+  // the Victory pop-up's look, the same card the selection panel is). The outpost hands it data only (outpostCard.js):
+  // GATHERING per ore and surface resource, the harvesters, the storage and hopper gauges, GO ONLINE · S SELL · R REPAIR
+  // ALL. It yields to the selection panel while a structure is selected (the HUD's rule); a selected plot or farm
+  // building shows ITS panel in this same card (farmCardModel). LEAVE is the top bar's primary action.
+  const card = hud.addCard({ className: 'op-card' });
+  /** The good news after an outpost-economy action, as a green toast (D6). */
+  function okToast(action, r) {
+    if (action.type === 'sell') flashMessage(hud, 'Sold · +' + fmtGold(r.earned != null ? r.earned : 0) + ' gold', 'ok');
+    else if (action.type === 'online') flashMessage(hud, 'OUTPOST ONLINE · mining has begun. Raiders will come: hold the first one.', 'ok');
+    else if (action.type === 'repairAll') flashMessage(hud, 'Repair drones launched · −' + fmtGold(r.cost || 0) + ' gold', 'ok');
+    else if (action.type === 'deep') flashMessage(hud, action.on ? 'Deep seam: ¼ the speed, 5× the price' : 'Shallow seam', 'info');
   }
-  // the away report (what happened while the player was gone), once, on arrival
+  const cardAct = (action) => { const r = actOnSave(action); if (r.ok) okToast(action, r); };
+  const closeFarm = () => { farmSel = null; if (farmLayer) farmLayer.select(null); panelSince = 1; };
+  // the away report (what happened while the player was gone): a report card on arrival, once, only when something happened (D5)
   const away = awayReportModel(opened.report, planet, map, catalog);
-  if (away.show) {
-    const rep = line('op-s-away');
-    rep.style.borderTop = '1px solid #2b3540';
-    rep.style.paddingTop = '6px';
-    const rows = ['While you were away (' + away.away + ')', ...away.built,
-      ...away.raids.map((x) => x.label + ' · ' + x.when + (x.lostText ? ' · ' + x.lostText : '')),
-      ...(away.bounty ? ['+' + away.bounty + ' gold from raid kills'] : []),
-      ...away.extracted.slice(0, 4).map((x) => '+' + x.units + ' ' + x.name)];
-    rows.forEach((t, i) => { const d = doc.createElement(i ? 'div' : 'b'); d.textContent = t; rep.appendChild(d); });
-  }
-  session.addPanel(panel);
   let panelSince = 1, gateSave = { of: null, s: null };
   function refreshPanel() {
     refreshFarmLocks();
@@ -558,31 +500,19 @@ async function openSession(opts, opening) {
       fm = farmPanelModel(fo, map, farmSel, { ...c, now: nowOf(), gold: sim.economy.money, room: Math.max(0, storeCapacity(fo, map) - (c.heldTotal || 0)) });
       if (!fm) farmSel = null;
     }
-    renderFarmPanel(fm);
-    farmBox.style.display = fm ? 'flex' : 'none';
-    for (const n of panel.children) if (n !== farmBox) n.hidden = !!fm;
     const v = view || fromLiveSim(sim, live.link, nowOf()).outpost;
-    const h = hudModel(v, map, { gold: sim.economy.money, now: nowOf() });
-    const issues = onlineIssues(v, map);
-    title.textContent = 'OUTPOST';
-    status.textContent = h.online ? (h.raidInbound ? 'Online · raid inbound' : 'Online') : ('Offline — ' + (issues.join('; ') || 'ready to go online'));
-    threatLine.textContent = h.threat.text;
+    const gold = sim.economy.money, raid = !!(sim.waves && sim.waves.active);
     // the save as last written (re-read when the save context is), with the outpost as it stands live: a Rig Mk II the
     // live sim finished this visit opens farming before the player leaves
     if (!farmed && gateSave.of !== ctxNow()) gateSave = { of: ctxNow(), s: store.load() };
     const gate = farmed ? null : farmGateReason({ ...gateSave.s, outposts: { ...(gateSave.s.outposts || {}), [planet]: v } }, planet, shipName);
-    if (gate !== gateText) { gateText = gate; lockFarmGate(gate); }   // the rail's padlocks and this line: one text
-    farmLine.textContent = gate || '';
-    farmLine.style.display = gate ? '' : 'none';
-    storeLine.textContent = 'Storage ' + Math.floor(h.storage.units) + ' / ' + Math.floor(h.storage.cap) + ' · ' + (h.loads || 0) + (h.loads === 1 ? ' load' : ' loads') + ' ready';
-    onlineBtn.style.display = h.online ? 'none' : '';
-    onlineBtn.disabled = issues.length > 0;
-    const sb = sellButton(h);
-    sellBtn.textContent = sb.enabled ? ('SELL · ' + sb.sub) : ('SELL (' + sb.sub + ')');
-    sellBtn.disabled = !sb.enabled;
-    const rc = repairAllCost(v);
-    repairBtn.style.display = rc > 0 ? '' : 'none';
-    repairBtn.textContent = 'REPAIR ALL · ' + fmtGold(rc);
+    if (gate !== gateText) { gateText = gate; lockFarmGate(gate); }   // the rail's padlocks and the card's line: one text
+    // the top bar: status (or the raid's "⚔ n left"), power, storage, threat (spec §1, §8)
+    const raidIn = raids && v.online && Number.isFinite(raids.nextAt) ? Math.max(0, raids.nextAt - sim.time) : null;
+    hud.setReadouts(outpostReadouts(v, map, { gold, now: nowOf(), raidIn, raid,
+      onThreat: () => flashMessage(hud, threatInfo(v, map, nowOf()), 'info') }));
+    card.render(fm ? farmCardModel(fm, { run: (act, arg) => farmAct(act, arg), close: closeFarm })
+      : outpostCardModel(v, map, { planet, gold, now: nowOf(), live: sim, issues: onlineIssues(v, map), gate, repairCost: repairAllCost(v), raid, act: cardAct }));
   }
   session.bindInput();
   session.start({
@@ -657,7 +587,8 @@ async function openSession(opts, opening) {
     resolveClosed();
   }
   refreshPanel();
-  const handle = { session, get sim() { return sim; }, get live() { return live; }, get ui() { return ui; }, get raids() { return raids; }, get scene() { return scene; }, panel, actOnSave,
+  if (away.show) void showAwayReport(hud, away);   // once, on arrival, over the outpost; CONTINUE hands back
+  const handle = { session, get sim() { return sim; }, get live() { return live; }, get ui() { return ui; }, get raids() { return raids; }, get scene() { return scene; }, panel: card.root, card, away, actOnSave,
     // the farm (S6; review pages and the headless check): its tab, the picture's counts, the crew, a farm action, a tap
     catalogue, get farm() { return farmLayer; }, get crew() { return crew ? crew.info() : null; }, farmAct, tapFarm, farmNow,
     get farmSel() { return farmSel; } };

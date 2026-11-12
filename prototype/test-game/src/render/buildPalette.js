@@ -63,12 +63,13 @@ export const PALETTE_CSS = `
  */
 export const SELPANEL_CSS = `
 .bw-key { font-weight:800; color:#ffe58a; }   /* bold keyboard-shortcut glyph on build + action buttons */
-.bw-selpanel { position:absolute; right:6px; top:56px; width:200px; font-size:12px; display:none; flex-direction:column; gap:4px; }
-.bw-selpanel .bw-sname { font-size:13px; font-weight:bold; color:#bfe0ff; }
-.bw-selpanel .bw-shpbar { width:100%; height:10px; background:#34373c; border:1px solid #141619; }
+/* the selection panel is a HudCard (render/hudCard.js: the Victory pop-up's look) in the right column's place */
+.bw-card.bw-selpanel { position:absolute; right:6px; top:56px; display:none; z-index:20; }
+.bw-selpanel .bw-shpbar { width:100%; height:8px; background:#34373c; border:1px solid #141619; }
 .bw-selpanel .bw-shpfill { height:100%; background:#8cf22e; }
+.bw-selpanel .bw-shptext { font-size:10px; color:#c9d3de; }
+.bw-selpanel .bw-sextra:empty { display:none; }
 .bw-selrow { display:flex; gap:4px; }
-.bw-selrow .bw-btn { flex:1; font-size:11px; padding:3px 4px; }
 `;
 
 export const paletteBaseCss = (scope) => `

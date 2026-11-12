@@ -21,16 +21,19 @@ const HUD = strip(readFileSync(new URL('../../render/hud.js', import.meta.url), 
 test('the session outpost draws no selection panel of its own: it hands its extras to the battle panel', () => {
   // the battle HUD's selection panel is the only one: the outpost never builds the battle panel's parts …
   for (const re of [/bw-selpanel/, /bw-sname/, /bw-shpbar/, /bw-selrow/, /op-s-sel|op-spanel|op-sel/]) assert.doesNotMatch(SV, re, `sessionView has no ${re}`);
-  // … it has ONE panel of its own (the outpost's economy controls), and gives the battle HUD its selection extras
-  assert.equal((SV.match(/session\.addPanel\(/g) || []).length, 1, 'one mode panel: the outpost controls');
+  // … it has ONE card of its own (the outpost's economy controls: a HudCard in the HUD's mode slot), and gives the battle
+  // HUD its selection extras
+  assert.equal((SV.match(/hud\.addCard\(/g) || []).length, 1, 'one mode card: the outpost controls');
+  assert.doesNotMatch(SV, /session\.addPanel\(/, 'no hand-built panel');
   assert.match(SV, /session\.createHud\(\{[\s\S]*selectionExtras: \(s\) => selectionExtras\(s\)/, 'the extras go through the battle HUD');
 });
 
 test('the battle panel takes the corner while a structure is selected, and draws a mode\'s extras inside itself', () => {
   // the mode panels step aside for the selection (the outpost panel sat right on top of the selection panel)
   assert.match(HUD, /querySelector\('\.bw-mode-panels'\)[\s\S]{0,80}modePanels\.style\.display = s \? 'none' : ''/);
-  // the extras' lines and buttons are children of the selection panel itself, built with the battle's button class
-  assert.match(HUD, /selPanel\.appendChild\(sextra\);\s*selPanel\.appendChild\(sactions\);/);
+  // the extras' lines and buttons are children of the selection panel itself (a HudCard, render/hudCard.js), built with
+  // the battle's button class
+  assert.match(HUD, /selCard\.body\.appendChild\(sextra\);\s*selPanel\.appendChild\(sactions\);/);
   assert.match(HUD, /el\(doc, 'button', 'bw-btn', a\.label\)/);
   assert.match(HUD, /hud\.callbacks && hud\.callbacks\.selectionExtras/);
 });
@@ -39,10 +42,9 @@ test('a farm plot tap still shows its farm panel: it selects no structure, so th
   // the mode panels hide ONLY for a selected sim structure (above); the farm's ground tap clears that selection …
   const INPUT = strip(readFileSync(new URL('../../input/input.js', import.meta.url), 'utf8'));
   assert.match(INPUT, /handle\.onGroundTap\(cell, ui\)\) \{\s*ui\.selectedStructureId = null;/);
-  // … and the farm panel lives in the outpost panel, shown while a plot is selected
+  // … and the farm panel is the outpost card itself (the same HudCard), filled with the plot's panel while one is selected
   assert.match(SV, /onGroundTap: \(cell, tapUi\) => tapFarm\(cell, tapUi\)/);
-  assert.match(SV, /panel\.appendChild\(farmBox\)/);
-  assert.match(SV, /farmBox\.style\.display = fm \? 'flex' : 'none'/);
+  assert.match(SV, /card\.render\(fm \? farmCardModel\(fm,/);
 });
 
 test('selectionExtrasModel: a battle (no hook) draws nothing extra; a key changes only when what is drawn changes', () => {

@@ -26,16 +26,17 @@
 import { TIERS, TIER_COLOR, iconIdFor } from './resourceSummary.js';
 import { resourceIconHtml } from '../data/resourceIcons.js';
 import { levelFromXp } from '../data/progression.js';
+// the pop-up's look, shared with the HUD cards (render/hudCard.js) — one set of tokens (owner 2026-11-12) [MM-story_mwcuyrqr_3j]
+import { AAA_VARS, AAA_PANEL_BG, AAA_FONT_BODY, aaaTicksCss, ensureAaaFonts } from './uiTokens.js';
 
-const FONTS = 'https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap';
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const fmt = (n) => Math.round(n || 0).toLocaleString('en-US');
 const pad2 = (n) => String(n || 0).padStart(2, '0');
 
 export const RESULTS_CSS = `
 .rs { position:absolute; inset:0; z-index:60; display:flex; flex-direction:column; justify-content:center; pointer-events:auto; overflow:hidden;
-  font-family:Rajdhani,"Segoe UI",system-ui,sans-serif; color:#dfe7ef; -webkit-font-smoothing:antialiased;
-  --gold:#D9A441; --gold-hi:#f2c869; --ink:#0b0f16; --line:#2a3340; --steel:#8A97A8; --cyan:#7af0ff; --ember:#e0533d;
+  font-family:${AAA_FONT_BODY}; color:#dfe7ef; -webkit-font-smoothing:antialiased;
+  ${AAA_VARS}
   --acc:var(--gold); --acc-hi:var(--gold-hi); --fs:clamp(12px, 2.1vmin, 16px); font-size:var(--fs); }
 .rs.lose { --acc:var(--ember); --acc-hi:#ff8a6a; }
 .rs * { box-sizing:border-box; }
@@ -72,11 +73,9 @@ export const RESULTS_CSS = `
 .rs-sub b { color:#e8eef5; font-weight:700; }
 
 /* panels */
-.rs-panel { position:relative; background:linear-gradient(180deg, rgba(20,26,36,.86), rgba(12,16,23,.9)); border:1px solid var(--line);
+.rs-panel { position:relative; background:${AAA_PANEL_BG}; border:1px solid var(--line);
   padding:clamp(8px,1.8vmin,16px) clamp(10px,2.2vmin,18px); opacity:0; transform:translateY(10px); transition:opacity .4s, transform .45s cubic-bezier(.2,1,.3,1); }
-.rs-panel::before, .rs-panel::after { content:""; position:absolute; width:22px; height:22px; pointer-events:none; }
-.rs-panel::before { left:-1px; top:-1px; border-left:2px solid var(--acc); border-top:2px solid var(--acc); }
-.rs-panel::after { right:-1px; bottom:-1px; border-right:2px solid var(--acc); border-bottom:2px solid var(--acc); }
+${aaaTicksCss('.rs-panel', 22, 'var(--acc)')}
 .rs-panel.in { opacity:1; transform:none; }
 .rs-h { font-size:.78em; font-weight:700; letter-spacing:.32em; color:var(--steel); margin-bottom:clamp(6px,1.2vmin,10px); display:flex; justify-content:space-between; gap:8px; }
 .rs-h span:last-child { letter-spacing:.12em; }
@@ -295,7 +294,7 @@ function countUp(el, ms, now) {
 export function mountResults(host, model, handlers = {}, opts = {}) {
   const doc = host.ownerDocument;
   if (!doc.getElementById('rs-css')) { const st = doc.createElement('style'); st.id = 'rs-css'; st.textContent = RESULTS_CSS; doc.head.appendChild(st); }
-  if (!doc.getElementById('rs-fonts')) { const l = doc.createElement('link'); l.id = 'rs-fonts'; l.rel = 'stylesheet'; l.href = FONTS; doc.head.appendChild(l); }
+  ensureAaaFonts(doc);
   host.innerHTML = '';
   const root = doc.createElement('div');
   root.className = 'rs' + (model.win ? '' : ' lose');

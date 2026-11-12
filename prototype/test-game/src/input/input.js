@@ -337,6 +337,14 @@ function onKeyDown(handle, ev) {
 
   const lower = typeof key === 'string' ? key.toLowerCase() : '';
 
+  // A MODE CARD's hotkey (spec Outpost-AAA-UX D10) [MM-story_mwcuyrqr_3j]: with no structure selected, a key the
+  // right column's card offers runs it (the outpost: S sell, R repair all); with one selected, R repairs IT, as before.
+  // A battle has no mode card, so nothing changes there.
+  if (ui.selectedStructureId === null && lower && handle.onModeKey && handle.onModeKey(lower)) {
+    ev.preventDefault();
+    return;
+  }
+
   // SUBJECT→ACTION grammar (owner): a completed action CONSUMES the selection; a failed action
   // keeps the subject and flashes the sim's reason — matching the harvester flow above.
   const structAction = (type, label) => {
@@ -386,6 +394,7 @@ export function createInput(canvas, renderer, getState, submit, ui, opts = {}) {
     catalogue: opts.catalogue || null,
     buildOrder: buildOrder(opts.catalogue),
     onGroundTap: typeof opts.onGroundTap === 'function' ? opts.onGroundTap : null,
+    onModeKey: typeof opts.onModeKey === 'function' ? opts.onModeKey : null,   // a mode card's hotkey (render/hud.js runCardKey)
     listeners: [],
     destroyed: false,
   };

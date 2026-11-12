@@ -70,6 +70,13 @@ const SYSTEMS = Object.freeze({
     what: 'its own fog (the battle fog runs on the live state: render3d fog tracker; S5)',
     re: /\.fog\.update\s*=|overlays\/fog(Model)?\.js/,
   },
+  // AAA UX pass [MM-story_mwcuyrqr_3j] (spec Outpost-AAA-UX §2): the outpost's panel was built with inline styles in a
+  // second font beside the battle HUD. A mode hands the HUD DATA (a HudCard model, readouts); the look lives in
+  // render/hud.js + render/hudCard.js. Only showing / hiding (.style.display) is a mode's to set.
+  inlineStyle: {
+    what: 'an inline-styled panel or its own CSS (the look is render/hudCard.js / render/hud.js: hand the HUD a HudCard model, hud.addCard / setReadouts)',
+    re: /\.style\.(?!display\b)\w+\s*=(?!=)|Object\.assign\(\s*[\w.]+\.style\b|\.style\.cssText|\.style\.setProperty\(|\bstyle="|createElement\(\s*['"]style['"]\s*\)|\.setAttribute\(\s*['"]style['"]/,
+  },
 });
 
 /**
@@ -105,6 +112,15 @@ test('src/outpost/** and src/farm/** keep no copy of a battle UX system (outside
     for (const k of hits(f)) if (!allowed.includes(k)) bad.push(`${f}: ${SYSTEMS[k].what}`);
   }
   assert.deepEqual(bad, [], 'use the battle session\'s system instead of a copy:\n  ' + bad.join('\n  '));
+});
+
+test('the no-inline-styled-panels guard bites a styled panel and lets a show / hide through [MM-story_mwcuyrqr_3j]', () => {
+  const re = SYSTEMS.inlineStyle.re;
+  for (const bad of ["Object.assign(panel.style, { position: 'absolute' })", "title.style.font = '900 13px Orbitron'", "d.style.color = '#fff'",
+    'el.style.cssText = "x"', "n.setAttribute('style', 'color:red')", `'<div style="color:red">'`, "doc.createElement('style')"]) assert.ok(re.test(bad), `catches: ${bad}`);
+  for (const ok of ["box.style.display = on ? '' : 'none'", "if (n.style.display === 'none') x()", 'card.render(model)']) assert.ok(!re.test(ok), `allows: ${ok}`);
+  // the outpost's session view, which built the old inline panel, now has none
+  assert.ok(!re.test(code('outpost/view/sessionView.js')), 'sessionView.js hands the HUD data only');
 });
 
 test('the allow-list only shrinks: every entry still exists and still matches what it is allowed', () => {

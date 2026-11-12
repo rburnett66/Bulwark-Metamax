@@ -245,6 +245,9 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
     quality, tier,
     clock: 0,
     cam: createCameraState(map), viewInsets: typeof opts.viewInsets === 'function' ? opts.viewInsets : null,
+    // a MODE'S FRAMING (spec Outpost-AAA-UX §9, D7) [MM-story_mwcuyrqr_3j]: () → { x0, y0, x1, y1 } inclusive cells, or
+    // null — the outpost frames its base; a battle passes none and frames its play area as before
+    frameRect: typeof opts.frameRect === 'function' ? opts.frameRect : null,
     headings: createHeadingTracker(),
     resolveModel: createModelResolver(),
     listeners: [],
@@ -532,9 +535,12 @@ function craftTop(r) {
  * (opts.viewInsets → { top, left, right, bottom } CSS px). It refits whenever the viewport, the HUD or the window
  * changes — before the match AND during it (owner 2026-10-19, a 2.6:1 window mid-match: "cameras not centering at
  * this resolution"). focusPlayArea glides to the same framing after a reward pick and re-arms it. Pure maths in
- * camera.js fitCameraToRect / clearBox.
+ * camera.js fitCameraToRect / clearBox. A mode may frame its own rect instead (opts.frameRect, the outpost's base).
  */
-function playRect(r, state) {
+export function playRect(r, state) {
+  let mode = null;
+  try { mode = r.frameRect ? r.frameRect(state) : null; } catch (e) { mode = null; }
+  if (mode) return { x0: mode.x0, z0: mode.y0, x1: mode.x1 + 1, z1: mode.y1 + 1 };   // a mode's rect wins (D7)
   const shown = r.fog && r.fog.rect;   // what the fog shows (respects the wave-end hold); first frame: the sim's window
   const w = shown || (() => { const f = fogWindow(state, r.map); return f && f.rect; })();
   const m = r.map;

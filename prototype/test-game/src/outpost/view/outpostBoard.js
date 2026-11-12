@@ -55,3 +55,33 @@ export function lowlandResources(om) {
   return (om.resources || []).filter((r) => !(H && H[r.y * cols + r.x] > 0) && !nearReserved(om, r.x, r.y, 1))
     .map((r, i) => ({ id: `or${i}`, x: r.x, y: r.y, role: r.role, color: r.color, units: 1, remaining: 1 }));
 }
+
+/**
+ * The outpost's opening FRAMING (spec Outpost-AAA-UX §9, D7) [MM-story_mwcuyrqr_3j]: the bounding box of the base — the
+ * hub (the live state's base) and every structure's footprint — plus `margin` cells, never smaller than minW × minH,
+ * inside the board. → { x0, y0, x1, y1 } inclusive cells, for render3d's frameRect (autoFrame): the battle camera frames
+ * it as it frames a battle's play area; pinch / scroll still zooms out to the whole board.
+ */
+export function baseFrameRect(state, board, { margin = 6, minW = 24, minH = 12 } = {}) {
+  const cols = board.cols, rows = board.rows;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  const add = (x, y) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); };
+  if (state.base && state.base.pos) add(state.base.pos.x, state.base.pos.y);
+  for (const s of state.structures ? state.structures.values() : []) {
+    if (!s || !s.pos) continue;
+    const w = (s.footprint && s.footprint.w) || 1, h = (s.footprint && s.footprint.h) || 1;
+    add(s.pos.x, s.pos.y); add(s.pos.x + w - 1, s.pos.y + h - 1);
+  }
+  if (!Number.isFinite(x0)) return null;
+  x0 -= margin; y0 -= margin; x1 += margin; y1 += margin;
+  const grow = (a, b, min, size) => {
+    const need = min - (b - a + 1);
+    if (need > 0) { a -= Math.floor(need / 2); b += Math.ceil(need / 2); }
+    if (a < 0) { b -= a; a = 0; }
+    if (b > size - 1) { a -= b - (size - 1); b = size - 1; }
+    return [Math.max(0, a), Math.min(size - 1, b)];
+  };
+  [x0, x1] = grow(x0, x1, Math.min(minW, cols), cols);
+  [y0, y1] = grow(y0, y1, Math.min(minH, rows), rows);
+  return { x0, y0, x1, y1 };
+}
