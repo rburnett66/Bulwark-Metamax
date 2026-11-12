@@ -6046,7 +6046,7 @@ export const MAPDATA = {
  "outpostRaids": [
   {
    "Planet_Key": "ground",
-   "Units": "GND-Troops GND-Troops GND-Tanks",
+   "Units": "GND-Troops",
    "Breacher": null,
    "Breacher_Every": null,
    "Breacher_HP_Mult": null,
@@ -6062,7 +6062,7 @@ export const MAPDATA = {
   },
   {
    "Planet_Key": "air",
-   "Units": "AIR-Troops AIR-Troops AIR-Tanks",
+   "Units": "AIR-Troops",
    "Breacher": null,
    "Breacher_Every": null,
    "Breacher_HP_Mult": null,
@@ -6078,7 +6078,7 @@ export const MAPDATA = {
   },
   {
    "Planet_Key": "hightech",
-   "Units": "HTC-Troops HTC-Troops HTC-Tanks",
+   "Units": "HTC-Troops",
    "Breacher": null,
    "Breacher_Every": null,
    "Breacher_HP_Mult": null,
@@ -6094,7 +6094,7 @@ export const MAPDATA = {
   },
   {
    "Planet_Key": "artillery",
-   "Units": "ART-Troops ART-Troops ART-Tanks",
+   "Units": "ART-Troops",
    "Breacher": null,
    "Breacher_Every": null,
    "Breacher_HP_Mult": null,
@@ -6110,7 +6110,7 @@ export const MAPDATA = {
   },
   {
    "Planet_Key": "water",
-   "Units": "WTR-Troops WTR-Troops WTR-Tanks",
+   "Units": "WTR-Troops",
    "Breacher": null,
    "Breacher_Every": null,
    "Breacher_HP_Mult": null,
@@ -6126,7 +6126,7 @@ export const MAPDATA = {
   },
   {
    "Planet_Key": "arcane",
-   "Units": "ARC-Troops ARC-Troops ARC-Tanks",
+   "Units": "ARC-Troops",
    "Breacher": null,
    "Breacher_Every": null,
    "Breacher_HP_Mult": null,
@@ -6142,7 +6142,7 @@ export const MAPDATA = {
   },
   {
    "Planet_Key": "space",
-   "Units": "SPC-Troops SPC-Troops SPC-Tanks",
+   "Units": "SPC-Troops",
    "Breacher": null,
    "Breacher_Every": null,
    "Breacher_HP_Mult": null,
@@ -6158,7 +6158,7 @@ export const MAPDATA = {
   },
   {
    "Planet_Key": "dark",
-   "Units": "DRK-Troops DRK-Troops DRK-Tanks",
+   "Units": "DRK-Troops",
    "Breacher": "DRK-Artillery",
    "Breacher_Every": 2,
    "Breacher_HP_Mult": 6,
@@ -6174,7 +6174,7 @@ export const MAPDATA = {
   },
   {
    "Planet_Key": "greenies",
-   "Units": "GRN-Troops GRN-Troops GRN-Tanks",
+   "Units": "GRN-Troops",
    "Breacher": "GRN-Artillery",
    "Breacher_Every": 2,
    "Breacher_HP_Mult": 5,
