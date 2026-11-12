@@ -254,7 +254,9 @@ export function createHud(mountEl, callbacks) {
   // NOTE: do NOT use getComputedStyle here (may not exist in headless boot).
   // Just ensure the mount element is a positioning context for the overlay.
   try {
-    if (!mountEl.style.position || mountEl.style.position === 'static') {
+    // (a mode host — battle/session.js createModeHost — is already fixed full-screen by the sheet's .bw-mode-host)
+    const modeHost = mountEl.classList && mountEl.classList.contains('bw-mode-host');
+    if (!modeHost && (!mountEl.style.position || mountEl.style.position === 'static')) {
       mountEl.style.position = 'relative';
     }
   } catch (e) { /* non-critical */ }

@@ -34,7 +34,7 @@ export const HUD_CARD_W = 220;
 
 export const HUD_CARD_CSS = `
 .bw-card { position:relative; box-sizing:border-box; pointer-events:auto; display:flex; flex-direction:column; gap:4px;
-  width:${HUD_CARD_W}px; max-height:calc(100vh - 112px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin;
+  width:${HUD_CARD_W}px; max-height:calc(100vh - 112px); overflow:hidden;
   padding:7px 10px 8px; background:${AAA_PANEL_BG}; border:1px solid var(--line); box-shadow:0 6px 22px rgba(0,0,0,.45);
   font-family:${AAA_FONT_BODY}; font-size:13px; font-weight:600; line-height:1.25; color:#dfe7ef; -webkit-font-smoothing:antialiased; }
 ${aaaTicksCss('.bw-card', 12, 'var(--gold)')}
@@ -42,12 +42,16 @@ ${aaaTicksCss('.bw-card', 12, 'var(--gold)')}
 .bw-card-title { font-family:${AAA_FONT_NUM}; font-weight:800; font-size:11.5px; letter-spacing:.12em; color:#f4f7fb; text-transform:uppercase;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
 .bw-card-status { flex:0 0 auto; font-size:10px; font-weight:700; letter-spacing:.2em; color:var(--steel); text-transform:uppercase; white-space:nowrap; }
+.bw-card-body { display:flex; flex-direction:column; gap:4px; min-height:0; flex:1 1 auto; overflow-y:auto; overscroll-behavior:contain; scrollbar-width:none; }
+.bw-card-body::-webkit-scrollbar { display:none; }
+.bw-card-actions { flex:0 0 auto; }   /* the body scrolls on a short screen; the title and the action row always show */
 .bw-card-rule { height:1px; margin:1px 0 2px; background:linear-gradient(90deg, var(--gold-hi), rgba(242,200,105,.15) 70%, transparent); }
 .bw-card-sec { display:flex; flex-direction:column; gap:3px; }
 .bw-card-sec + .bw-card-sec { border-top:1px solid #1e252f; padding-top:4px; }
 .bw-card-h { display:flex; justify-content:space-between; gap:6px; font-size:9.5px; font-weight:700; letter-spacing:.3em; color:var(--steel); text-transform:uppercase; }
 .bw-card-h span:last-child { letter-spacing:.12em; }
 .bw-card-line { font-size:12px; color:#d6dce4; }
+.bw-card-line.t-gold { font-size:11px; line-height:1.2; }
 .bw-card-kv { display:flex; justify-content:space-between; gap:8px; font-size:12px; }
 .bw-card-kv .k { color:#9aa6b4; letter-spacing:.04em; }
 .bw-card-kv .v { color:#e8eef5; text-align:right; font-variant-numeric:tabular-nums; }

@@ -14,11 +14,11 @@
  *     GO ONLINE · S SELL · R REPAIR ALL;
  *   - farmCardModel → the same HudCard for a selected plot or farm building (farm/view/farmUi.js farmPanelModel).
  * Every number comes from the outpost model the save and the live visit share (model.js rigExtraction — the rule
- * liveSim.js stepLiveOutpost mines by —, harvestPlan / surfaceFieldGroups / fieldStock, hopperCap / hopperUnits,
+ * liveSim.js stepLiveOutpost mines by —, harvestPlan / steadyHarvest, hopperCap / hopperUnits,
  * hudModel's storage, power, loads and threat). Nothing here shows progress toward a pod or the Pod Reward Chest.
  * Pure: no DOM.
  */
-import { rigExtraction, bayCapacity, harvestPlan, surfaceFieldGroups, fieldStock, hopperCap, hopperUnits, resourceBayPad, powerGrids, depositAt, buildingRect } from '../model.js';
+import { rigExtraction, bayCapacity, harvestPlan, steadyHarvest, hopperCap, hopperUnits, resourceBayPad, powerGrids, depositAt, buildingRect } from '../model.js';
 import { oresOf, oreById } from '../../data/ores.js';
 import { PLANETS } from '../../data/planets.js';
 import { resourceId } from '../../data/resourceIcons.js';
@@ -59,14 +59,12 @@ export function gatheringRows(o, map, planet = o.planet) {
   const hop = o.hopper || {}, trucks = o.harvesters || 0;
   if (trucks > 0 || hopperUnits(o) > 0) {
     const names = (PLANETS[planet] || {}).resources || {};
-    const plan = harvestPlan(o, map), stock = fieldStock(o, map), groups = new Map(surfaceFieldGroups(map).map((f) => [f.id, f]));
+    const plan = harvestPlan(o, map);
     const bay = resourceBayPad(o), powered = !!bay && powerGrids(o, map).powered.has(bay);
     const hCap = hopperCap(o, map), room = hCap - hopperUnits(o);
-    // a field with stock gives the trucks' rate; a bare one only what regrows (model.steadyHarvest's rule)
-    const demand = {};
-    for (const h of plan) demand[h.fieldId] = (demand[h.fieldId] || 0) + h.rate;
-    const perTier = { common: 0, uncommon: 0 };
-    for (const [id, d] of Object.entries(demand)) { const f = groups.get(id); perTier[f.tier] += (stock[id] >= 1 ? d : Math.min(d, f.regrow)); }
+    // the trucks' steady take an hour: per field the lesser of their rate and its regrowth (model.steadyHarvest — the
+    // rate the hopper is sized by; a fresh field's stock comes in faster, once)
+    const perTier = steadyHarvest(o, map).byTier;
     for (const tier of ['common', 'uncommon']) {
       const units = hop[tier] || 0;
       if (!plan.some((h) => h.tier === tier) && !(units > 0)) continue;
