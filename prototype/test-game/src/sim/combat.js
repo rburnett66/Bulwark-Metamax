@@ -207,10 +207,16 @@ function beatsBest(d2, id, bestD2, bestId, slack2) {
   return d2 <= bestD2 + slack2 && id < bestId;            // tied -> lowest id
 }
 
+/**
+ * A structure under construction is no target and takes no damage until it completes (owner 2026-11-11: "towers
+ * should not take damage during construction, since they don't become targets until completion") — battles and the
+ * outpost alike (one sim). An UPGRADE in progress is a standing structure and stays a target.
+ */
+export const UNDER_CONSTRUCTION = new Set(['Placing', 'Building']);
 function structureIsTargetable(s) {
   return s.hp > 0 &&
     s.lifecycle !== 'Destroyed' &&
-    s.lifecycle !== 'Placing';
+    !UNDER_CONSTRUCTION.has(s.lifecycle);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -457,6 +463,8 @@ export function acquireTarget(state, shooter) {
  */
 export function applyDamage(state, sourceId, target, rawDps, damageType, dt) {
   if (!target || target.hp <= 0) return { dealt: 0, killed: false };
+  // a structure under construction takes no damage from any source — direct fire, splash, bursts (structureIsTargetable)
+  if (target.structId !== undefined && UNDER_CONSTRUCTION.has(target.lifecycle)) return { dealt: 0, killed: false };
 
   const row = EFFECTIVENESS[damageType];
   // a role override (Toxic corrodes harvesters and repair drones) beats the armor-class row [MM-task_mvjxae69_g]
