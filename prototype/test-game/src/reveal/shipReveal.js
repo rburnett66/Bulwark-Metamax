@@ -16,11 +16,14 @@
  *     a faction ship reuses it with its own crew until its own layout is authored);
  *   - the character: the ship's captain from the mission catalog (content/missions/missions.json capitalShips), speaking
  *     their own voice-pack lines through the comm card (comm/commCard.js, comm/dialog.js characterCall);
- *   - the missions: offered as a contract on the contract card (render/contractModal.js), ACCEPT → onContract.
+ *   - the missions: offered as a contract on the contract card (render/contractModal.js), ACCEPT → onContract;
+ *   - the farming contract: in person, by the faction's Factor at the Trade Station (farm/factor.js) — the room flags
+ *     them while it is on offer, and their scene ends on the same contract card.
  *
  *   await playShipReveal({ planet, firstTime, tier, onSeen, onContract, missions, outpost })   // first sight (+ aboard) or coast-in
  *     outpost: { cardFor(shipName) → card, onAccept(key), onDecline(key) } — the outpost contract before the missions (O3)
- *   await boardShip({ planet })                                                        // re-board: explore, depart
+ *     farm: { onAccept(key, factor), onDecline(key, factor) } — the farming contract at the Trade Station's Factor
+ *   await boardShip({ planet, outpost, farm })                                         // re-board: explore, depart
  *   await playCollectiveIntroduces({ planet, onContract })                             // a new planet's contract
  */
 import { openDirector } from './director.js';
@@ -40,6 +43,7 @@ import '../data/factions.js';
 import { createStandingsScreen } from '../menu/standingsScreen.js';
 import { loadSave, updateSave } from '../save/save.js';
 import { noteRapportEvent, standingOf } from '../save/standings.js';
+import { FACTOR_ROOM, factorOf, factorDesk, factorLines, factorCard, noteFactorTalk } from '../farm/factor.js';
 
 const CSS = `
 .rv .rv-rooms { position:absolute; inset:0; width:100%; height:100%; display:block; clip-path:inset(0 100% 0 0); }
@@ -55,6 +59,8 @@ const CSS = `
 .rv .rv-prompt { position:absolute; transform:translate(-50%, -100%); text-align:center; pointer-events:none; opacity:0; transition:opacity .4s; }
 .rv .rv-prompt b { display:block; font:700 clamp(14px,2vw,20px) "Chakra Petch", sans-serif; letter-spacing:.3em; padding-left:.3em; color:#ffcf5c; text-shadow:0 0 14px rgba(255,207,92,.6); }
 .rv .rv-prompt span { display:block; margin-top:4px; font-size:12px; letter-spacing:.2em; color:#e9e2d6; animation:rvPulse 2s ease-in-out infinite; }
+.rv .rv-prompt.rv-offer b { font-size:clamp(11px,1.4vw,15px); letter-spacing:.16em; padding-left:.16em; white-space:nowrap; }
+.rv .rv-prompt.rv-offer span { font-size:10px; letter-spacing:.16em; white-space:nowrap; }
 @keyframes rvPulse { 0%,100% { opacity:.55 } 50% { opacity:1 } }
 .rv .rv-bar { position:absolute; left:max(16px, env(safe-area-inset-left)); top:max(16px, env(safe-area-inset-top)); display:flex; gap:8px; }
 .rv .rv-btn { font:600 12px "Chakra Petch", sans-serif; letter-spacing:.16em; color:#e9e2d6; background:rgba(14,9,8,.8); border:1px solid rgba(242,200,105,.4);
@@ -139,7 +145,7 @@ async function speak(doc, calls) {
  * Inside the ship (F2–F8): the board wipe over the 3D flank, life, then either the path to the character, their
  * scene and the contract (story), or straight to exploring. Explore until DEPART; the depart wipe; resolve.
  */
-async function aboard(S, { story = false, onContract = () => {}, missions = [], outpost = null, missionsCard = true } = {}) {
+async function aboard(S, { story = false, onContract = () => {}, missions = [], outpost = null, missionsCard = true, farm = null } = {}) {
   const { d, THREE, stage, ship } = S, doc = d.doc, reduce = d.reduce;
   const roomCanvas = doc.createElement('canvas'); roomCanvas.className = 'rv-rooms';
   const scanEl = doc.createElement('div'); scanEl.className = 'rv-scan';
@@ -256,10 +262,36 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
   const standings = createStandingsScreen({ doc, host: d.root, faction: ship.isCollective ? 'collective' : ship.key, onClose: () => { standings.close(); setStand(false); } });
   standBtn.addEventListener('click', () => { if (standings.isOpen()) { standings.close(); setStand(false); } else { standings.open(); setStand(true); } });
   const leaveBtn = bar.querySelector('[data-leave]'); leaveBtn.style.display = 'none';
-  let inRoom = null, departing = false, walking = false;
+  let inRoom = null, departing = false, walking = false, talking = false;
+
+  // the Trade Station's Factor (farm/factor.js) [MM-story_mwcuzyf7_3k]: the planet faction's Neutral character keeps
+  // the farming contract. While it is on offer the room flags them (a chevron, and a tag naming them); walking in plays
+  // their scene: before the gate opens they say what to bring, then the card with ACCEPT / LATER.
+  const factor = !ship.isCollective && farm ? factorOf(await packs(), ship.key) : null;
+  const tag = doc.createElement('div'); tag.className = 'rv-prompt rv-offer'; tag.dataset.factorTag = '';
+  if (factor) { tag.innerHTML = '<b></b><span>FARMING CONTRACT · TAP TO TALK</span>'; tag.querySelector('b').textContent = factor.name.toUpperCase(); d.ui.appendChild(tag); }
+  const deskNow = () => (factor ? factorDesk(loadSave(), ship.key) : null);
+  const syncMark = () => { const on = deskNow() === 'offer'; view.setMark(FACTOR_ROOM, on); tag.dataset.on = on ? '1' : ''; };
+  syncMark();
+  async function factorTalk() {
+    const st = deskNow(); if (!st) return;
+    talking = true;
+    try {
+      const pk = await packs(), R2 = await revealsData(), lines = (R2.factionShip || {}).farm;
+      const say = (ls) => speak(doc, ls.map((l) => withMood(characterCall(pk, ship.key, factor.name, l, 'FACTOR'), factor.name)).filter(Boolean));
+      try { updateSave((sv) => noteFactorTalk(sv, ship.key, factor)); } catch (e) { console.warn('[reveal] factor rating', e); }
+      await say(factorLines(lines, ship.key, st));
+      if (st !== 'offer') return;
+      const card = factorCard(ship.key, ship.name, factor);
+      const choice = await new Promise((res) => showContractModal(d.root, card, { onAccept: () => res('accept'), onDecline: () => res('later') }));
+      try { await (choice === 'accept' ? farm.onAccept : farm.onDecline)(ship.key, factor); } catch (e) { console.warn('[reveal] farm contract', e); }
+      syncMark();
+      await say(factorLines(lines, ship.key, st, choice));
+    } finally { talking = false; }
+  }
   leaveBtn.addEventListener('click', () => { inRoom = null; view.focus(null); leaveBtn.style.display = 'none'; where.textContent = shipLabel(ship); });
   const onPick = (e) => {
-    if (departing || walking || standings.isOpen()) return;
+    if (departing || walking || talking || standings.isOpen()) return;
     const hit = view.pick(e.clientX, e.clientY, roomCanvas.getBoundingClientRect()); if (!hit) return;
     walking = true; inRoom = hit.id; view.focus(hit.id, portrait() ? 0.9 : 0.6);
     where.textContent = shipLabel(ship) + ' · ' + (roomOf(hit.id).name || hit.id).toUpperCase();
@@ -269,13 +301,22 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
       const r = roomOf(hit.id);
       // the Collective's rooms carry their occupant's line (ship-layout.json); a faction ship's own lines come with its layout
       if (ship.isCollective && r.who && r.line) await speak(doc, [{ factionKey: 'collective', name: r.who.split('·')[0].trim(), sub: r.who, line: r.line, gender: 'female', intent: 'statement' }]);
+      else if (factor && hit.id === FACTOR_ROOM) await factorTalk();
     });
   };
   roomCanvas.addEventListener('pointerup', onPick); roomCanvas.style.pointerEvents = 'auto';
   if (story) { inRoom = ship.room; leaveBtn.style.display = ''; }
-  const L2 = d.loop((dt) => view.frame(dt, { flash: 0, camEase: 2.4 }));
+  const L2 = d.loop((dt) => {
+    view.frame(dt, { flash: 0, camEase: 2.4 });
+    // the Factor's tag rides over the Trade Station while the offer stands (hidden under the standings and the scene)
+    if (factor) {
+      const show = tag.dataset.on === '1' && !talking && !standings.isOpen();
+      if (show) { const box = view.screenBox(FACTOR_ROOM, { left: 0, top: 0, width: d.root.clientWidth, height: d.root.clientHeight }); tag.style.left = (box.left + box.width / 2) + 'px'; tag.style.top = Math.max(60, box.top + box.height * 0.42) + 'px'; }
+      tag.style.opacity = show ? '1' : '0';
+    }
+  });
   await new Promise((res) => bar.querySelector('[data-depart]').addEventListener('click', res, { once: true }));
-  departing = true; L2.stop(); where.remove(); bar.remove(); standings.dispose();
+  departing = true; L2.stop(); where.remove(); bar.remove(); tag.remove(); standings.dispose();
   roomCanvas.removeEventListener('pointerup', onPick);
   // F8 — depart: the hull closes behind the scan line (the wipe in reverse) over the 3D flank, then black
   view.focus(null);
@@ -318,7 +359,7 @@ function arrivalOverlay(d, ship) {
  * the pan to the flank, then aboard with the story (the character, the contract → onContract), explore, depart.
  * Otherwise: the 3.5 s coast-in into its orbit. → Promise.
  */
-export async function playShipReveal({ planet, firstTime = true, tier = 'high', reduce = null, mount, onSeen = () => {}, onContract = () => {}, missions = [], start = 0, outpost = null } = {}) {
+export async function playShipReveal({ planet, firstTime = true, tier = 'high', reduce = null, mount, onSeen = () => {}, onContract = () => {}, missions = [], start = 0, outpost = null, farm = null } = {}) {
   if (firstTime && !missions.length) missions = await shipMissions(planet).catch(() => []);
   const S = await openShipStage({ planet, tier, reduce, mount, label: 'Capital ship arriving' });
   const { d, stage, ship } = S;
@@ -344,7 +385,7 @@ export async function playShipReveal({ planet, firstTime = true, tier = 'high', 
     commit(); ov.remove(); d.caption('', false);
     // F1 — the pan to the flank
     await d.timed(d.reduce ? 0.2 : FLANK_S - FIRST_SIGHT_S, (t, dt) => { stage.frame(FIRST_SIGHT_S + t, dt); });
-    await aboard(S, { story: true, onContract, missions, outpost: outpost && outpost.card ? outpost : (outpost && outpost.cardFor ? { ...outpost, card: outpost.cardFor(ship.name) } : null) });
+    await aboard(S, { story: true, onContract, missions, outpost: outpost && outpost.card ? outpost : (outpost && outpost.cardFor ? { ...outpost, card: outpost.cardFor(ship.name) } : null), farm });
   } finally {
     commit();
     S.dispose(); d.close();
@@ -352,15 +393,15 @@ export async function playShipReveal({ planet, firstTime = true, tier = 'high', 
 }
 
 /** Re-board a ship already met (tap its station): the flank, the board wipe, explore, depart. */
-export async function boardShip({ planet, tier = 'high', reduce = null, mount, outpost = null } = {}) {
+export async function boardShip({ planet, tier = 'high', reduce = null, mount, outpost = null, farm = null } = {}) {
   const S = await openShipStage({ planet, tier, reduce, mount, label: 'Boarding' });
   try {
     await S.d.timed(S.d.reduce ? 0.2 : 1.2, (t, dt) => { S.stage.frame(FLANK_S, dt); });
     // the outpost contract is still on offer (put off, or the ship came before outposts existed) [MM-story_mw5oe8km_k]:
     // boarding walks to the captain and makes the offer again; otherwise boarding is free exploring
     const card = outpost && (outpost.card || (outpost.cardFor && outpost.cardFor(S.ship.name)));
-    if (card) await aboard(S, { story: true, outpost: { ...outpost, card }, missionsCard: false });
-    else await aboard(S, { story: false });
+    if (card) await aboard(S, { story: true, outpost: { ...outpost, card }, missionsCard: false, farm });
+    else await aboard(S, { story: false, farm });
   } finally { S.dispose(); S.d.close(); }
 }
 

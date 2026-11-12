@@ -139,8 +139,8 @@ def outpost_missions(ships, givers, problems):
 def farm_missions(ships, givers, problems):
     """
     The farming contracts as missions (Farming tech plan §5 A5, Farming-Design §2.2): one per Farm_Contracts row of the
-    map-data workbook, quest line QL-<PLA>-F, offered aboard the planet's capital ship once that planet's outpost has a
-    Rig Mk II (farming_open), the same way the outpost contracts are. Phase A ships Verdance F1. → (missions, lines).
+    map-data workbook, quest line QL-<PLA>-F, offered in person by the planet faction's Factor at the Trade Station aboard
+    its capital ship once that planet's outpost has a Rig Mk II (farming_open). Phase A ships Verdance F1. → (missions, lines).
     """
     wb = openpyxl.load_workbook(MAP_XLSX, data_only=True)
     if "Farm_Contracts" not in wb.sheetnames:
@@ -158,7 +158,13 @@ def farm_missions(ships, givers, problems):
         if not ship:
             problems.append(f"Farm_Contracts {key}: {planet} has no capital ship on Capital_Ships")
             continue
-        g = givers.get(ship["captain"])
+        # the contract comes from the planet faction's Factor: its Neutral (N) character, who crews the Trade Station
+        # aboard its capital ship (src/farm/factor.js FACTOR_ALIGN; Farming-Design §2.2) [MM-story_mwcuzyf7_3k]
+        factor = next(((n, g) for n, g in givers.items() if g["faction"] == key and g["align"] == "N"), None)
+        if not factor:
+            problems.append(f"Farm_Contracts {key}: no Neutral (N) giver of faction {key} on Givers to be its Factor")
+            continue
+        fname, g = factor
         ql = f"QL-{abbr}-F"
         lines[ql] = {"name": f"{planet} farm", "planet": planet, "role": "Primary", "variant": None, "ship": ship["ship"]}
         complete = [
@@ -172,8 +178,8 @@ def farm_missions(ships, givers, problems):
         missions.append({
             "id": f"FC-{abbr}-{step}", "questLine": ql, "step": step, "role": "primary", "variant": None,
             "planet": planet, "map": None, "title": c["Title"], "type": "farm",
-            "giver": {"name": ship["captain"], **(g or {})}, "grantedAt": ship["ship"], "collectAt": ship["ship"],
-            "briefing": f"Farming contract {code}. Run it from FARM on the main menu.",
+            "giver": {"name": fname, **g}, "grantedAt": ship["ship"], "collectAt": ship["ship"],
+            "briefing": f"Farming contract {code}, offered by {fname} at the Trade Station aboard {ship['ship']}. Run it from FARM on the main menu.",
             "status": "Draft", "impact": {"loyaltyPlanet": c["Loyalty"]},
             "view": view, "unlock": unlock, "execute": [], "complete": complete, "fail": [],
             "rewards": [{"kind": "gold", "amount": c["Gold"], "label": "Gold"}, {"kind": "xp", "amount": c["XP"], "label": "Commander XP"}],

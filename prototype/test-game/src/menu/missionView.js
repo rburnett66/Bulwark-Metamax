@@ -258,11 +258,12 @@ export function actionsHtml(row, s, catalog) {
     return s.outposts && s.outposts[key] ? `<div class="shipnote">Run it from <b>OUTPOST</b> on the main menu.</div>`
       : `<button class="btn primary" data-act="accept-outpost" data-planet="${esc(key)}">${use('s-ready')}Accept the outpost contract</button><div class="shipnote">Grants the outpost kit on ${esc(m.planet)}.</div>`;
   }
-  // a farming contract (Farming A5): ACCEPT grants the Farmhouse and the Pod Crate if it was put off aboard; then FARM
+  // a farming contract (Farming A5): it is struck in person with its giver, the Factor at the Trade Station aboard the
+  // planet's ship (farm/factor.js) [MM-story_mwcuzyf7_3k] — the log points there; once it is the player's, FARM runs it
   if (m.type === 'farm') {
     const key = planetKeyOf(m.planet), fc = (s.farmContracts || {})[key];
     return fc && fc.state !== 'offered' ? `<div class="shipnote">Run it from <b>FARM</b> on the main menu.</div>`
-      : `<button class="btn primary" data-act="accept-farm" data-planet="${esc(key)}">${use('s-ready')}Accept the farming contract</button><div class="shipnote">Grants the Farmhouse and a Pod Crate on ${esc(m.planet)}.</div>`;
+      : `<div class="claimed-stamp">${use('u-clock')}See ${esc(m.giver.name)}</div><div class="shipnote">At the <b>Trade Station</b> aboard <b>${esc(m.grantedAt)}</b>: the contract grants the Farmhouse and a Pod Crate on ${esc(m.planet)}.</div>`;
   }
   return `<button class="btn${m.tracked ? '' : ' primary'}" data-act="track" aria-pressed="${!!m.tracked}">${use('u-pin')}${m.tracked ? 'Tracking in battle' : 'Track in battle'}</button>${m.role === 'primary' ? '' : '<button class="btn ghost" data-act="abandon">Abandon favour</button>'}`;
 }

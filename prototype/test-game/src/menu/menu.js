@@ -15,7 +15,8 @@
 import { openBattleHistory } from './battleHistory.js';
 import { outpostButtonModel } from './outpostButton.js';
 import { farmButtonModel } from './farmButton.js';
-import { farmOffer, farmCard, acceptFarmContract, declineFarmContract } from '../farm/contract.js';
+import { declineFarmContract } from '../farm/contract.js';
+import { acceptViaFactor } from '../farm/factor.js';
 import { cellRule } from '../farm/cells.js';
 import { outpostOffer, outpostCard, acceptOutpostContract, declineOutpostContract } from '../outpost/contract.js';
 import { outpostMapFor } from '../outpost/outpostMap.js';
@@ -402,7 +403,7 @@ export function createMenu(mountEl, cbs) {
   ensureMissionIcons(doc);
   const missionLog = createMissionLog({ doc, host: mlHost, chipPing: () => widget.ping('missions'), gateOpts: () => gateOverride() || {},
     onChange: () => refreshProgress(), onClose: () => show('main'), onCollected: () => { if (cbs.onTechChanged) cbs.onTechChanged(); playPendingRewards(); },
-    onAcceptOutpost: (key) => acceptOutpost(key), onAcceptFarm: (key) => acceptFarm(key) });
+    onAcceptOutpost: (key) => acceptOutpost(key) });
   // ACCEPT on the outpost contract (aboard, or later from the Mission Log) [MM-story_mw5oe8km_k]: the kit is placed on
   // the planet's outpost map; the OUTPOST button lights
   const outpostMap = (key) => outpostMapFor(key);   // the planet's own outpost map (O4), the draft layout until it has one
@@ -411,23 +412,27 @@ export function createMenu(mountEl, cbs) {
     updateSave((s) => { acceptOutpostContract(s, key, { map, now }); });
     missionsChanged();
   }
-  // ACCEPT on a farming contract (Farming A5) [MM-story_mwabgpsa_e]: the Farmhouse beside the outpost's hub, the Pod
-  // Crate, and the OUTPOST button gains its FARM tab
-  async function acceptFarm(key) {
+  // ACCEPT on the farming contract (Farming A5) [MM-story_mwabgpsa_e], struck in person with the planet faction's Factor
+  // at the Trade Station (farm/factor.js) [MM-story_mwcuzyf7_3k]: the Farmhouse beside the outpost's hub, the Pod Crate,
+  // the OUTPOST button gains its FARM tab, and the deal counts with the Factor
+  async function acceptFarm(key, factor) {
     const map = await outpostMap(key), now = Date.now();
-    updateSave((s) => { const r = acceptFarmContract(s, key, { map, now, cellOk: cellRule(map, s.outposts && s.outposts[key]) }); if (r.error) console.warn('[farm] accept', r.error); });
+    updateSave((s) => { const r = acceptViaFactor(s, key, factor, { map, now, cellOk: cellRule(map, s.outposts && s.outposts[key]) }); if (r.error) console.warn('[farm] accept', r.error); });
     missionsChanged();
     refreshOutpost();
   }
-  /** The contract on offer aboard a planet's ship: the outpost's first, then the farm's (one card slot, Farming A5). */
+  /** The outpost contract on offer aboard a planet's ship, at its captain (the farming contract is the Factor's: farmDesk). */
   function shipOffer(planet) {
     const s = loadSave();
     if (outpostOffer(s, planet)) return { cardFor: (ship) => outpostCard(planet, ship), onAccept: (k) => acceptOutpost(k),
       onDecline: (k) => { updateSave((x) => declineOutpostContract(x, k, { now: Date.now() })); missionsChanged(); } };
-    if (farmOffer(s, planet)) return { cardFor: (ship) => farmCard(planet, ship), onAccept: (k) => acceptFarm(k),
-      onDecline: (k) => { updateSave((x) => declineFarmContract(x, k, { now: Date.now() })); missionsChanged(); } };
     return null;
   }
+  /** The Trade Station's Factor makes the farming contract's ACCEPT / LATER through these (shipReveal.js aboard). */
+  const farmDesk = {
+    onAccept: (k, factor) => acceptFarm(k, factor),
+    onDecline: (k) => { updateSave((x) => declineFarmContract(x, k, { now: Date.now() })); missionsChanged(); },
+  };
 
   const inventory = createInventoryScreen({ doc, host: mlHost, gateOpts: () => gateOverride() || {}, onChange: () => refreshProgress(), onClose: () => show('main') });
   // the OUTPOST & FARM inventory: the same screen on the farm store (owner rule 5) [MM-story_mwaf80xq_19]
@@ -1038,8 +1043,8 @@ export function createMenu(mountEl, cbs) {
     // is exploring the ship like any other (the opening can still be replayed from Settings) [MM-task_mw6q0j5r_9].
     if (planet === 'collective' && !collectiveOf(loadSave()).contractAccepted) { openCollectiveIntro(); return; }
     revealing = true; if (stage) stage.pause();
-    const outpost = shipOffer(planet);   // still on offer: boarding makes it again (the outpost's, then the farm's)
-    import('../reveal/shipReveal.js').then((M) => M.boardShip({ planet, tier: revealTier(), outpost }))
+    const outpost = shipOffer(planet);   // still on offer: boarding makes it again; the farm's waits at the Factor's desk
+    import('../reveal/shipReveal.js').then((M) => M.boardShip({ planet, tier: revealTier(), outpost, farm: farmDesk }))
       .catch((e) => console.warn('[menu] board', e))
       .finally(() => { revealing = false; syncStage(); });
   }
@@ -1077,7 +1082,7 @@ export function createMenu(mountEl, cbs) {
           const S = await import('../reveal/shipReveal.js');
           if (stage) stage.pause();
           const outpost = shipOffer(item.planet);
-          await S.playShipReveal({ planet: item.planet, firstTime: true, tier: revealTier(), onSeen: (p) => updateSave((s) => markShipSeen(s, p)), onContract: missionsChanged, outpost });
+          await S.playShipReveal({ planet: item.planet, firstTime: true, tier: revealTier(), onSeen: (p) => updateSave((s) => markShipSeen(s, p)), onContract: missionsChanged, outpost, farm: farmDesk });
           updateSave((s) => markShipSeen(s, item.planet));
           setTarget(item.planet);                          // back on its planet, the ship at its station
           syncStage();
