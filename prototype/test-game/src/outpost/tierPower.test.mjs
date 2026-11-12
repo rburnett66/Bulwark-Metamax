@@ -93,7 +93,7 @@ test('the reference outpost: upgrades cross Power Station I and Power Station II
 
 test('a gun upgrade at the Upgrade Bay that shorts the grid is allowed and flagged', () => {
   const o = referenceOutpost('ground', { seed: 7, map, now: T0 });
-  o.pads.b2 = { kind: 'upgradeBay', tier: 1 };            // the bay draws 1: the grid is at 10 of 10
+  o.pads.f9 = { kind: 'upgradeBay', tier: 1, at: { x: 23, y: 15, w: 2, h: 2 } };   // beside the station; draws 1: 10 of 10
   assert.deepEqual(powerGrids(o, map).off, {});
   const mg = o.defenses.find((d) => d.kind === 'mg');
   const r = upgradeDefense(o, mg.id, ctx());
@@ -123,8 +123,7 @@ test('the save session passes the warning on: an upgrade that shorts the grid su
   sv.carry = { gold: 1e6, structures: [] }; sv.goldBank = 1e6;
   acceptOutpostContract(sv, 'ground', { map: forgeMap, now: T0, seedSalt: 'test' });
   const o = referenceOutpost('ground', { seed: sv.outposts.ground.seed, map: forgeMap, now: T0 });
-  const bay = forgeMap.pads.find((p) => p.role === 'bay' && !o.pads[p.id]);
-  o.pads[bay.id] = { kind: 'upgradeBay', tier: 1 };       // 10 of 10
+  o.pads.f9 = { kind: 'upgradeBay', tier: 1, at: { x: 36, y: 19, w: 2, h: 2 } };   // beside the station (no pads since S2c.2): 10 of 10
   sv.outposts.ground = o;
   sv.tech = { owned: { supply_depot: true } };
   const v = createSession({ store: memoryStore(sv), planet: 'ground', map: forgeMap, catalog, raidHook: null, flowOpts: { allOpen: true } });
