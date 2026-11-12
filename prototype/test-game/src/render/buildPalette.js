@@ -40,6 +40,15 @@ export const PALETTE_CSS = `
 .bw-buildbtn .bw-cost { color:#ffd76a; font-size:10px; }
 .bw-buildbtn.bw-poor { opacity:0.45; }
 @media (max-width: 900px) { .bw-buildbtn { width:64px; } }
+/* COLUMN LAYOUT [MM-task_mwd2upbd_5]: a tab that declares groups (battle/catalogue.js layout) draws them side by side —
+   the outpost's FARM tab: machinery far left, the seeds beside it in up to two columns that scroll (touch + wheel) */
+.bw-rail-cols { display:flex; flex-direction:row; align-items:flex-start; gap:var(--bb-gap, 4px); }
+.bw-rail-group { display:grid; grid-template-columns:repeat(var(--grp-cols, 1), var(--bb-w, 76px)); gap:var(--bb-gap, 4px); align-content:start; }
+.bw-rail-group.bw-rail-scroll { overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; -webkit-overflow-scrolling:touch;
+  scrollbar-width:thin; scrollbar-color:#4a6076 transparent; }
+.bw-rail-group.bw-rail-scroll::-webkit-scrollbar { width:4px; }
+.bw-rail-group.bw-rail-scroll::-webkit-scrollbar-thumb { background:#4a6076; border-radius:2px; }
+.bw-rail-group + .bw-rail-group { border-left:1px solid #2b3540; padding-left:var(--bb-gap, 4px); }
 `;
 
 /**
@@ -97,6 +106,54 @@ export function railFit(avail, btns, chrome, viewW, { GAP = 4, MAX = 80, MIN = 5
     icon: Math.round(Math.max(16, Math.min(26, h - 16))), img: Math.round(Math.max(24, Math.min(54, h - 26))),
     name: h < 60 ? 8 : 9, cost: h < 60 ? 9 : 10,
   };
+}
+
+/**
+ * The rail's sizes for a COLUMN layout (battle/catalogue.js layout.groups) [MM-task_mwd2upbd_5]: every button the same
+ * size (one look), sized so the groups that do not scroll fit the height as the plain rail would (railFit's 50–80 px),
+ * each scrolling group as wide as it needs up to its maxCols, then scrolling vertically when even that overflows.
+ * groups: [{ n, scroll, maxCols }]. → { h, w, gap, icon, img, name, cost, groups: [{ cols, rows, scroll, overflow, height }] }
+ * where height is the px a group may take (a scrolling group's viewport) and overflow says it scrolls now.
+ */
+export function railColumnsFit(avail, groups, chrome, viewW, { GAP = 4, MAX = 80, MIN = 50 } = {}) {
+  const room = Math.max(0, avail - chrome);
+  // the size: what the tallest non-scrolling group allows in its columns (railFit's rule), else the largest
+  const fixed = groups.filter((g) => !g.scroll && g.n > 0);
+  let h = MAX;
+  for (const g of fixed) {
+    const cols = Math.max(1, g.maxCols || 1), rows = Math.ceil(g.n / cols);
+    h = Math.min(h, (room - GAP * (rows - 1)) / rows);
+  }
+  h = Math.max(MIN - 4, Math.min(MAX, Math.floor(h)));
+  const w = viewW <= 900 ? Math.min(66, Math.max(58, h)) : Math.min(80, Math.max(66, h));
+  const rowsFit = Math.max(1, Math.floor((room + GAP) / (h + GAP)));
+  const out = groups.map((g) => {
+    const maxCols = Math.max(1, g.maxCols || 1), n = Math.max(0, g.n | 0);
+    const cols = n ? Math.min(maxCols, Math.max(1, Math.ceil(n / rowsFit))) : 1, rows = Math.ceil(n / cols);
+    const overflow = !!g.scroll && rows > rowsFit;
+    return { cols, rows, scroll: !!g.scroll, overflow, height: g.scroll ? Math.min(room, rows * h + GAP * Math.max(0, rows - 1)) : null };
+  });
+  return {
+    h, w, gap: GAP, groups: out,
+    icon: Math.round(Math.max(16, Math.min(26, h - 16))), img: Math.round(Math.max(24, Math.min(54, h - 26))),
+    name: h < 60 ? 8 : 9, cost: h < 60 ? 9 : 10,
+  };
+}
+
+/** Apply railColumnsFit's numbers: the palette's button sizes (as applyRailFit) and each group's columns and height. */
+export function applyRailColumns(palette, groupEls, f) {
+  palette.classList.add('bw-fit');
+  palette.classList.remove('bw-2col');
+  for (const [k, v] of [['--bb-h', f.h], ['--bb-w', f.w], ['--bb-icon', f.icon], ['--bb-img', f.img], ['--bb-name', f.name], ['--bb-cost', f.cost], ['--bb-gap', f.gap]]) {
+    palette.style.setProperty(k, v + 'px');
+  }
+  groupEls.forEach((g, i) => {
+    const fg = f.groups[i];
+    if (!g || !fg) return;
+    g.style.setProperty('--grp-cols', String(fg.cols));
+    g.classList.toggle('bw-rail-scroll', fg.scroll);
+    g.style.maxHeight = fg.scroll ? fg.height + 'px' : '';
+  });
 }
 
 /** Apply railFit's numbers to a palette element (the CSS variables and the two-column class). */

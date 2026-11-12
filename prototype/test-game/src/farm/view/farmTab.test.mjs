@@ -221,5 +221,5 @@ test('the shared rail count hook is generic and optional: battles set none, so t
   assert.match(hud, /if \(railLabel\) \{/);
   const main = readFileSync(new URL('../../main.js', import.meta.url), 'utf8');
   assert.doesNotMatch(main, /railLabel/, 'the battle never sets it');
-  assert.match(readFileSync(new URL('../../outpost/view/sessionView.js', import.meta.url), 'utf8'), /railLabel: \(id\) => \(farmed \? farmRailLabel\(id, ctxNow\(\)\.pods\) : null\)/);
+  assert.match(readFileSync(new URL('../../outpost/view/sessionView.js', import.meta.url), 'utf8'), /railLabel: \(id\) => farmRailLabel\(id, ctxNow\(\)\.pods\),/);
 });

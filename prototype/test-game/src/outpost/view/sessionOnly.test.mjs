@@ -23,10 +23,15 @@ test('the old farm view and the files only it used are deleted', () => {
   }
 });
 
-test('a deep link to the farm opens the outpost on its FARM tab; with no farm there is one catalogue and no toggle', () => {
+test('a deep link to the farm opens the outpost on its FARM tab; the FARM tab is there before farming opens too', () => {
+  // [MM-task_mwd2upbd_5] owner 2026-11-12: "Even if farming is disabled the Farm menu should be active to confirm my seed
+  // pod inventory" — was: no farm, one catalogue and no toggle
   const s = src('./sessionView.js');
-  assert.match(s, /if \(farmed && opts\.tab === 'farm'\) catalogue\.setTab\('farm'\);/);
-  assert.match(s, /createCatalogue\(farmed\s*\? \[\{ id: 'build', label: 'BUILD', ids: outpostCatalogueIds\(\) \}, \{ id: 'farm', label: 'FARM', ids: farmIds \}\]\s*: outpostCatalogueIds\(\)\)/);
+  assert.match(s, /if \(opts\.tab === 'farm'\) catalogue\.setTab\('farm'\);/);
+  assert.match(s, /createCatalogue\(\[\{ id: 'build', label: 'BUILD', ids: outpostCatalogueIds\(\) \}, farmTab\]\)/);
+  assert.match(s, /const farmTab = farmRailTab\(save0, planet\);/, 'the FARM tab with its column layout (farm/farmRail.js)');
+  assert.match(s, /farmGateReason\(save0, planet, /, 'locked with the gate reason until the farm is the player\'s');
+  assert.match(s, /railLabel: \(id\) => farmRailLabel\(id, ctxNow\(\)\.pods\),/, 'the pods held show either way');
 });
 
 test('farm items go through the battle placement, then the save session (no second rules engine)', () => {

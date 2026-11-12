@@ -48,6 +48,7 @@ import { applyCommand } from '../../sim/core.js';
 import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../../data/outpostStructures.js';
 import { DEFENSE_KINDS } from '../../data/outpost.js';
 import { getStructureDef } from '../../data/tables.js';
+import { PLANETS } from '../../data/planets.js';
 import { toLiveSim, fromLiveSim, syncHarvestPower } from '../liveSim.js';
 import { ghostPowerOf, powerWarning } from '../placementRules.js';
 import { createVisitRaids } from '../visitRaids.js';
@@ -55,7 +56,7 @@ import { validatePlacement } from '../../sim/structures.js';
 import { isFarmStructId } from '../../data/farmStructures.js';
 import { cropOf } from '../../data/farm.js';
 import { hasFarm } from '../../farm/contract.js';
-import { farmRailIds, farmRailLocks, farmGroundRule, farmThingAt, grownFarm, farmRailLabel } from '../../farm/farmRail.js';
+import { farmRailTab, farmGateReason, farmRailLocks, farmGroundRule, farmThingAt, grownFarm, farmRailLabel } from '../../farm/farmRail.js';
 import { farmPanelModel, farmRailGlyph } from '../../farm/view/farmUi.js';
 import { storeCapacity } from '../../farm/model.js';
 import { createFarmLayer } from '../../farm/view/farmLayer.js';
@@ -166,15 +167,20 @@ async function openSession(opts, opening) {
   if (!store.load().outposts || !store.load().outposts[planet]) { host.remove(); throw new Error(`no outpost on ${planet}`); }
   const nextFrame = () => new Promise((ok) => win.requestAnimationFrame(() => ok()));
   const opened = await saveSession.openChunked(clockNow(), nextFrame);   // the away catch-up
-  // the OUTPOST catalogue on the battle rail; a lock is refused by the sim too. With a farm on this planet the rail has
-  // two tabs, BUILD (the outpost's equipment) and FARM (plots, farm machinery, crops) — one rail, one placement (S6)
+  // the OUTPOST catalogue on the battle rail; a lock is refused by the sim too. The rail has two tabs, BUILD (the
+  // outpost's equipment) and FARM (plots, farm machinery, crops) — one rail, one placement (S6). FARM is there before
+  // farming opens too [MM-task_mwd2upbd_5] (owner 2026-11-12: "Even if farming is disabled the Farm menu should be active
+  // to confirm my seed pod inventory"): every item padlocked with how farming opens, the pods held still counted. Its
+  // layout is the shared rail's columns: machinery far left, the seeds beside it, scrolling (farm/farmRail.js farmRailTab)
   const save0 = store.load();
   const farmed = hasFarm(save0, planet) || !!opened.outpost.farm;
-  const farmIds = farmed ? farmRailIds(save0, planet) : [];
-  const catalogue = createCatalogue(farmed
-    ? [{ id: 'build', label: 'BUILD', ids: outpostCatalogueIds() }, { id: 'farm', label: 'FARM', ids: farmIds }]
-    : outpostCatalogueIds());
-  if (farmed && opts.tab === 'farm') catalogue.setTab('farm');   // a deep link to the farm opens on its tab
+  const farmTab = farmRailTab(save0, planet);
+  const farmIds = farmTab.layout.groups.flatMap((g) => g.ids);
+  const catalogue = createCatalogue([{ id: 'build', label: 'BUILD', ids: outpostCatalogueIds() }, farmTab]);
+  if (opts.tab === 'farm') catalogue.setTab('farm');   // a deep link to the farm opens on its tab
+  // before farming opens: every FARM item's lock is the gate's reason (the ship's name from the mission catalogue)
+  const farmGate = farmed ? null : farmGateReason(save0, planet, (((catalog && catalog.capitalShips) || {})[(PLANETS[planet] || {}).name] || {}).ship || null);
+  if (farmGate) catalogue.setLocks({ ...catalogue.locks, ...Object.fromEntries(farmIds.map((id) => [id, farmGate])) });
   // the live state, (re)built from the save — on arrival and after an outpost-economy action (actOnSave below)
   let t0 = 0, live = null, sim = null, raids = null;
   // the farm as last grown (farmNow), the selected plot / farm building, and the save context the FARM locks were read from
@@ -230,7 +236,7 @@ async function openSession(opts, opening) {
     onMainMenu: () => close(),
     // the FARM tab's crops show the seed pods held in their price slot (the rail's railLabel hook); the save context is
     // re-read after every action (actOnSave), so a planting or a harvest updates the count at once
-    railLabel: (id) => (farmed ? farmRailLabel(id, ctxNow().pods) : null),
+    railLabel: (id) => farmRailLabel(id, ctxNow().pods),
     harvesterTile: () => harvesterTile(view || fromLiveSim(sim, live.link, nowOf()).outpost, ctxNow(), sim.economy.money),
     onBuyHarvesterUnit: () => { if (actOnSave({ type: 'buyHarvester' }).ok) flashMessage(hud, 'Harvester bought · it docks at the Resource Bay'); },
     // the battle's selection panel, with the outpost's extras inside it (render/hud.js selectionExtras) — no panel of its own
