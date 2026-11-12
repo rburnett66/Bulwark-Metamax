@@ -176,7 +176,7 @@ is a pad's size, so the land round a 21 × 19 mesa on a 64 × 32 map has room fo
 **Farming unlocks when the miner reaches level 2** (owner, 20:41). The miner is the outpost's **Mining Rig**; level 2
 is **Rig Mk II**, the 2× miner that the planet's outpost **contract 2** unlocks (Outpost-Design §2.4: "the rare ore;
 Rig Mk II"). So the order on a planet is: outpost contract 1 → contract 2 → build or upgrade a rig to Mk II → that
-planet's capital ship offers its first farming contract.
+planet's Factor offers its first farming contract, in person, at the Trade Station aboard the planet's capital ship.
 
 - **Per planet** (proposed, Distribution X4): each planet's farming opens with its own outpost's Rig Mk II, as each
   planet's outpost opens with its own ship. The first Mk II anywhere opens the FARM button.
@@ -185,9 +185,52 @@ planet's capital ship offers its first farming contract.
 Colonel Vane already asks it in the outpost scene: *"So tell me: how are you at mining? And farming?"* Farming opens
 on the answer.
 
+#### Who offers it: the faction's Factor, at the Trade Station [MM-story_mwcuzyf7_3k]
+
+Owner, 2026-11-11: *"Where is the farm mission which unlocks farming. This should come directly from the faction for
+the planet I unlock, and it should be a nice character in the room on the capital ship tied to resource trade."*
+
+- **The character.** Every faction capital ship has a **Trade Station** (a neutral room, Capital-Ship-Interior §5.5)
+  crewed by the faction's **Factor**. The Factor is one of the faction's existing nine characters: its **Neutral (N)**
+  one, the character who deals with every side (GDD §11). No character is added. One rule for all nine factions
+  (`src/farm/factor.js` `FACTOR_ALIGN`), and never the ship's captain:
+
+  | Planet | Faction | Factor (the N character) |
+  |---|---|---|
+  | Verdance | Ground / Powder | **Quartermaster Ines Roth**: *"Someone counts the powder while they wave flags."* |
+  | Florael | Air | Mechanic Sora Ito |
+  | Ochre | High Tech | Actuary Devlin Cho |
+  | Kessra | Artillery | Logistician Bo Farrell |
+  | Rime | Water | Ferryman Old Brack |
+  | Cinder | Arcane / Energy | Archivist Balthus |
+  | Lumen | Space Tech | Navigator AI "Vector" |
+  | Xenthe | Dark Energy | Doctrinist Vera |
+  | Vexmire | Greenies (Chem) | Composter Null-7 |
+
+  The farming contract's mission (`FC-<PLA>-<n>`) names the Factor as its giver (`tools/extract_missions.py` picks the
+  faction's N giver from the workbook's Givers sheet), so the Mission Log dossier shows their portrait and the
+  contract's end counts with them.
+
+- **The flow.** Board the ship, walk to the Trade Station, talk to the Factor. What they say depends on their desk
+  (`factorDesk`):
+  - **gate**: farming is shut. The Factor says what is needed: *"Bring your Verdance mine up to a Mining Rig Mk II and
+    come see me."* This is how the player learns the gate. There is no progress bar.
+  - **offer**: F1 is on offer. The room **flags** the Factor: a gold chevron over them, and a tag over the room naming
+    them, *FARMING CONTRACT · TAP TO TALK*. Talking plays their lines on the comm card (portrait, their voice,
+    breadcrumbs), then the contract card with F1's terms (`farmCard`): **ACCEPT CONTRACT** / **LATER**. Their reply
+    closes the scene. LATER leaves the offer, and the flag, on their desk.
+  - **farm**: the contract is the player's. The Factor talks about the harvest.
+- **One way to get it.** The captain's card slot carries the outpost contract only. The Mission Log row points to the
+  Factor (*See Quartermaster Ines Roth, at the Trade Station aboard Halbrecht's Oath*) and has no accept button.
+- **Standing.** Talking to the Factor is a greeting (+1, once a day, as with the captain). Accepting is a **contract**
+  struck in person (+1; `standings.js` `RAPPORT_GAIN.contract`), counted with the Factor's trades on the Standings
+  screen. LATER costs nothing.
+- **Lines** live in `content/reveals/reveals.json` `factionShip.farm.<planet>`: `gate`, `offer`, `accept`, `later`,
+  `farm`. The Verdance set is a draft for owner review; each planet's set is written when that planet's F1 ships.
+
 | | Verdance, contract F1: *Bread for the Regiments* (proposed) |
 |---|---|
-| Offered | aboard the planet's capital ship, once the Verdance outpost has a **Rig Mk II** |
+| Offered | in person by **Quartermaster Ines Roth**, the Factor at the Trade Station aboard Halbrecht's Oath, once the Verdance outpost has a **Rig Mk II** |
 | Granted | the **Farmhouse** (the farm's hub, §6) on its plot at the mesa's foot, and a **Pod Crate**: 12 Common seed pods of Loam Grain (three plots' worth) |
 | Step 1 | **Break ground.** Prep three Traditional plots and plant them. |
 | Step 2 | **Bring in a harvest.** Harvest one plot at Fruited and deliver 40 units of grain to the ship. |

@@ -80,7 +80,7 @@ export function characterDetailHtml(groups, selected) {
    <h2>${esc(c.name)}</h2><div class="rdt">${ALIGN_NAME[c.align] || esc(c.align)}</div>
    <dl><dt>Faction</dt><dd>${fsvg(g.key)}${esc(g.name)}</dd>
     <dt>Missions kept</dt><dd class="num">${c.kept}</dd><dt>Missions broken</dt><dd class="num">${c.broken}</dd>
-    <dt>Visits</dt><dd class="num">${c.greets}</dd><dt>Trades</dt><dd class="num">${c.sales + c.purchases}</dd>
+    <dt>Visits</dt><dd class="num">${c.greets}</dd><dt>Trades</dt><dd class="num">${c.sales + c.purchases + (c.contracts || 0)}</dd>
     <dt>Wants</dt><dd>${esc(c.motivation) || '—'}</dd></dl>
    <p class="inote">${c.met ? 'Keeping the missions this character gives, visiting their ship and trading with them raise your rating; breaking or abandoning their missions lowers it.' : 'You have not dealt with this character yet.'}</p>
   </div>`;

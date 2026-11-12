@@ -406,30 +406,8 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     }
     r.lights.invalidateShadows();
   }
-  // ── an unpowered DEFENSE (owner 2026-11-10: "Unpowered tower has energy bolt icon over it") [MM-story_mwb7in5i_22]: the
-  //    pads' own no-power marker (the yellow bolt in a red ring) floats over each defense the grid does not reach or
-  //    cannot supply (model.js powerGrids off[id]); it bobs with the pad markers and goes when the power comes back.
-  const defMarks = new Map();   // defense id → sprite
-  let defSig = '';
-  function setDefenseWarnings(list) {   // [{ id, cell: [x, y] }]
-    const sig = JSON.stringify(list || []);
-    if (sig === defSig) return;
-    defSig = sig;
-    const want = new Map((list || []).map((d) => [d.id, d]));
-    for (const [id, sp] of defMarks) if (!want.has(id)) { root.remove(sp); sp.material.dispose(); defMarks.delete(id); }
-    for (const d of want.values()) {
-      const x = d.cell[0] + 0.5, z = d.cell[1] + 0.5, y = 2.1;
-      let sp = defMarks.get(d.id);
-      if (!sp) {
-        sp = markerSprite('no_power', 0.05, `outpost-defense-no-power-${d.id}`);
-        root.add(sp); defMarks.set(d.id, sp);
-      }
-      sp.userData = { x, y, z, ph: hash(d.id) % 100 / 16 };
-      sp.position.set(x, y, z);
-    }
-  }
   // ── POWER ICONS (owner 2026-11-11, #282 answer 1: "buildings have power icons") [MM-subtask_mwco9m19_39]: a small
-  //    bolt over every building and defense that draws power — green ring powered, red ring unpowered, amber ring (and a
+  //    bolt over every building that draws power (defenses need none, [MM-task_mwcutmnk_3h]) — green ring powered, red ring unpowered, amber ring (and a
   //    pulse) on the one an armed placement would cut. The plan is conduits.js planPowerIcons / withCuts; the sprites
   //    are the warning markers' own (markerSprite). Fixed above the model (no bob), smaller than a warning marker.
   const powerIcons = new Map();   // id → { sprite, state }
@@ -463,10 +441,6 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       const k = ICON_SIZE * (reduced ? 1.25 : 1.1 + 0.25 * (0.5 + 0.5 * Math.sin(clock * 7 + e.sprite.userData.ph)));
       e.sprite.scale.set(k, k, 1);
     }
-    for (const sprite of defMarks.values()) {
-      const u = sprite.userData;
-      sprite.position.y = u.y + (reduced ? 0 : Math.sin(clock * 2.4 + u.ph) * 0.18);
-    }
     for (const { sprite } of markers.values()) {
       const u = sprite.userData;
       sprite.position.y = u.y + (reduced ? 0 : Math.sin(clock * 2.4 + u.ph) * 0.18);
@@ -492,12 +466,11 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       stepMarkers();
       return out;
     },
-    setWarnings, setDefenseWarnings, setPreview, setPowerIcons,
+    setWarnings, setPreview, setPowerIcons,
     /** The preview conduit drawn now (tests / review): its point count, or 0. */
     get previewPoints() { return preview.line ? preview.line.geometry.getAttribute('position').count : 0; },
     get warningMarkers() { return [...markers].map(([pad, m]) => ({ pad, kind: m.kind })); },
     get powerIcons() { return [...powerIcons].map(([id, e]) => ({ id, state: e.state })); },
-    get defenseWarnings() { return [...defMarks.keys()]; },
     /** The world position of a pad's centre (cells), for the camera. */
     padCentre(id) { const p = rectOf(id); return p ? centre(p) : null; },
     buildingCount: () => [...built.values()].filter((e) => e.inst).length,

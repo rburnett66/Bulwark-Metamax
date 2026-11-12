@@ -3,11 +3,12 @@
  *
  * Built the way the outpost contracts are (src/outpost/contract.js), not beside them (owner rule 7): a farming contract
  * is a Mission Log mission (type 'farm', quest line QL-<PLA>-F) that tools/extract_missions.py generates from the
- * map-data workbook's Farm_Contracts sheet; the Mission Log lists, tracks and pays it like any mission, and its card
- * is offered aboard the planet's capital ship in the same slot as the outpost contract's.
+ * map-data workbook's Farm_Contracts sheet; the Mission Log lists, tracks and pays it like any mission. It is offered in
+ * person by the planet faction's Factor at the Trade Station aboard its capital ship (farm/factor.js)
+ * [MM-story_mwcuzyf7_3k] — the one way to take it.
  *
  * The gate (owner, 2026-11-09, Farming-Design §2.2, D41/D46): farming opens on a planet when that planet's outpost has
- * a finished Mining Rig Mk II. F1 then appears aboard its capital ship. ACCEPT grants the Farmhouse (placed on free
+ * a finished Mining Rig Mk II. F1 then appears at the Factor's desk. ACCEPT grants the Farmhouse (placed on free
  * ground near the outpost's hub) and the Pod Crate.
  *
  * Pure: functions change only the save they are given. Wall-clock time is passed in.
@@ -152,8 +153,8 @@ export function recordDelivery(s, key, cropId, units) {
 }
 
 /**
- * The contract card's words for showContractModal / boardShip (as outpostCard): { kicker, task, terms, acceptLabel,
- * declineLabel }. Trusted HTML from game data. ship: the capital ship's name.
+ * The contract card's words for showContractModal (as outpostCard; the Factor hands it over: factor.js factorCard):
+ * { kicker, task, terms, acceptLabel, declineLabel }. Trusted HTML from game data. ship: the capital ship's name.
  */
 export function farmCard(key, ship) {
   const c = farmContractOf(key, 'F1');

@@ -21,12 +21,14 @@
  *                                                              (outpost/view/session.js); a rare contract that sold
  *                                                              something: the ship's contact (main.js); a purchase from
  *                                                              a character: 'purchase' (no character sells yet)
+ *   a contract struck with a character in person          → 'contract': the farming contract accepted from the
+ *                                                              planet's Factor at the Trade Station (farm/factor.js)
  * Each band also picks the character's portrait expression (moodFor: angry, neutral, happy).
  *
  * Factions: the loyalty ledger that already exists (s.loyalty by faction name, contracts.addLoyalty) and its tiers
  * (LOYALTY_TIERS: 100 / 260 / 520).
  *
- *   s.rapport = { [characterName]: { score, kept, broken, faction, greets?, sales?, purchases?, greetDay? } }   s.rapportBackfilled = true
+ *   s.rapport = { [characterName]: { score, kept, broken, faction, greets?, sales?, purchases?, contracts?, greetDay? } }   s.rapportBackfilled = true
  * Pure: no DOM.
  */
 import { LOYALTY_TIERS, rivalOf } from './contracts.js';
@@ -34,9 +36,9 @@ import '../data/factions.js';
 const REG = globalThis.BulwarkFactions;
 
 export const KEPT = 25, BROKEN = -45, ABANDONED = -30;
-/** The everyday dealings (owner 2026-11-09: a greeting is +1; selling to or buying from a character raises it). */
-export const RAPPORT_GAIN = Object.freeze({ greet: 1, sale: 1, purchase: 1 });
-const COUNTER = Object.freeze({ greet: 'greets', sale: 'sales', purchase: 'purchases' });
+/** The everyday dealings (owner 2026-11-09: a greeting is +1; selling to or buying from a character raises it; so does a contract struck in person). */
+export const RAPPORT_GAIN = Object.freeze({ greet: 1, sale: 1, purchase: 1, contract: 1 });
+const COUNTER = Object.freeze({ greet: 'greets', sale: 'sales', purchase: 'purchases', contract: 'contracts' });
 const ABANDON_REASON = /abandon/i;
 
 /** The change a mission's end makes to its giver's rating. */
@@ -85,7 +87,7 @@ export function captainOf(catalog, planetName) {
 }
 
 /** Has the player dealt with this character at all? */
-export const hasMet = (r) => !!(r && (r.kept || r.broken || r.greets || r.sales || r.purchases));
+export const hasMet = (r) => !!(r && (r.kept || r.broken || r.greets || r.sales || r.purchases || r.contracts));
 
 /** The portrait expression a rating shows: angry when wary or worse, happy when friendly or better. */
 export function moodFor(bandKey) {
@@ -144,7 +146,7 @@ export function characterStandings(s, packs) {
       const r = book[c.name] || null, met = hasMet(r);
       const score = r ? r.score : 0, band = rapportBand(score, met);
       return { name: c.name, align: c.align, motivation: c.motivation || '', score, kept: r ? r.kept : 0, broken: r ? r.broken : 0,
-        greets: (r && r.greets) || 0, sales: (r && r.sales) || 0, purchases: (r && r.purchases) || 0, met, band, mood: moodFor(band.key) };
+        greets: (r && r.greets) || 0, sales: (r && r.sales) || 0, purchases: (r && r.purchases) || 0, contracts: (r && r.contracts) || 0, met, band, mood: moodFor(band.key) };
     }),
   }));
 }

@@ -533,6 +533,21 @@ export function createHud(mountEl, callbacks) {
   selPanel.appendChild(shpbar);
   selPanel.appendChild(shptext);
   selPanel.appendChild(selrow);
+  // A MODE'S EXTRAS for the selected structure (cbs.selectionExtras(structure, state) → { lines, actions } | null): its
+  // own status lines and the actions the battle has no equivalent for (the outpost's SELL RESOURCES, DEEP SEAM), drawn
+  // INSIDE this panel with the battle's own button — one selection panel for every mode, never a second one beside it
+  // (owner 2026-11-11: "the exact same UX I see on the battle map, same font .. same buttons, same layout").
+  const sextra = el(doc, 'div', 'bw-sextra');
+  const sactions = el(doc, 'div', 'bw-selrow bw-sactions');
+  sextra.style.display = 'none'; sactions.style.display = 'none';   // a battle has none: the panel is exactly as before
+  sactions.style.flexDirection = 'column';                          // an extra action's label is long: one per line
+  sactions.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    const a = b && hud.selActions ? hud.selActions[+b.dataset.i] : null;
+    if (a && !b.disabled && typeof a.run === 'function') a.run();
+  });
+  selPanel.appendChild(sextra);
+  selPanel.appendChild(sactions);
   root.appendChild(selPanel);
 
   // ---- selected UNIT info window (lower-middle) — name + live stats ----
@@ -806,6 +821,7 @@ export function createHud(mountEl, callbacks) {
     selPanel,
     sname,
     sinfo,
+    sextra, sactions, selActions: [],
     shpfill,
     shptext,
     upgradeBtn,
@@ -936,6 +952,43 @@ function fmtTime(sec) {
   return (m < 10 ? '0' + m : m) + ':' + (r < 10 ? '0' + r : r);
 }
 
+/**
+ * A mode's extras for the selected structure, normalised: cbs.selectionExtras(structure, state) →
+ * { lines: [string], actions: [{ label, enabled, title?, run }] } | null. → { lines, actions, key } — `key` changes only
+ * when what is drawn changes, so the panel rebuilds its extra buttons on a change, never every frame.
+ */
+export function selectionExtrasModel(extras) {
+  const lines = (extras && Array.isArray(extras.lines) ? extras.lines : []).filter((t) => t != null && t !== '').map(String);
+  const actions = (extras && Array.isArray(extras.actions) ? extras.actions : []).filter((a) => a && a.label)
+    .map((a) => ({ label: String(a.label), enabled: a.enabled !== false, title: a.title ? String(a.title) : '', run: a.run }));
+  const key = JSON.stringify([lines, actions.map((a) => [a.label, a.enabled, a.title])]);
+  return { lines, actions, key };
+}
+
+/** Draw the mode's extras (selectionExtrasModel) into the battle selection panel: lines under the HP, a row of buttons. */
+function updateSelectionExtras(hud, s, state) {
+  if (!hud.sextra) return;
+  const fn = hud.callbacks && hud.callbacks.selectionExtras;
+  let m = selectionExtrasModel(null);
+  if (s && typeof fn === 'function') { try { m = selectionExtrasModel(fn(s, state)); } catch (e) { console.warn('[hud] selection extras', e); } }
+  hud.selActions = m.actions;                       // the click handler runs the CURRENT action at its index
+  if (hud._selExtraKey === m.key) return;
+  hud._selExtraKey = m.key;
+  const doc = hud.doc;
+  hud.sextra.textContent = '';
+  for (const t of m.lines) hud.sextra.appendChild(el(doc, 'div', null, t));
+  hud.sextra.style.display = m.lines.length ? '' : 'none';
+  hud.sactions.textContent = '';
+  m.actions.forEach((a, i) => {
+    const b = el(doc, 'button', 'bw-btn', a.label);
+    b.dataset.i = String(i);
+    b.disabled = !a.enabled;
+    if (a.title) b.title = a.title;
+    hud.sactions.appendChild(b);
+  });
+  hud.sactions.style.display = m.actions.length ? 'flex' : 'none';
+}
+
 export function updateHud(hud, state, ui) {
   if (!hud || !state) return;
   hud.lastSeed = state.seed;
@@ -1063,6 +1116,11 @@ export function updateHud(hud, state, ui) {
   if (selId != null && state.structures && typeof state.structures.get === 'function') {
     s = state.structures.get(selId) || null;
   }
+  // a mode's own panels (addPanel) give the slot to the selection while a structure is selected: the selection panel is
+  // the one in that corner, as in a battle (the object window is temporary and takes priority)
+  const modePanels = hud.root && hud.root.querySelector ? hud.root.querySelector('.bw-mode-panels') : null;
+  if (modePanels) modePanels.style.display = s ? 'none' : '';
+  updateSelectionExtras(hud, s, state);
   if (!s) {
     hud.currentSelectedId = null;
     hud.selPanel.style.display = 'none';

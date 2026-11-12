@@ -46,7 +46,9 @@ test('the reference set (the former kit: the map\'s kitDefenses) is on the defau
   assert.deepEqual(onlineProblems(o, map), []);
   const g = powerGrids(o, map);
   assert.equal(g.grids.length, 1);
-  assert.deepEqual([g.grids[0].supply, g.grids[0].draw], [10, 9], 'the kit draws 9 of 10');
+  // 9 of 10 before defenses stopped drawing power (owner 2026-11-11 [MM-task_mwcutmnk_3h]): the buildings draw 7
+  assert.deepEqual([g.grids[0].supply, g.grids[0].draw], [10, 7], 'the kit draws 7 of 10; its guns draw nothing');
+  for (const d of o.defenses) assert.ok(g.powered.has(d.id) && !g.off[d.id], `${d.id} is always on`);
 });
 
 test('4 hours fill the 720-iron bay; a load is 15 units; nothing is sold while time passes', () => {
@@ -299,8 +301,9 @@ test('owner 2026-11-07: no electricity, no operation; stored ore is kept; an unp
   delete dark.pads.p1;
   const d = quiet(dark, o.t + HOUR).outpost;
   assert.ok(Math.abs(d.storage.r1.iron - 180) < 1e-9);
+  // the guns (d1, d2) had 'no_power' too until defenses stopped drawing power (owner 2026-11-11 [MM-task_mwcutmnk_3h])
   assert.deepEqual(warnings(d, map), {
-    hub: ['no_power'], s1: ['no_power', 'door_closed'], r1: ['no_power', 'storage_full'], d1: ['no_power'], d2: ['no_power'],
+    hub: ['no_power'], s1: ['no_power', 'door_closed'], r1: ['no_power', 'storage_full'],
   });
   assert.equal(sell(d, ctx()).gold, 720, 'stored ore still sells: 12 loads');
   // only the tower loses power (the rig on a station of its own): its door closes, the rig falls back to its own bay

@@ -34,6 +34,11 @@
  *      panel; the farm's 3D picture (farm/view/farmLayer.js), the avatar and farmhands (avatar.js) and the harvest embers
  *      (embers.js) are mounted on the session's own 3D scene, as outpostScene.js is. Raiders that cross the farm during
  *      a visit raid trample it as a raid does (visitRaids.js takeCells → act trample).
+ *  10. a selected building or defense shows the battle's selection panel itself [MM-task_mwcuvn8l_3i]: the outpost panel
+ *       (6) steps aside while something is selected, and the outpost's extras (status line, SELL RESOURCES, DEEP SEAM)
+ *       are drawn inside the battle panel through its selectionExtras hook (outpostSelectionExtras below).
+ *       A plot or farm building is not a sim structure: its tap (9) selects none, so the panel — with its farm section —
+ *       stays in the corner; selecting a structure clears the farm selection (refreshPanel).
  */
 import { createBattleSession } from '../../battle/session.js';
 import { createCatalogue, lockRule } from '../../battle/catalogue.js';
@@ -66,7 +71,7 @@ import { renderMenuIcons, OUTPOST_GLYPHS } from './menuIcons.js';
 import { oresOf } from '../../data/ores.js';
 import { createSession, onlineIssues, repairAllCost } from './session.js';
 import { upgradeGridShort } from '../model.js';
-import { hudModel, sellButton, fmtGold, harvesterTile } from './hudModel.js';
+import { hudModel, panelModel, sellButton, fmtGold, harvesterTile } from './hudModel.js';
 import { awayReportModel } from './awayReport.js';
 import { loadSave, updateSave } from '../../save/save.js';
 import { loadMissionCatalog } from '../../save/missionCatalog.js';
@@ -76,6 +81,40 @@ const ROOT = new URL('../../../', import.meta.url).href;   // the game root (pro
 
 /** Has any repair drone finished its work by `now`? (the outpost's d.repair = { at, arrive, done }) */
 export const repairDue = (o, now) => !!(o && o.defenses && o.defenses.some((d) => d.repair && d.repair.done <= now));
+
+/** The buildings that hold ore: their selection carries SELL RESOURCES (the old outpost panel's rule, owner 2026-11-09). */
+const HOLDS_ORE = new Set(['rig', 'storage', 'resourceBay']);
+
+/**
+ * The outpost's extras for a structure selected in the battle selection panel (render/hud.js selectionExtras): only what
+ * the battle has no equivalent for. s: the live sim structure; ids: the live link's sim id → { pad } | { defense };
+ * outpost: the save shape now; ctx: the save session's ctx; act(action): runs an outpost-economy action on the save.
+ * → { lines, actions: [{ label, enabled, title, run }] } | null (a structure placed this visit has no save identity yet:
+ * the battle panel alone).
+ *   - a building: its status line (power / online — hudModel.panelModel's, as the old outpost panel read it), always;
+ *     a defense: the status line only when it has no power (its state is the battle's own line);
+ *   - SELL RESOURCES on a building that holds ore (the bottom SELL's sale, in the same state);
+ *   - DEEP SEAM / SHALLOW SEAM on a Mining Station (needs Deep Drilling I).
+ */
+export function outpostSelectionExtras(s, { ids, outpost, map, ctx = {}, now, gold = 0, act = () => {} }) {
+  const e = s && ids ? ids.get(s.id) : null;
+  if (!e || (!e.pad && !e.defense)) return null;
+  const m = panelModel(outpost, map, e.pad ? { pad: e.pad } : { defense: e.defense }, { ...ctx, now, gold });
+  if (!m) return null;
+  const lines = [], actions = [];
+  if (e.pad || m.tone === 'off') lines.push(m.status);
+  if (e.pad && HOLDS_ORE.has(m.kind)) {
+    const sb = sellButton(hudModel(outpost, map, { gold, now }));
+    actions.push({ label: 'SELL RESOURCES' + (sb.enabled ? ' · ' + sb.sub : ''), enabled: sb.enabled, title: sb.enabled ? '' : 'Sell: ' + sb.sub,
+      run: () => act({ type: 'sell' }) });
+  }
+  if (e.pad && m.deep) {
+    const on = !m.deep.on;
+    actions.push({ label: on ? 'DEEP SEAM' : 'SHALLOW SEAM', enabled: m.deep.enabled, title: m.deep.note,
+      run: () => act({ type: 'deep', pad: e.pad, on }) });
+  }
+  return { lines, actions };
+}
 
 /** The outpost's build list on the battle rail: its buildings (the hub is the base, never built), then its defenses. */
 export function outpostCatalogueIds() {
@@ -194,6 +233,8 @@ async function openSession(opts, opening) {
     railLabel: (id) => (farmed ? farmRailLabel(id, ctxNow().pods) : null),
     harvesterTile: () => harvesterTile(view || fromLiveSim(sim, live.link, nowOf()).outpost, ctxNow(), sim.economy.money),
     onBuyHarvesterUnit: () => { if (actOnSave({ type: 'buyHarvester' }).ok) flashMessage(hud, 'Harvester bought · it docks at the Resource Bay'); },
+    // the battle's selection panel, with the outpost's extras inside it (render/hud.js selectionExtras) — no panel of its own
+    selectionExtras: (s) => selectionExtras(s),
   });
   // the outpost buildings' glyphs on the battle rail until their GLB pictures are rendered (below)
   const RAIL_KINDS = OUTPOST_BUILDING_KINDS.filter((k) => k !== 'hub');
@@ -270,6 +311,29 @@ async function openSession(opts, opening) {
     ui.selectedStructureId = null; ui.buildSelection = tool;   // a farm placement keeps its tool armed, as a battle build does
     ctx = null; view = null; since = 1; farmMemo = null; farmLocksOf = null;
     return res;
+  }
+  // ── the selected structure's outpost extras, drawn inside the BATTLE selection panel (render/hud.js) ──────────
+  // A selected outpost building or defense shows the battle's panel (name, tier, state, HP, Upgrade / Sell / Repair as
+  // battle commands on the live state); the outpost adds only what the battle has no equivalent for: the building's
+  // status line (its power: hudModel.panelModel's, as the old outpost panel read it) and the outpost-economy actions
+  // SELL RESOURCES (a building that holds ore) and DEEP / SHALLOW SEAM (a Mining Station), run through actOnSave.
+  // Re-read at most twice a second (the battle HUD asks every frame).
+  // (a rebuild makes a new sim whose ids restart: the cache is the sim's too)
+  let extrasOf = { sim: null, id: null, at: -1, out: null };
+  function selectionExtras(s) {
+    if (extrasOf.sim === sim && extrasOf.id === s.id && sim.time - extrasOf.at < 0.5) return extrasOf.out;
+    extrasOf = { sim, id: s.id, at: sim.time, out: outpostExtras(s) };
+    return extrasOf.out;
+  }
+  function outpostExtras(s) {
+    const v = view || fromLiveSim(sim, live.link, nowOf()).outpost;
+    return outpostSelectionExtras(s, { ids: live.link.ids, outpost: v, map, ctx: ctxNow(), now: nowOf(), gold: sim.economy.money,
+      act: (action) => {
+        const r = actOnSave(action);
+        if (!r.ok) return;
+        if (action.type === 'sell') flashMessage(hud, 'Sold · +' + fmtGold(r.earned != null ? r.earned : 0) + ' gold');
+        else if (action.type === 'deep') flashMessage(hud, action.on ? 'Deep seam: ¼ the speed, 5× the price' : 'Shallow seam');
+      } });
   }
 
   // ── the FARM (S6): its state now, its placements, its taps and its actions — all through the save session ──────────

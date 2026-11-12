@@ -54,7 +54,7 @@ test('all 81 characters by faction, and all nine factions with loyalty and the n
 });
 
 test('a greeting on each ship visit is +1; a sale or a purchase raises the rating too (owner 2026-11-09)', () => {
-  assert.deepEqual(RAPPORT_GAIN, { greet: 1, sale: 1, purchase: 1 });
+  assert.deepEqual(RAPPORT_GAIN, { greet: 1, sale: 1, purchase: 1, contract: 1 });
   const s = {};
   assert.equal(noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'greet', { day: '2026-11-09' }), true);
   assert.equal(noteRapportEvent(s, 'Colonel Aldric Vane', 'ground', 'greet', { day: '2026-11-09' }), false, 'once per day');
