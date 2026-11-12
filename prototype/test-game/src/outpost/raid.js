@@ -52,7 +52,8 @@
  *  - The defenders: the outpost's defenses, each its Battle_Struct (STR-MG, STR-Cannon, STR-Wall) at its tier,
  *    starting from its SAVED HP. A destroyed defense (HP 0) is a wreck and is not placed. Defenses need no power
  *    (owner 2026-11-11 [MM-task_mwcutmnk_3h]): every standing gun fires, whatever the grid.
- *  - The raiders: one wave of the planet faction's tier I lightGround units (troops and assault tanks), the measured
+ *  - The raiders: one wave of the planet faction's tier I troops (Outpost_Raids Units; troopers only since the owner's
+ *    2026-11-12 playtest, "heavy tanks, juggernauts" [MM-task_mwd2qc3c_4] — the assault tanks are gone), the measured
  *    number for the contract step, cycling Units in order and alternating the raid lanes (the first lane drawn from
  *    the raid's seed), plus the planet's Breacher when it has one (owner 2026-11-07: Xenthe and Vexmire, whose Toxic
  *    troops do nothing to a wall, bring their Artillery, in every Breacher_Every-th raid window, with its reach cut to

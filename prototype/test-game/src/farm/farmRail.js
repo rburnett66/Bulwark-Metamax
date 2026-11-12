@@ -11,19 +11,23 @@
  *
  *   farmRailIds(save, planet)           → the FARM tab's ids: plot methods, the Silo and Pump, then crops
  *   farmRailLocks(save, ctx, ids)       → { [id]: reason } for the catalogue (shown as padlocks, refused by the sim)
+ *   farmRailTab(save, planet)           → the FARM tab for createCatalogue: machinery column + scrolling seed columns
+ *   farmGateReason(save, planet, ship)  → why the farm is shut here (every FARM item's lock until it opens), or null
  *   farmGroundRule(getOutpost, map, getCtx) → a state.placementRules rule (state, def, cell, structId) → reason | null
  *   farmRefusal(o, map, def, cell, ctx) → the same answer, unmemoised (tests)
  *   grownFarm(o, map, now)              → the outpost with its farm grown on to `now` (a copy; the save is not touched)
  *
  * Pure: no DOM, no clock (ctx.now comes in).
  */
-import { METHODS, CROPS, cropOf, methodOf } from '../data/farm.js';
+import { METHODS, CROPS, cropOf, methodOf, farmContractOf } from '../data/farm.js';
 import { farmStructId, cropStructId, FARM_RAIL_BUILDINGS } from '../data/farmStructures.js';
 import { groundRefusal, plotState } from './model.js';
 import { growFarm } from './grow.js';
 import { powerGrids } from '../outpost/model.js';
 import { podCount } from './pods.js';
 import { podsUnlocked, unlockUnits } from './unlock.js';
+import { farmGate, hasFarm } from './contract.js';
+import { PLANETS } from '../data/planets.js';
 
 const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 /** Pods one planting takes (the fewest any method needs: a crop with fewer can plant nothing). */
@@ -37,6 +41,34 @@ export function farmRailIds(save, planet) {
   const own = CROPS.filter((c) => c.planet === planet || c.planetKey === planet).map((c) => c.id);
   const held = CROPS.filter((c) => !own.includes(c.id) && podCount(save, c.id) > 0).map((c) => c.id);
   return [...METHODS.map((m) => farmStructId(m.id)), ...FARM_RAIL_BUILDINGS.map(farmStructId), ...[...own, ...held].map(cropStructId)];
+}
+
+/**
+ * The FARM tab as a catalogue tab (battle/catalogue.js) with the shared rail's COLUMN layout [MM-task_mwd2upbd_5]
+ * (owner 2026-11-12: "Maybe the machinery is the far left and the seeds are adjacent and scroll"): the machinery (plot
+ * methods, the farm buildings bought — any farm building added to the data joins it) in the far-left column, the seeds
+ * (the planet's crops, then any other crop held) beside it in up to two columns that scroll. Order = farmRailIds'.
+ */
+export function farmRailTab(save, planet) {
+  const ids = farmRailIds(save, planet), isSeed = (id) => id.startsWith('FARM-crop-');
+  return { id: 'farm', label: 'FARM', layout: { type: 'columns', groups: [
+    { id: 'machinery', ids: ids.filter((id) => !isSeed(id)) },
+    { id: 'seeds', ids: ids.filter(isSeed), scroll: true, maxCols: 2 },
+  ] } };
+}
+
+/**
+ * Why the farm is shut on this planet, from the farming gate (farm/contract.js, farm/factor.js's desk states) — every
+ * FARM item's lock until the farming contract is accepted, so the tab still shows the seed pods held (owner 2026-11-12:
+ * "Even if farming is disabled the Farm menu should be active to confirm my seed pod inventory"). null once farmed.
+ * ship: the planet's capital ship's name (the mission catalogue's capitalShips), or a generic one.
+ */
+export function farmGateReason(save, planet, ship = null) {
+  if (hasFarm(save, planet)) return null;
+  if (!farmContractOf(planet, 'F1')) return `Farming is not open on ${(PLANETS[planet] || {}).name || planet} yet`;
+  // the one wording of the gate, step by step (farm/contract.js farmGate): the OUTPOST panel's line reads it too
+  const g = farmGate(save, planet, { ship });
+  return g ? g.text : `Farming opens with a Mining Rig Mk II — then see the Factor at the Trade Station aboard ${ship || `the ${(PLANETS[planet] || {}).name || planet} capital ship`}`;
 }
 
 /**

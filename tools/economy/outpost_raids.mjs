@@ -17,7 +17,8 @@
 //   - per contract step 2 and 3 (owner 2026-11-07, "same set, smaller raids"), the same two sets against a raid of at
 //     most step 1's size and, where the size bottoms out, a smaller step strength (Strength_Step2/3 × both multipliers).
 // Planets with a breacher bring it every BREACHER_EVERY-th raid (owner 2026-11-07, "breacher every other raid").
-// Raiders: the faction's tier I lightGround troops and assault tanks (Units cycled: troops, troops, tank). A planet
+// Raiders: the faction's tier I troops only (owner 2026-11-12, "base is getting attacked by heavy tanks, juggernauts":
+// the assault tank the old troops, troops, tank cycle brought reads as a heavy tank) [MM-task_mwd2qc3c_4]. A planet
 // whose troops do nothing to a wall (EFFECTIVENESS vs Structure 0: Toxic) gets a Breacher (owner: "add a breacher
 // unit"): the faction's own ground unit that hurts structures most, light ground first (none qualifies for Xenthe or
 // Vexmire, so it is their Artillery; raid.js caps every raider's range at the outposts' longest gun).
@@ -62,12 +63,12 @@ const mapFile = (p) => path.join(G, 'content/maps/forge', `${p}-outpost.json`);
 const loadMap = (p) => outpostMapFromForge(JSON.parse(fs.readFileSync(mapFile(p), 'utf8')), p);
 const median = (a) => [...a].sort((x, y) => x - y)[a.length >> 1];
 
-/** The faction's tier I lightGround units, troops first, as the raid's Units cycle (troops, troops, tank). */
+/** The faction's tier I troops, as the raid's Units cycle: troopers only [MM-task_mwd2qc3c_4]. */
 function unitsOf(planet) {
   const pre = REG.find(planet).prefix;
-  const troops = `${pre}-Troops`, tanks = `${pre}-Tanks`;
-  for (const id of [troops, tanks]) if (!UNITS[id] || !UNITS[id].lightGround) throw new Error(`${id} is not a lightGround unit`);
-  return [troops, troops, tanks];
+  const troops = `${pre}-Troops`;
+  if (!UNITS[troops] || !UNITS[troops].isInfantry) throw new Error(`${troops} is not an infantry unit`);
+  return [troops];
 }
 
 const hurtsWalls = (u) => ((EFFECTIVENESS[u.damageType] || {}).Structure || 0) > 0;
