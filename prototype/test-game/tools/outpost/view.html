@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Outpost View Review</title>
-<!-- [MM-story_mw5oeer7_n] Review page for the real outpost view (src/outpost/view/outpostView.js, story O6), outside
+<!-- [MM-story_mw5oeer7_n] Review page for the real outpost view (src/outpost/view/sessionView.js since S6; story O6), outside
      Claude and outside the game: the game's own 3D view, HUD, SELL sequence and away report on a chosen save preset,
      with an in-memory save (your real save is never touched) and a clock you can speed up.
      Query: ?planet=ground|air|hightech|artillery|water|arcane|space|dark|greenies (each planet's own outpost map, O11)
@@ -55,7 +55,7 @@
 </div>
 <div id="closed"><div>The outpost view closed.<br><button id="reopen">Open again</button></div></div>
 <script type="module">
-import { openOutpostView } from '../../src/outpost/view/outpostView.js';
+import { openOutpostSessionView as openOutpostView } from '../../src/outpost/view/sessionView.js';
 import { outpostMapFor } from '../../src/outpost/outpostMap.js';
 import { acceptOutpostContract, outpostQuestLine } from '../../src/outpost/contract.js';
 import { PLANETS } from '../../src/data/planets.js';
@@ -175,7 +175,7 @@ async function open() {
   current = await openOutpostView({ planet: PLANET, tier: document.getElementById('quality').value || null, store, now, raidHook, map,
     reduced: q.get('reduced') === '1' ? true : undefined });
   window.outpost = current.handle;
-  if (q.get('probe') === '1' && current.handle && current.handle.probeNow) current.handle.probeNow();   // a visit probe right away (the farm view; the session view runs visit raids)
+
   window.outpostStore = store;
   window.outpostReady = true;
   current.closed.then(() => { window.outpostReady = false; document.getElementById('closed').style.display = 'grid'; });
