@@ -57,6 +57,20 @@ export function farmRailLocks(save, ctx, ids) {
   return out;
 }
 
+/**
+ * The count a FARM-tab crop button shows in its price slot (the shared rail's railLabel hook) [MM-task_mwcztxf9_2]: the
+ * seed pods the player HOLDS of that crop ("8 pods"), and in its tooltip how many one planting uses. Only pods held —
+ * never progress toward the next Pod Reward Chest (owner rule: the chest is a surprise). pods: the save's s.pods.
+ * → { text, title } for a crop item, null for anything else (the gold price stays).
+ */
+export function farmRailLabel(structId, pods = {}) {
+  if (typeof structId !== 'string' || !structId.startsWith('FARM-crop-')) return null;
+  const c = cropOf(structId.slice(10));
+  if (!c) return null;
+  const n = podCount({ pods }, c.id), need = podsToPlant();
+  return { text: `${n} pod${n === 1 ? '' : 's'}`, title: `${c.name}: ${n} seed pod${n === 1 ? '' : 's'} held · a plot plants ${need}` };
+}
+
 /** What farm thing covers a cell: { plot: id } | { farm: id } | null. */
 export function farmThingAt(o, x, y) {
   if (!o || !o.farm) return null;

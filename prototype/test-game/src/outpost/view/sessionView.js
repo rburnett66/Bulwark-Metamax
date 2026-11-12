@@ -55,7 +55,7 @@ import { validatePlacement } from '../../sim/structures.js';
 import { isFarmStructId } from '../../data/farmStructures.js';
 import { cropOf } from '../../data/farm.js';
 import { hasFarm } from '../../farm/contract.js';
-import { farmRailIds, farmRailLocks, farmGroundRule, farmThingAt, grownFarm } from '../../farm/farmRail.js';
+import { farmRailIds, farmRailLocks, farmGroundRule, farmThingAt, grownFarm, farmRailLabel } from '../../farm/farmRail.js';
 import { farmPanelModel, farmRailGlyph } from '../../farm/view/farmUi.js';
 import { storeCapacity } from '../../farm/model.js';
 import { createFarmLayer } from '../../farm/view/farmLayer.js';
@@ -228,6 +228,9 @@ async function openSession(opts, opening) {
   // refusals from the model, the purchase through the save session (act 'buyHarvester'), the live state rebuilt with the truck
   hud = session.createHud({
     onMainMenu: () => close(),
+    // the FARM tab's crops show the seed pods held in their price slot (the rail's railLabel hook); the save context is
+    // re-read after every action (actOnSave), so a planting or a harvest updates the count at once
+    railLabel: (id) => (farmed ? farmRailLabel(id, ctxNow().pods) : null),
     harvesterTile: () => harvesterTile(view || fromLiveSim(sim, live.link, nowOf()).outpost, ctxNow(), sim.economy.money),
     onBuyHarvesterUnit: () => { if (actOnSave({ type: 'buyHarvester' }).ok) flashMessage(hud, 'Harvester bought · it docks at the Resource Bay'); },
     // the battle's selection panel, with the outpost's extras inside it (render/hud.js selectionExtras) — no panel of its own

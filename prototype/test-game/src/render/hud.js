@@ -1088,6 +1088,7 @@ export function updateHud(hud, state, ui) {
 
   // Build palette
   hud.currentBuildSelection = ui ? ui.buildSelection : null;
+  const railLabel = hud.callbacks && typeof hud.callbacks.railLabel === 'function' ? hud.callbacks.railLabel : null;
   for (const structId of Object.keys(hud.paletteBtns)) {
     const btn = hud.paletteBtns[structId];
     const def = getStructureDef(structId);
@@ -1098,6 +1099,15 @@ export function updateHud(hud, state, ui) {
     if (locked) { btn.classList.add('bw-locked'); btn.dataset.locked = locked; if (!pad) btn.insertAdjacentHTML('beforeend', LOCK_SVG); }
     else { btn.classList.remove('bw-locked'); delete btn.dataset.locked; if (pad) pad.remove(); }
     if (ui && ui.buildSelection === structId) btn.classList.add('bw-selected'); else btn.classList.remove('bw-selected');
+    // A MODE'S COUNT LABEL [MM-task_mwcztxf9_2]: callbacks.railLabel(structId) → { text, title? } | null replaces the gold
+    // price under a button with the mode's own count (the outpost FARM tab: the seed pods held). Battles set none.
+    if (railLabel) {
+      const lab = railLabel(structId), span = btn.querySelector('.bw-cost');
+      if (lab && span) {
+        if (span.textContent !== lab.text) span.textContent = lab.text;
+        if (lab.title && btn.title !== lab.title) btn.title = lab.title;
+      }
+    }
   }
 
   // Selected structure panel
