@@ -1,6 +1,6 @@
 import { BUILD_ICONS, buildIcon, buildIconUrl } from './buildIcons.js';
 import { createCatalogue } from '../battle/catalogue.js';
-import { SELPANEL_CSS, PALETTE_CSS, STRUCT_ICONS, railFit, applyRailFit, LOCK_SVG } from './buildPalette.js';
+import { SELPANEL_CSS, PALETTE_CSS, STRUCT_ICONS, railFit, applyRailFit, railColumnsFit, applyRailColumns, LOCK_SVG } from './buildPalette.js';
 import { STRUCTURES, ASSUMPTIONS, ABILITIES, getStructureDef, factionsInRoster } from '../data/tables.js';
 import { getSellValue } from '../sim/economy.js';
 import { upgradeRuleRefusal } from '../sim/structures.js';
@@ -437,6 +437,32 @@ export function createHud(mountEl, callbacks) {
   harvBtn.addEventListener('click', () => { if (cbs.onBuyHarvesterUnit) cbs.onBuyHarvesterUnit(); });
   paletteRow.appendChild(harvBtn);
   palette.appendChild(paletteRow);
+  // COLUMN LAYOUT [MM-task_mwd2upbd_5]: a tab that declares groups (battle/catalogue.js layout) puts its SAME buttons in
+  // side-by-side group columns (the FARM tab: machinery, then the seeds, which scroll). Battles declare none: no element
+  // is added and the rail is the one above, unchanged.
+  const railCols = {};   // tab id → { el, groups: [group element…] }
+  for (const t of tabs) {
+    if (!t.layout) continue;
+    const box = el(doc, 'div', 'bw-rail-cols');
+    box.dataset.tab = t.id;
+    const groups = t.layout.groups.map((g) => {
+      const ge = el(doc, 'div', 'bw-rail-group' + (g.scroll ? ' bw-rail-scroll' : ''));
+      ge.dataset.group = g.id;
+      for (const sid of g.ids) if (paletteBtns[sid]) ge.appendChild(paletteBtns[sid]);
+      box.appendChild(ge);
+      return ge;
+    });
+    box.style.display = 'none';
+    palette.appendChild(box);
+    railCols[t.id] = { el: box, groups };
+  }
+  /** Show the visible tab's column block in place of the plain row (a tab without a layout shows the row). */
+  function showCols(id) {
+    const on = railCols[id];
+    if (!on && !Object.keys(railCols).length) return;
+    paletteRow.style.display = on ? 'none' : '';
+    for (const [tid, c] of Object.entries(railCols)) c.el.style.display = tid === id ? '' : 'none';
+  }
   root.appendChild(palette);
   /** Show the visible tab's buttons (the harvester tile sits on the first tab); disarm an item of another tab. */
   function showTab(id) {
@@ -445,6 +471,7 @@ export function createHud(mountEl, callbacks) {
     for (const [sid, btn] of Object.entries(paletteBtns)) btn.style.display = shown.has(sid) ? '' : 'none';
     harvBtn.style.display = id === tabs[0].id ? '' : 'none';
     for (const [tid, b] of Object.entries(tabBtns)) b.classList.toggle('bw-tab-on', tid === id);
+    showCols(id);
     if (hud.currentBuildSelection && !shown.has(hud.currentBuildSelection) && cbs.onBuildSelect) cbs.onBuildSelect(null);
     if (cbs.onTab) cbs.onTab(id);
     const view = doc.defaultView;
@@ -459,12 +486,21 @@ export function createHud(mountEl, callbacks) {
     const view = doc.defaultView;
     if (!view || !palette.isConnected) return;
     const btns = tabs.length > 1 ? [...paletteRow.children].filter((b) => b.style.display !== 'none').length : paletteRow.children.length;
-    if (!btns) return;
+    if (!btns && !railCols[catalogue.tab]) return;
     palette.classList.add('bw-fit');
     const top = palette.getBoundingClientRect().top;
     const safeB = 6;
     const avail = view.innerHeight - top - safeB;
     const chrome = 12 + 4 + (palette.firstChild ? palette.firstChild.getBoundingClientRect().height + 2 : 14);   // padding + title
+    // a tab with a column layout: its groups sized together (buildPalette.js railColumnsFit), the seeds scrolling
+    const cols = railCols[catalogue.tab];
+    if (cols) {
+      const counts = catalogue.layoutOf(catalogue.tab).groups.map((g, i) => ({ ...g, n: [...cols.groups[i].children].filter((b) => b.style.display !== 'none').length }));
+      applyRailColumns(palette, cols.groups, railColumnsFit(avail, counts, chrome, view.innerWidth));
+      if (railMinimap) railMinimap.style.left = Math.round(palette.getBoundingClientRect().right + 8) + 'px';
+      layoutObjectBand();
+      return;
+    }
     // picture + name + cost [MM-story_mvg3xsca_1x] (was 52 / 30 for a bare glyph); sizing shared with the outpost (buildPalette.js)
     applyRailFit(palette, railFit(avail, btns, chrome, view.innerWidth));
     // the minimap sits beside the rail, never over it
@@ -882,6 +918,7 @@ export function createHud(mountEl, callbacks) {
   };
 
   if (tabs.length > 1) showTab(catalogue.tab);   // the first look: the visible tab's buttons only
+  else showCols(catalogue.tab);   // a lone tab with a column layout (none today); a battle's rail is untouched
 
   // ---- MINIMAP radar (epic mm-8e045fed61fb): 128x64 lower-left, above the gear button ----
   const minimap = el(doc, 'canvas', 'bw-minimap');
