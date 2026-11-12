@@ -136,6 +136,9 @@ export function hasErrors() {
   return s.slice(-2).some((ss) => ss.some(isProblem));
 }
 
+/** How many problems (errors, failed promises, console errors, lost GL contexts) the log holds, all sessions. */
+export function problemCount() { return read().reduce((n, e) => n + (isProblem(e) ? (e.n || 1) : 0), 0); }
+
 /** The report the player copies: device, version, then the last sessions' entries. */
 export function errorReport(win = globalThis) {
   const nav = (win && win.navigator) || {}, scr = (win && win.screen) || {};
