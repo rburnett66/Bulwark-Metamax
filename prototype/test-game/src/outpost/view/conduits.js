@@ -217,10 +217,10 @@ export function powerCuts(before, after) {
 
 /**
  * The power icon over each building (owner 2026-11-11, #282 answer 1: "buildings have power icons"): every finished
- * building and defense that draws power, with its grid state — 'on', 'off', or 'cut' (an armed placement would switch
- * it off: ghostPower's `cuts`). Grid nodes (stations, pylons) and buildings that draw nothing (walls, the Habitat) get
- * none; nor does a building still under construction.
- * → [{ id, kind, at: [x, z] (centre, cells), defense, state }], buildings by id, then defenses by id.
+ * building that draws power, with its grid state — 'on', 'off', or 'cut' (an armed placement would switch it off:
+ * ghostPower's `cuts`). Grid nodes (stations, pylons), buildings that draw nothing (the Habitat) and defenses (they
+ * need no power, owner 2026-11-11 [MM-task_mwcutmnk_3h]) get none; nor does a building still under construction.
+ * → [{ id, kind, at: [x, z] (centre, cells), defense: false, state }], by id.
  * opts.cuts: ids an armed placement would cut; opts.grids: a powerGrids answer already to hand.
  */
 export function planPowerIcons(o, map, { cuts = [], grids = null } = {}) {
@@ -232,11 +232,6 @@ export function planPowerIcons(o, map, { cuts = [], grids = null } = {}) {
     const b = o.pads[id], def = structureDef(b.kind, b.tier), rect = buildingRect(o, map, id);
     if (!def || !def.draw || POWER_NODE_KINDS.includes(b.kind) || !rect) continue;
     out.push({ id, kind: b.kind, at: centre(rect), defense: false, state: state(id) });
-  }
-  for (const d of [...(o.defenses || [])].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
-    const def = structureDef(d.kind, d.tier);
-    if (!def || !def.draw || d.building || !d.cell) continue;
-    out.push({ id: d.id, kind: d.kind, at: [d.cell[0] + 0.5, d.cell[1] + 0.5], defense: true, state: state(d.id) });
   }
   return out;
 }
@@ -250,18 +245,15 @@ export const withCuts = (icons, cuts) => {
 /**
  * What the grid would give a building of `kind` placed at `rect` ({ x, y, w, h }, cells; top-left = the hover cell):
  * powerGrids run on the outpost with that building added (so the priority rule decides, not a copy of it).
- * → null when the kind draws no power, else { reason: null | 'reach' | 'supply', node (the node it would hook into,
+ * → null when the kind draws no power (a defense never does), else { reason: null | 'reach' | 'supply', node (the node it would hook into,
  * or null), rect, cuts (ids on now that it would switch off), route (node → building, conduitRoute) | null }.
  * 'supply' (grid short): it would go without, or the priority rule would serve it by cutting a building that is on.
  */
 export const GHOST_ID = '__ghost';
 export function ghostPower(o, map, kind, rect) {
   const def = structureDef(kind, 1);
-  if (!def || !def.draw || POWER_NODE_KINDS.includes(kind)) return null;
-  const isDefense = DEFENSE_KINDS.includes(kind);
-  const o2 = isDefense
-    ? { ...o, defenses: [...(o.defenses || []), { id: GHOST_ID, kind, tier: 1, cell: [rect.x, rect.y], hp: 1 }] }
-    : { ...o, pads: { ...o.pads, [GHOST_ID]: { kind, tier: 1, at: { x: rect.x, y: rect.y, w: rect.w, h: rect.h } } } };
+  if (!def || !def.draw || POWER_NODE_KINDS.includes(kind) || DEFENSE_KINDS.includes(kind)) return null;
+  const o2 = { ...o, pads: { ...o.pads, [GHOST_ID]: { kind, tier: 1, at: { x: rect.x, y: rect.y, w: rect.w, h: rect.h } } } };
   const after = powerGrids(o2, map), { grids, off } = after;
   const node = joinNode(gridNodes(o2, map, grids), centre(rect));
   // grid short: the building itself goes without, or it is served by cutting a building that is on now (powerCuts:

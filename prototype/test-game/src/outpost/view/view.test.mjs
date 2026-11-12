@@ -37,7 +37,8 @@ test('the HUD model: the kit offline, then running — ores, storage fill, power
   assert.equal(off.online, false);
   assert.deepEqual(off.problems, []);
   assert.deepEqual(sellButton(off), { label: 'SELL', sub: 'outpost offline', enabled: false });
-  assert.deepEqual([off.power.draw, off.power.supply], [9, 10], 'the kit draws 9 of the first station\'s 10 (design §4.5)');
+  // 9 of 10 while the guns drew 1 each; defenses need no power since owner 2026-11-11 [MM-task_mwcutmnk_3h]
+  assert.deepEqual([off.power.draw, off.power.supply], [7, 10], 'the kit draws 7 of the first station\'s 10: its buildings only (design §4.5)');
   const o = advance(online(), T0 + HOUR, quiet).outpost;
   const h = hudModel(o, map, { gold: 500 });
   assert.deepEqual(h.ores.map((x) => [x.id, Math.round(x.units)]), [['iron', 180]]);

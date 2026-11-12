@@ -18,7 +18,7 @@
  * the sim's fixed ticks (CLAUDE.md, replay determinism). Pure apart from createRaid; no DOM, no clock.
  */
 import { createRaid } from '../raid.js';
-import { raidFor } from '../../data/outpost.js';
+import { raidFor, OUTPOST } from '../../data/outpost.js';
 
 /** When probes come, in seconds of visit time: the first, then the gap after each one ends. */
 export const PROBE_FIRST_S = [45, 75];
@@ -48,17 +48,30 @@ export function probeUnits(planet, n = 0) {
   return n % 2 ? [tank, troop, tank] : [tank, troop];
 }
 
+/**
+ * A probe's raid-only strength (owner 2026-11-11: "the attacks on the outpost are supposed to be mild but they are
+ * crushing my base") [MM-task_mwcutmnk_3h]: the planet's step-1 raid multipliers (Outpost_Raids Raider_HP_Mult,
+ * Raider_Damage_Mult) × Outpost_Params Probe_Strength. At the raid's full strength the starter kit lost a wall per
+ * probe on the ground outpost (measured in the PR); the dial lives in the workbook. → { hpMult, dmgMult }.
+ */
+export function probeRules(planet) {
+  const r = raidFor(planet, 1) || {};
+  const k = OUTPOST.Probe_Strength ?? 1;
+  return { hpMult: (r.hpMult ?? 1) * k, dmgMult: (r.dmgMult ?? 1) * k };
+}
+
 /** The probe's sim seed: the outpost seed and the probe's number in the visit. */
 export const probeSeed = (outpostSeed, n) => mix(outpostSeed >>> 0, 0x5eed00 + n) || 1;
 
 /**
- * Start probe number n against the outpost as it stands. powered: the defenses with power (powerGrids(o, map).powered).
+ * Start probe number n against the outpost as it stands. powered: kept for old callers; defenses need no power, so every
+ * standing gun fires (owner 2026-11-11 [MM-task_mwcutmnk_3h]).
  * → createRaid's stepping object, or null when the planet has no raiders.
  */
 export function startProbe(outpost, n, { map, powered = [], step = 1 } = {}) {
   const units = probeUnits(outpost.planet, n);
   if (!units.length || !map) return null;
-  const probe = createRaid(outpost, { powered }, { map, step, units, seed: probeSeed(outpost.seed, n) });
+  const probe = createRaid(outpost, { powered }, { map, step, units, seed: probeSeed(outpost.seed, n), ...probeRules(outpost.planet) });
   probe.startHp = new Map(outpost.defenses.map((d) => [d.id, d.hp]));   // the damage it deals is measured from here
   return probe;
 }

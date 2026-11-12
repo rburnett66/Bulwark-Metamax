@@ -300,8 +300,10 @@ export function collectionRates(o, map, params = OUTPOST) {
  * buildingRect's, so map pads and free positions answer alike.
  * → { grids: [{ stations, nodes, supply, draw, powered }], powered: Set<id>, off: { [id]: 'reach' | 'supply' } }
  * `stations` are a grid's Power Stations, `nodes` all of its nodes (stations and pylons).
- * Ids are pad ids for buildings and defense ids for defenses. Walls draw nothing and are always on. Farm buildings
- * (o.farm.buildings, owner rule 7) are consumers on the same grids once finished at time `t` (default o.t).
+ * Ids are pad ids for buildings and defense ids for defenses. Defenses (Machine Guns, Cannons, walls) need no power
+ * (owner 2026-11-11: "Defense towers do not need power") [MM-task_mwcutmnk_3h]: they are never consumers, never in
+ * `off`, and always in `powered`, at every tier. Farm buildings (o.farm.buildings, owner rule 7) are consumers on the
+ * same grids once finished at time `t` (default o.t).
  */
 export function powerGrids(o, map, t = o.t) {
   const { nodes, find, groups: grids } = nodeGroups(o, map);
@@ -350,11 +352,11 @@ function serveGrids(o, map, t, nodes, find, grids) {
   const consumers = [
     ...Object.entries(o.pads).filter(([, b]) => !POWER_NODE_KINDS.includes(b.kind))
       .map(([id, b]) => ({ id, kind: b.kind, at: centre(buildingRect(o, map, id)), draw: structureDef(b.kind, b.tier).draw })),
-    ...o.defenses.map((d) => ({ id: d.id, kind: d.kind, at: cellCentre(d.cell), draw: structureDef(d.kind, d.tier).draw })),
     ...Object.entries((o.farm && o.farm.buildings) || {}).filter(([, b]) => b.done <= t)
       .map(([id, b]) => ({ id, kind: b.kind, at: [b.x + b.w / 2, b.y + b.h / 2], draw: farmBuildingOf(b.kind).draw })),
   ];
-  const off = {}, powered = new Set();
+  // defenses need no power (owner 2026-11-11): always on, whatever the grid or the data's draw
+  const off = {}, powered = new Set((o.defenses || []).map((d) => d.id));
   for (const c of consumers) {
     if (!c.draw) { powered.add(c.id); continue; }
     let best = null;

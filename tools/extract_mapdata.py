@@ -155,7 +155,7 @@ OUTPOST_PARAMS = ("Load_Sec", "Store_Hours", "Deep_Rate_Mult", "Deep_Price_Mult"
                   "Far_Buyer_Mult", "Far_Loyalty_Cost", "Defense_Price_Mult", "Repair_Share_Per_HP", "Shuttle_II_Bonus",
                   "Rig_Bay_Min", "Harvester_Cap", "Harvester_Max", "Hopper_Hours", "Harvest_Route_Mult",
                   "Harvest_Rate_Mult", "Surface_Respawn_Mult", "Gun_Cap", "Habitat_Guns_Per_Tier",
-                  "Raid_Chance_Per_Size", "Raid_Chance_Max")
+                  "Raid_Chance_Per_Size", "Raid_Chance_Max", "Probe_Strength")
 OUTPOST_TECH_APPLIES = {"outposts", "upgradeBay"}
 
 
@@ -273,6 +273,9 @@ def outpost_problems(data):
         out.append("Outpost_Params: Raid_Chance_Per_Size must be >= 0 (a bigger base is never raided less)")
     if isinstance(op.get("Raid_Chance_Max"), (int, float)) and not 0 < op["Raid_Chance_Max"] <= 1:
         out.append("Outpost_Params: Raid_Chance_Max must be in (0, 1] (at most one raid per window)")
+    # visit probes are milder than the raids they are drawn from, never stronger (owner 2026-11-11)
+    if isinstance(op.get("Probe_Strength"), (int, float)) and not 0 < op["Probe_Strength"] <= 1:
+        out.append("Outpost_Params: Probe_Strength must be in (0, 1] (a visit probe is never stronger than a raid)")
     out += raid_problems(data, planets)
     return out
 

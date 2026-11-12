@@ -11,7 +11,8 @@
  *
  * The timing and the raiders are visitProbe.js's (probeDelay: the first at 45–75 s, then 100–180 s after the last one
  * clears; probeUnits: the planet's light tank and a trooper, a second tank every other probe) — reused, not copied.
- * The raiders follow the outpost's raid rules (raid.js raiderRules: raid-only strength, range cap, fire while advancing;
+ * The raiders follow the outpost's raid rules (raid.js raiderRules: raid-only strength — visitProbe.js probeRules, the
+ * step-1 raid's multipliers × Outpost_Params Probe_Strength, so a probe stays mild [MM-task_mwcutmnk_3h] — range cap, fire while advancing;
  * siegeRoutes: walls may seal the ramps, so an idle raider marches on the first defense in its way) and pull back after
  * PROBE_MAX_S, held or not — the same rules a raid runs, shared, not copied.
  * Deterministic: probe times come from the outpost seed and run on SIM time, never the wall clock.
@@ -21,8 +22,7 @@
  */
 import { startNextWave } from '../sim/waves.js';
 import { buildNavGrid } from '../sim/pathfinding.js';
-import { raidFor } from '../data/outpost.js';
-import { probeDelay, probeUnits, PROBE_MAX_S } from './view/visitProbe.js';
+import { probeDelay, probeUnits, probeRules, PROBE_MAX_S } from './view/visitProbe.js';
 import { raiderRules, siegeRoutes } from './raid.js';
 
 export function createVisitRaids(state, { planet, seed, probes = 0, nextIn = null }) {
@@ -33,8 +33,7 @@ export function createVisitRaids(state, { planet, seed, probes = 0, nextIn = nul
   let n = probes;
   let nextAt = state.time + (nextIn != null ? nextIn : probeDelay(seed >>> 0, n));
   let wasActive = false, startedAt = 0;
-  const strength = raidFor(planet, 1) || {};
-  const rules = { hpMult: strength.hpMult ?? 1, dmgMult: strength.dmgMult ?? 1 };
+  const rules = probeRules(planet);
   const openGrid = buildNavGrid(state.map, []);
   const base = { x: state.map.base.x, y: state.map.base.y };
   const api = {

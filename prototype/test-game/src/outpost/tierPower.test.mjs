@@ -1,7 +1,8 @@
 // Upgraded buildings draw more power [MM-story_mwcp7u7b_3a]. Owner 2026-11-11: "Tiers no [they don't count toward raid
 // size] — but upgraded buildings can use more power requiring upgraded power stations." The numbers are the workbook's
 // (Outpost_Structures Power_Draw, tools/economy/patch_tier_power_draw.py); an upgrade that outgrows the grid goes ahead,
-// flagged (model.upgradeGridShort), never refused.
+// flagged (model.upgradeGridShort), never refused. Defenses need no power at any tier (owner 2026-11-11, "Defense towers
+// do not need power") [MM-task_mwcutmnk_3h]: Machine Guns, Cannons and walls draw 0, so a gun upgrade never shorts a grid.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { referenceOutpost, powerGrids, upgrade, upgradeDefense, upgradeGridShort, advance, defaultPads } from './model.js';
@@ -21,8 +22,8 @@ const SHORT = 'grid short — upgrade a Power Station';
 const ctx = (extra = {}) => ({ map, gold: 1e9, now: T0, unlocks: new Set(['rig_mk2', 'supply_depot', 'power_grid_2']),
   techOwned: new Set(['mg2', 'mg3', 'cannon2', 'cannon3']), ...extra });
 
-test('tier draws rise: tier N of a tiered consumer draws N × its tier-I draw', () => {
-  for (const [kind, tiers] of [['rig', 2], ['storage', 2], ['mg', 3], ['cannon', 3]]) {
+test('tier draws rise: tier N of a tiered building draws N × its tier-I draw', () => {
+  for (const [kind, tiers] of [['rig', 2], ['storage', 2]]) {
     assert.ok(draw(kind, 1) > 0, kind + ' draws power');
     for (let t = 2; t <= tiers; t++) {
       assert.equal(draw(kind, t), t * draw(kind, 1), `${kind} tier ${t}`);
@@ -30,8 +31,9 @@ test('tier draws rise: tier N of a tiered consumer draws N × its tier-I draw', 
     }
   }
   assert.deepEqual([draw('rig', 1), draw('rig', 2), draw('storage', 1), draw('storage', 2)], [4, 8, 1, 2]);
-  assert.deepEqual([1, 2, 3].map((t) => draw('mg', t)), [1, 2, 3]);
-  assert.deepEqual([1, 2, 3].map((t) => draw('cannon', t)), [1, 2, 3]);
+  // the guns drew 1 / 2 / 3 (#288) until defenses stopped needing power (owner 2026-11-11 [MM-task_mwcutmnk_3h])
+  assert.deepEqual([1, 2, 3].map((t) => draw('mg', t)), [0, 0, 0]);
+  assert.deepEqual([1, 2, 3].map((t) => draw('cannon', t)), [0, 0, 0]);
   // single-tier and zero-draw kinds unchanged
   assert.deepEqual([draw('hub', 1), draw('resourceBay', 1), draw('upgradeBay', 1)], [2, 2, 1]);
   assert.deepEqual([draw('habitat', 1), draw('habitat', 2), draw('wall', 1), draw('wall', 2), draw('pylon', 1), draw('power', 1), draw('power', 2), draw('harvester', 1)],
@@ -54,30 +56,26 @@ test('tiers still do not count toward raid size (the outpost size counts buildin
 
 test('the reference outpost: upgrades cross Power Station I and Power Station II restores the grid', () => {
   const ref = referenceOutpost('ground', { seed: 7, map, now: T0 });
-  assert.deepEqual([main(ref).draw, main(ref).supply], [9, 10], 'the kit draws 9 of 10');
+  // 9 of 10 while the guns drew 1 each; defenses need no power since owner 2026-11-11 [MM-task_mwcutmnk_3h]
+  assert.deepEqual([main(ref).draw, main(ref).supply], [7, 10], 'the kit draws 7 of 10');
   assert.equal(upgradeGridShort(ref, map), null, 'nothing pending: no warning');
 
-  // one gun to tier II on the bare reference grid: 10 of 10, fine
-  const gunII = structuredClone(ref);
-  gunII.defenses.find((d) => d.kind === 'mg').tier = 2;
-  assert.deepEqual([main(gunII).draw, main(gunII).supply], [10, 10]);
-  assert.deepEqual(powerGrids(gunII, map).off, {});
+  // both guns to tier III on the bare reference grid: still 7 of 10, every defense on (two gun IIs overloaded it before)
+  const gunsIII = structuredClone(ref);
+  for (const d of gunsIII.defenses) if (d.kind !== 'wall') d.tier = 3;
+  assert.deepEqual([main(gunsIII).draw, main(gunsIII).supply], [7, 10]);
+  assert.deepEqual(powerGrids(gunsIII, map).off, {});
 
-  // both guns to tier II: 11 > 10 — Power Station I is short
-  const bothII = structuredClone(gunII);
-  bothII.defenses.find((d) => d.kind === 'cannon').tier = 2;
-  assert.ok(Object.values(powerGrids(bothII, map).off).includes('supply'), 'a second gun upgrade overloads Power Station I');
-
-  // Rig Mk II alone: 9 − 4 + 8 = 13 > 10 — the upgrade goes ahead, flagged
+  // Rig Mk II alone: 7 − 4 + 8 = 11 > 10 — the upgrade goes ahead, flagged
   const rigUp = upgrade(ref, 'r1', ctx());
   assert.ok(!rigUp.error, rigUp.error);
   assert.equal(rigUp.warning, SHORT);
   const rigII = structuredClone(ref); rigII.pads.r1.tier = 2;
   assert.ok(Object.values(powerGrids(rigII, map).off).includes('supply'));
 
-  // a Power Station II restores it: 20 supply carries the rig II and both guns II (9 − 4 + 8 + 2 = 15)
-  const fixed = structuredClone(bothII); fixed.pads.r1.tier = 2; fixed.pads.p1.tier = 2;
-  assert.deepEqual([main(fixed).draw, main(fixed).supply], [15, 20]);
+  // a Power Station II restores it: 20 supply carries the rig II (7 − 4 + 8 = 11; the guns III draw nothing)
+  const fixed = structuredClone(gunsIII); fixed.pads.r1.tier = 2; fixed.pads.p1.tier = 2;
+  assert.deepEqual([main(fixed).draw, main(fixed).supply], [11, 20]);
   assert.deepEqual(powerGrids(fixed, map).off, {});
   // and with the station already upgraded, the rig upgrade carries no warning
   const p2 = structuredClone(ref); p2.pads.p1.tier = 2;
@@ -91,29 +89,45 @@ test('the reference outpost: upgrades cross Power Station I and Power Station II
   assert.ok(!both.error && !both.warning, JSON.stringify(both.warning || both.error));
 });
 
-test('a gun upgrade at the Upgrade Bay that shorts the grid is allowed and flagged', () => {
+// was 'a gun upgrade at the Upgrade Bay that shorts the grid is allowed and flagged' (mg II took the grid to 11 of 10);
+// defenses need no power since owner 2026-11-11 [MM-task_mwcutmnk_3h], so no gun upgrade can short a grid
+test('a gun upgrade at the Upgrade Bay never shorts the grid: defenses need no power at any tier', () => {
   const o = referenceOutpost('ground', { seed: 7, map, now: T0 });
-  o.pads.f9 = { kind: 'upgradeBay', tier: 1, at: { x: 23, y: 15, w: 2, h: 2 } };   // beside the station; draws 1: 10 of 10
+  o.pads.f9 = { kind: 'upgradeBay', tier: 1, at: { x: 23, y: 15, w: 2, h: 2 } };   // beside the station; draws 1: 8 of 10
   assert.deepEqual(powerGrids(o, map).off, {});
   const mg = o.defenses.find((d) => d.kind === 'mg');
   const r = upgradeDefense(o, mg.id, ctx());
   assert.ok(!r.error, r.error);
-  assert.equal(r.warning, SHORT, 'mg II takes the grid to 11 of 10');
-  assert.equal(r.outpost.upgrading.id, mg.id, 'not refused: the gun is on the bay');
-  // no map, no check (a bare call is unchanged)
-  assert.equal(upgradeDefense(o, mg.id, ctx({ map: undefined })).warning, undefined);
-  // the station at tier II: no warning
-  const o2 = structuredClone(o); o2.pads.p1.tier = 2;
-  assert.equal(upgradeDefense(o2, mg.id, ctx()).warning, undefined);
+  assert.equal(r.warning, undefined, 'mg II draws nothing: no grid warning');
+  assert.equal(r.outpost.upgrading.id, mg.id, 'the gun is on the bay');
+  assert.equal(upgradeGridShort(r.outpost, map), null);
+});
+
+test('defenses are never unpowered: at every tier, with no station at all, or on a short grid', () => {
+  const o = referenceOutpost('ground', { seed: 7, map, now: T0 });
+  for (const kind of ['mg', 'cannon', 'wall']) for (let t = 1; structureDef(kind, t); t++) assert.equal(draw(kind, t), 0, `${kind} ${t}`);
+  const on = (x) => { const g = powerGrids(x, map); for (const d of x.defenses) { assert.ok(g.powered.has(d.id), d.id); assert.equal(g.off[d.id], undefined, d.id); } };
+  const top = structuredClone(o);
+  for (const d of top.defenses) d.tier = d.kind === 'wall' ? 2 : 3;
+  on(top);
+  const dark = structuredClone(top); delete dark.pads.p1;            // no station at all: the buildings go dark, the guns do not
+  assert.ok(Object.keys(powerGrids(dark, map).off).includes('r1'));
+  on(dark);
+  const short = structuredClone(top); short.pads.r1.tier = 2;         // a short grid cuts buildings only
+  assert.ok(Object.values(powerGrids(short, map).off).includes('supply'));
+  on(short);
 });
 
 test('every station at its top tier: the warning asks for another Power Station', () => {
   const o = referenceOutpost('ground', { seed: 7, map, now: T0 });
   o.pads.p1.tier = 2;
   o.pads.r2 = { kind: 'rig', tier: 2, deposit: 'uncommon', deep: false };
-  o.pads.s1.tier = 2;                                      // 2 + 4 + 8 + 2 + 2 = 18 of 20
+  o.pads.s1.tier = 2;
+  o.pads.f9 = { kind: 'upgradeBay', tier: 1, at: { x: 23, y: 15, w: 2, h: 2 } };
+  // hub 2 + rig 4 + rig II 8 + storage II 2 + upgrade bay 1 = 17 of 20 (the guns, which drew 2, draw nothing since
+  // owner 2026-11-11 [MM-task_mwcutmnk_3h]; the Upgrade Bay keeps the case short)
   assert.deepEqual(powerGrids(o, map).off, {});
-  const r = upgrade(o, 'r1', ctx());                       // + 4 → 22 of 20
+  const r = upgrade(o, 'r1', ctx());                       // + 4 → 21 of 20
   assert.equal(r.warning, 'grid short — build another Power Station');
 });
 
@@ -123,16 +137,18 @@ test('the save session passes the warning on: an upgrade that shorts the grid su
   sv.carry = { gold: 1e6, structures: [] }; sv.goldBank = 1e6;
   acceptOutpostContract(sv, 'ground', { map: forgeMap, now: T0, seedSalt: 'test' });
   const o = referenceOutpost('ground', { seed: sv.outposts.ground.seed, map: forgeMap, now: T0 });
-  o.pads.f9 = { kind: 'upgradeBay', tier: 1, at: { x: 36, y: 19, w: 2, h: 2 } };   // beside the station (no pads since S2c.2): 10 of 10
+  o.pads.f9 = { kind: 'upgradeBay', tier: 1, at: { x: 36, y: 19, w: 2, h: 2 } };   // beside the station (no pads since S2c.2): 8 of 10
   sv.outposts.ground = o;
-  sv.tech = { owned: { supply_depot: true } };
+  sv.tech = { owned: { rig_mk2: true } };
   const v = createSession({ store: memoryStore(sv), planet: 'ground', map: forgeMap, catalog, raidHook: null, flowOpts: { allOpen: true } });
   v.open(T0);
-  const s1 = defaultPads(forgeMap).storage;
-  const r = v.act({ type: 'upgrade', pad: s1 }, T0);      // Storage Tower II: 1 → 2, 11 of 10
+  // was Storage Tower II (1 → 2: 11 of 10 while the guns drew 1 each); the guns draw nothing since owner 2026-11-11
+  // [MM-task_mwcutmnk_3h], so the Rig Mk II (4 → 8: 12 of 10) is the upgrade that shorts the grid
+  const rig = defaultPads(forgeMap).rig;
+  const r = v.act({ type: 'upgrade', pad: rig }, T0);
   assert.equal(r.ok, true, r.error);
   assert.equal(r.warning, SHORT);
-  assert.ok(r.outpost.building.some((j) => j.pad === s1 && j.tier === 2), 'the upgrade is under way, not refused');
+  assert.ok(r.outpost.building.some((j) => j.pad === rig && j.tier === 2), 'the upgrade is under way, not refused');
 });
 
 test('the live (battle-session) path: the battle U command on a rig, then the save check flags it', () => {
