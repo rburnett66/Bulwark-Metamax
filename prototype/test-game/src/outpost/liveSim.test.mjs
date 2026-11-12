@@ -51,7 +51,9 @@ test('the live state is the battle sim: buildings and defenses are OUT- structur
   assert.equal(state.base.pos.x, Math.floor(hub.x + hub.w / 2));
   const lifecycles = new Set([...state.structures.values()].map((s) => s.lifecycle));
   for (const l of ['Complete', 'Damaged', 'Building', 'Upgrading']) assert.ok(lifecycles.has(l), `has a ${l} structure`);
-  assert.equal([...state.structures.values()].filter((s) => s.structId === 'OUT-mg' && s.hp <= 0).length, 0, 'wrecks stay out');
+  // a wreck is in the live state as an inert 'Wrecked' hulk (no longer left out) [MM-story_mwcrfnyf_3c]
+  const wrecked = [...state.structures.values()].filter((s) => s.hp <= 0);
+  assert.ok(wrecked.length >= 1 && wrecked.every((s) => s.lifecycle === 'Wrecked'), 'wrecks are inert Wrecked structures');
   assert.ok(state.placementRules && state.placementRules.length >= 2, 'the outpost rules are on the shared placement');
 });
 
