@@ -50,7 +50,7 @@ export function buildNavGrid(map, structures, extraBlocked) {
     for (let i = 0; i < structures.length; i++) {
       const s = structures[i];
       if (!s) continue;
-      if (s.lifecycle === 'Destroyed') continue;
+      if (s.lifecycle === 'Destroyed' || s.lifecycle === 'Wrecked') continue;   // an opt-in wreck (structures.js) is walked past
       const fp = s.footprint || { w: 1, h: 1 };
       const bx = Math.round(s.pos.x);
       const by = Math.round(s.pos.y);

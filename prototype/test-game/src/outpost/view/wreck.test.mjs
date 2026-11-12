@@ -3,7 +3,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { defenseStructures } from './conduits.js';
-import { damageSites } from './constructionFx.js';
+import { createStructureFx } from '../../render3d/fx/structureFx.js';
+import { K } from '../../render3d/fx/impacts.js';
 import { lifecycleLook } from '../../render3d/structures/models.js';
 import { planSystem } from '../../render3d/structures/system3d.js';
 
@@ -24,8 +25,15 @@ test('the wreck look: charred and slumped, and its turret does not aim', () => {
   assert.equal(planSystem(defenseStructures(outpost(200))).items[0].aim, true);
 });
 
-test('a wreck smokes (its damage site says so)', () => {
-  assert.equal(damageSites(outpost(0))[0].wreck, true);
-  assert.equal(damageSites(outpost(200))[0].wreck, false);
-  assert.deepEqual(damageSites(outpost(400)), []);
+test('a wreck smokes and sparks the most, through the shared structure FX (render3d/fx/structureFx.js) [MM-story_mwcrfnyf_3c]', () => {
+  const run = (hp) => {
+    const fx = createStructureFx({ seed: 5 }), st = { structures: new Map(defenseStructures(outpost(hp)).map((s) => [s.id, s])) };
+    const n = { spark: 0, smoke: 0 };
+    for (let i = 0; i < 60; i++) fx.step(1 / 30, st, (kind) => { if (kind === K.SPARK) n.spark++; if (kind === K.SMOKE) n.smoke++; }, K);
+    return n;
+  };
+  const wreck = run(0), worn = run(200), whole = run(400);
+  assert.ok(wreck.spark > worn.spark && wreck.smoke > worn.smoke, `a wreck throws the most (${JSON.stringify(wreck)} vs ${JSON.stringify(worn)})`);
+  assert.ok(worn.spark > 0 && worn.smoke > 0, 'a worn one throws some');
+  assert.deepEqual(whole, { spark: 0, smoke: 0 }, 'a whole one throws none');
 });

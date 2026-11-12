@@ -296,7 +296,7 @@ export function startUpgrade(state, structureId) {
 export function startSell(state, structureId) {
   const s = state.structures.get(structureId);
   if (!s) return false;
-  if (s.lifecycle === 'Selling' || s.lifecycle === 'Destroyed') return false;
+  if (s.lifecycle === 'Selling' || s.lifecycle === 'Destroyed' || s.lifecycle === 'Wrecked') return false;
   s.lifecycle = 'Selling';
   s.progress = 0;
   emitEvent(state, { type: 'build', tick: state.tick, id: s.id, structId: s.structId, phase: 'sellStart' });
@@ -424,7 +424,12 @@ export function stepStructures(state, dt) {
       }
     } else if (s.lifecycle === 'Destroyed') {
       emitEvent(state, { type: 'build', tick: state.tick, id: s.id, structId: s.structId, phase: 'destroyed', pos: { x: s.pos.x, y: s.pos.y } });
-      toRemove.push(s);
+      // OPT-IN WRECKS [MM-story_mwcrfnyf_3c]: a state whose owner asks (state.keepWreck(s) — the outpost's live state,
+      // outpost/liveSim.js; a battle never sets it) keeps the structure as an inert 'Wrecked' hulk at 0 HP instead of
+      // removing it: drawn and smoking, but it blocks no walker (pathfinding.js), is never targeted (hp 0), never fires,
+      // cannot be sold, upgraded or repaired here (the outpost repairs wrecks through its own save rules).
+      if (state.keepWreck && state.keepWreck(s)) { s.lifecycle = 'Wrecked'; s.hp = 0; s.targetId = null; s.progress = 0; pathDirty = true; }
+      else toRemove.push(s);
     }
   }
 

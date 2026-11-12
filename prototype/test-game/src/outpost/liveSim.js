@@ -46,6 +46,13 @@ const progressOf = (since, done, now) => (done > since ? clamp01((now - since) /
 const doneAt = (since, done, progress, now) => Math.round(now + (1 - progress) * (done - since));
 const sinceOf = (done, ms) => done - ms;   // a pad job records only `done`; its start is `done − its Build_Sec`
 
+/** sim/structures.js opt-in: an outpost DEFENSE the raid destroys stays as a wreck; a building is gone (as fromLiveSim saves). */
+function keepDefenseWreck(s) {
+  let def = null;
+  try { def = getStructureDef(s.structId); } catch (e) { return false; }
+  return !!(def && def.outpostKind && !isBuilding(def.outpostKind));
+}
+
 function addStructure(state, kind, cell, tier) {
   const id = outpostStructId(kind), def = getStructureDef(id);
   const s = createStructure(state, id, { x: cell[0], y: cell[1] });
@@ -102,12 +109,21 @@ export function toLiveSim(outpost, { map, now, gold = 0 }) {
     s.progress = progress;
     ids.set(s.id, { pad, extra, building: true });
   }
-  // defenses (a wreck at 0 HP stays out of the sim until it is repaired — as in a raid)
+  // defenses. A wreck at 0 HP is an inert 'Wrecked' structure (sim/structures.js opt-in wrecks): drawn, smoking and
+  // sparking (render3d/fx/structureFx.js), but it blocks no raider, is never targeted, never fires and draws no power
+  // in the sim — as a raid treats it. A defense a raid destroys during the visit becomes one the same tick
+  // (state.keepWreck), so it is in the save as a wreck, never lost between two reads [MM-story_mwcrfnyf_3c].
   const wrecks = [];
+  state.keepWreck = keepDefenseWreck;
   for (const d of outpost.defenses) {
-    if (!(d.hp > 0)) { wrecks.push(d); continue; }
     const { id, kind, tier, cell, hp, building, selling, ...extra } = d;
     const s = addStructure(state, kind, cell, tier);
+    if (!(hp > 0)) {
+      wrecks.push(d);
+      s.hp = 0; s.lifecycle = 'Wrecked';
+      ids.set(s.id, { defense: id, extra });
+      continue;
+    }
     s.hp = Math.min(hp, s.maxHp);
     s.lifecycle = s.hp < s.maxHp ? 'Damaged' : 'Complete';
     if (building) { s.lifecycle = 'Building'; s.progress = progressOf(building.since, building.done, now); }
@@ -271,9 +287,10 @@ export function fromLiveSim(state, link, now) {
     const def = getStructureDef(s.structId), kind = def.outpostKind;
     if (!kind) continue;                       // not an outpost structure
     const e = ids.get(s.id) || null;
-    if (s.lifecycle === 'Destroyed') {
+    if (s.lifecycle === 'Destroyed' || s.lifecycle === 'Wrecked') {
       // a defense a raid destroyed stays in the save as a WRECK at 0 HP — repaired, it fights again (as in a raid);
-      // a sold one is gone from the sim altogether (structures.js deletes it) [MM-subtask_mwcij14c_33]
+      // a sold one is gone from the sim altogether (structures.js deletes it) [MM-subtask_mwcij14c_33]. 'Wrecked': a
+      // wreck from before the visit, or one the sim kept the tick it was destroyed (state.keepWreck)
       if (!isBuilding(kind)) {
         const id = e ? e.defense : `d${nextDefense++}`;
         const wreck = { id, kind, tier: s.tier, cell: [s.pos.x, s.pos.y], hp: 0, ...(e ? e.extra : {}) };
@@ -321,10 +338,7 @@ export function fromLiveSim(state, link, now) {
   padJobs.sort((a, b) => ((oldJobs.indexOf(jobKey(a)) + 1 || 1e9) - (oldJobs.indexOf(jobKey(b)) + 1 || 1e9)));
   o.building = padJobs;
   o.defenses = [];
-  for (const d of before.defenses) {
-    if (!(d.hp > 0)) o.defenses.push(clone(d));
-    else if (defenses.has(d.id)) o.defenses.push(defenses.get(d.id));
-  }
+  for (const d of before.defenses) if (defenses.has(d.id)) o.defenses.push(defenses.get(d.id));   // wrecks are live structures too
   o.defenses.push(...newDefenses);
   o.upgrading = upgrading || null;
   if (before.upgrading == null && upgrading == null && !('upgrading' in before)) delete o.upgrading;

@@ -2,7 +2,7 @@
 // a settling burst on complete, nothing once Complete, scaled by quality tier.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBuildFx, BUILD_FX, BUILD_TIER } from './buildFx.js';
+import { createBuildFx, BUILD_FX, BUILD_TIER, DUST_MULT } from './buildFx.js';
 import { K } from './impacts.js';
 
 const world = (lifecycle = 'Building', progress = 0, fp = { w: 1, h: 1 }) => ({
@@ -86,6 +86,23 @@ test('dust is twice as obvious, and upgrades raise it too [MM-task_mvfjymwc_a]',
 test('construction dust draws at full dust alpha, and the ring with it [MM-task_mvfqfakd_6] [MM-task_mvfr56vi_8]', async () => {
   assert.ok(0.45 * BUILD_FX.opacity >= 0.99, 'puffs reach the dust batch\'s full alpha (other dust stays at 0.45)');
   assert.equal(BUILD_FX.ring.a, 1, 'ring at full strength');
-  const src = (await import('node:fs')).readFileSync(new URL('./impactsView.js', import.meta.url), 'utf8');
-  assert.ok(src.includes('0.45 * Math.max(1, p.dusty)'), 'the smoke batch scales dust alpha by the dusty value');
+});
+
+test('the build dust is the outpost construction dust: four times the puffs, and more opaque [MM-story_mwcrfnyf_3c]', async () => {
+  const { smokeAlpha } = await import('./impactsView.js');
+  assert.equal(DUST_MULT, 4);
+  assert.equal(BUILD_FX.rate, 24 * DUST_MULT, 'four times the 2026-10-19 rate');
+  // 2.2 sat at the full-alpha cap, so the opacity holds full alpha longer instead: at every age the puff is at least as
+  // opaque as before, clearly more so through mid-life, and a 2.2 puff draws exactly as it used to
+  const before = (t) => Math.min(1, (t / 1) * 6) * (1 - t) * Math.min(1, 0.45 * 2.2);
+  let more = 0;
+  for (let t = 0; t < 1; t += 0.05) {
+    const now = smokeAlpha({ t, life: 1, dusty: BUILD_FX.opacity });
+    assert.ok(now >= before(t) - 1e-9, `no less opaque at u=${t.toFixed(2)}`);
+    if (now > before(t) + 0.15) more++;
+    assert.ok(Math.abs(smokeAlpha({ t, life: 1, dusty: 2.2 }) - before(t)) < 1e-9, 'a dusty 2.2 puff unchanged');
+  }
+  assert.ok(more >= 6, `visibly more opaque over a good part of its life (${more} samples)`);
+  assert.equal(smokeAlpha({ t: 0.3, life: 1, dusty: BUILD_FX.opacity }), 1, 'fully opaque at 30 % of its life');
+  assert.ok(Math.abs(smokeAlpha({ t: 0.5, life: 1, dusty: 0 }) - 0.55 * 0.5) < 1e-9, 'gunsmoke unchanged');
 });
