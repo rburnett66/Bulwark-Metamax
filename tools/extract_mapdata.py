@@ -280,9 +280,11 @@ def outpost_problems(data):
     return out
 
 
-# The raiders' unit kinds (owner: troops and low-end tanks only). The sheet holds unit ids; that each is lightGround
-# and spawned at tier I is checked against UNITS by src/outpost/raid.test.mjs (the battle tables live in JS).
-RAID_UNIT_KINDS = ("Troops", "Tanks")
+# The raiders' unit kinds: troopers only (owner 2026-11-12, "base is getting attacked by heavy tanks, juggernauts" —
+# the assault tanks the cycle used to bring; outpost raids are "very simple .. low level raids") [MM-task_mwd2qc3c_4].
+# The sheet holds unit ids; that each is a tier I infantry unit is checked against UNITS by
+# src/outpost/raidRoster.test.mjs (the battle tables live in JS).
+RAID_UNIT_KINDS = ("Troops",)
 # The documented breacher exception (owner 2026-11-07): a planet whose troops cannot hurt walls (Toxic does 0 to
 # Structure) adds one unit of its own faction that can. No light ground unit of those factions qualifies, so the
 # breacher is the faction's Artillery (the only one that damages structures); raid.js caps every raider's range at the
@@ -291,7 +293,7 @@ BREACHER_KINDS = ("Artillery",)
 
 
 def raid_problems(data, planets):
-    """Outpost_Raids (tech plan Outpost §3.1): one row per planet, the faction's own troops / assault tanks, positive
+    """Outpost_Raids (tech plan Outpost §3.1): one row per planet, the faction's own troops, positive
     whole sizes per contract step."""
     out, rows = [], data["outpostRaids"]
     if not rows:
@@ -309,7 +311,7 @@ def raid_problems(data, planets):
             out.append(f"{tag}: Units mix factions {sorted(prefixes)} (raiders are the planet's own dissidents)")
         for u in units:
             if "-" not in u or u.split("-", 1)[1] not in RAID_UNIT_KINDS:
-                out.append(f"{tag}: unit {u!r} is not a troop or an assault tank (owner: tier I light ground only)")
+                out.append(f"{tag}: unit {u!r} is not a trooper (owner: outpost raids are low level, troops only)")
         b = r.get("Breacher") or ""
         if b:
             if "-" not in b or b.split("-", 1)[1] not in BREACHER_KINDS:
