@@ -7,9 +7,10 @@
  * person by the planet faction's Factor at the Trade Station aboard its capital ship (farm/factor.js)
  * [MM-story_mwcuzyf7_3k] — the one way to take it.
  *
- * The gate (owner, 2026-11-09, Farming-Design §2.2, D41/D46): farming opens on a planet when that planet's outpost has
- * a finished Mining Rig Mk II. F1 then appears at the Factor's desk. ACCEPT grants the Farmhouse (placed on free
- * ground near the outpost's hub) and the Pod Crate.
+ * The gate (owner 2026-11-12, Farming-Design §2.2; supersedes the Mining Rig Mk II gate of 2026-11-09): farming opens on
+ * a planet when the player has FINISHED it — every campaign map beaten (save/reveals.js planetFinished) — and has an
+ * outpost there for the farm to stand beside. F1 then appears at the Factor's desk. ACCEPT grants the Farmhouse (placed
+ * on free ground near the outpost's hub) and the Pod Crate. A farm already accepted is never taken away.
  *
  * Pure: functions change only the save they are given. Wall-clock time is passed in.
  */
@@ -17,6 +18,7 @@ import { PLANETS } from '../data/planets.js';
 import { farmContractOf, cropOf, farmBuildingOf, methodOf } from '../data/farm.js';
 import { ensureFarm, occupied, placeFarmBuilding, plotState } from './model.js';
 import { grantPodCrate } from './pods.js';
+import { planetFinished, planetMapsBeaten } from '../save/reveals.js';
 
 const nameOf = (key) => (PLANETS[key] || {}).name || key;
 /** The farming quest line of a planet key: 'ground' → 'QL-VER-F'. */
@@ -24,11 +26,35 @@ export const farmQuestLine = (key) => 'QL-' + String(nameOf(key)).slice(0, 3).to
 /** The mission id of a planet's farming contract step: 'ground', 1 → 'FC-VER-1'. */
 export const farmMissionId = (key, step) => 'FC-' + String(nameOf(key)).slice(0, 3).toUpperCase() + '-' + step;
 
-/** Farming is open on a planet once its outpost has a finished Mining Rig Mk II (the outpost's level-2 miner). */
+/**
+ * Farming is open on a planet once the player has finished it (every campaign map beaten) and has an outpost there — or
+ * the farm is already the player's (an old save that accepted F1 under the Rig Mk II gate keeps its farm).
+ */
 export function farmingOpen(s, key) {
-  const o = s.outposts && s.outposts[key];
-  return !!o && Object.values(o.pads || {}).some((b) => b.kind === 'rig' && b.tier >= 2);
+  if (hasFarm(s, key)) return true;
+  return !!(s.outposts && s.outposts[key]) && planetFinished(s, key);
 }
+/**
+ * What the player must do next to farm on this planet — THE one wording of the farming gate: the FARM tab's padlocks
+ * (farm/farmRail.js farmGateReason), the OUTPOST panel's line and the Factor's desk all read it, so they always agree.
+ * The one path: finish the planet (every campaign map), have an outpost there, then the Factor at the Trade Station
+ * offers F1, whose ACCEPT makes the farm the player's. ship: the capital ship's name (the mission catalogue's
+ * capitalShips), else a generic one; factor: the Factor's name (farm/factor.js factorOf), else "the Factor".
+ * Reads the save; changes nothing.
+ * → null (no farming contract here, or the farm is the player's) | { step: 'finish' | 'outpost' | 'ship' | 'factor', text,
+ *   maps: { beaten, total } }
+ */
+export function farmGate(s, key, { ship = null, factor = null } = {}) {
+  const c = farmContractOf(key, 'F1');
+  if (!c || hasFarm(s, key)) return null;
+  const desk = `${factor || 'the Factor'} at the Trade Station aboard ${ship || `the ${nameOf(key)} capital ship`}`;
+  const maps = planetMapsBeaten(s, key);
+  if (!planetFinished(s, key)) return { step: 'finish', maps, text: `Farming opens when you finish ${nameOf(key)} (${maps.beaten}/${maps.total} maps) — then see ${desk}` };
+  if (!(s.outposts && s.outposts[key])) return { step: 'outpost', maps, text: `Farming opens beside your ${nameOf(key)} outpost — accept the outpost contract first` };
+  const arrived = !!((s.capitalShips || {})[nameOf(key)] || {}).arrived;
+  return { step: arrived ? 'factor' : 'ship', maps, text: `Farming is open — accept the farming contract from ${desk}` + (arrived ? '' : ' once it is in orbit') };
+}
+
 /** Has the player accepted a farming contract on this planet (the farm exists)? */
 export const hasFarm = (s, key) => !!(s.farmContracts && s.farmContracts[key] && s.farmContracts[key].state !== 'offered');
 
@@ -65,7 +91,7 @@ export function spotNearHub(o, map, w, h, cellOk = null) {
  */
 export function acceptFarmContract(s, key, { map, now, cellOk = null }) {
   if (hasFarm(s, key)) return { error: 'already accepted' };
-  if (!farmingOpen(s, key)) return { error: 'farming opens with a Mining Rig Mk II' };
+  if (!farmingOpen(s, key)) return { error: farmGate(s, key).text };
   const c = farmContractOf(key, 'F1');
   if (!c) return { error: `no farming contract on ${nameOf(key)}` };
   const o = s.outposts[key];

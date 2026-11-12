@@ -18,7 +18,7 @@
  *     harvesters: n,                                                // bought for the Resource Bay (O16; behaviour O10)
  *     hopper: { common: units, uncommon: units },                   // the Resource Bay's hopper (O10), fractional
  *     fields: { [fieldId]: units },                                 // surface field stock (O10); absent = full
- *     liveHarvest?: { from, to },                                   // a visit's stretch the battle sim's trucks ran (S4)
+ *     liveHarvest?: { from, to },                                   // a visit's stretch run live: its trucks and its rigs (S4)
  *     raids: { window, log: [{ at, result, lost, damage, bounty? }] },
  *     sold: { [oreId]: units } }                                    // lifetime, both grades, for contract steps
  *
@@ -430,6 +430,23 @@ function runningRigs(o, map, params = OUTPOST) {
   });
 }
 
+/**
+ * What the running rigs extract over dt ms at the outpost as it stands, each capped by its bay's room — the one rule
+ * the away closed form (advance) and a live visit (liveSim.js stepLiveOutpost) both mine by. Changes nothing.
+ * → [{ pad, item, rate (units / ms), got (units), full (the bay filled) }], rigs with no room left out.
+ */
+export function rigExtraction(o, map, dt, params = OUTPOST) {
+  const out = [];
+  if (!(dt > 0)) return out;
+  for (const r of runningRigs(o, map, params)) {
+    const space = r.cap - bayUnits(o, r.pad);
+    if (space <= 0) continue;
+    const got = Math.min(r.rate * dt, space);
+    out.push({ pad: r.pad, item: r.item, rate: r.rate, got, full: got >= space - 1e-9 });
+  }
+  return out;
+}
+
 // ── harvesters and the hopper (design §6, story O10) ─────────────────────────────────────────────────────────────
 /** The surface tiers a Resource Bay's harvesters gather: the map's primary fields are common, premium uncommon. */
 export const HARVEST_TIERS = Object.freeze(['common', 'uncommon']);
@@ -670,18 +687,18 @@ export function advance(outpost, toMs, ctx) {
   const extractTo = (until) => {
     const dt = until - now;
     if (dt <= 0) return;
-    for (const r of runningRigs(o, map, params)) {
-      const bay = (o.storage[r.pad] ||= {});
-      const space = r.cap - bayUnits(o, r.pad);
-      if (space <= 0) continue;
-      const got = Math.min(r.rate * dt, space);
-      bay[r.item] = (bay[r.item] || 0) + got;
-      report.extracted[r.item] = (report.extracted[r.item] || 0) + got;
-      if (got >= space - 1e-9) report.full.push({ pad: r.pad, at: now + space / r.rate });
+    // the rigs and the harvesters — except over a stretch a live visit already ran (o.liveHarvest, outpost/liveSim.js:
+    // the visit mines on its own clock, stepLiveOutpost, and its trucks are the battle sim's own)
+    for (const [a, b] of outsideLive(o.liveHarvest, now, until)) {
+      for (const r of rigExtraction(o, map, b - a, params)) {
+        const bay = (o.storage[r.pad] ||= {});
+        bay[r.item] = (bay[r.item] || 0) + r.got;
+        report.extracted[r.item] = (report.extracted[r.item] || 0) + r.got;
+        if (r.full) report.full.push({ pad: r.pad, at: a + r.got / r.rate });
+      }
+      // the harvesters and the surface fields (finite stock, 5 % regrowth), into the hopper
+      harvestFields(o, map, params, b - a, harvestRunning(o, map, params), report, a);
     }
-    // the harvesters and the surface fields (finite stock, 5 % regrowth), into the hopper — except over a stretch a
-    // live visit already ran on the battle sim's own trucks (o.liveHarvest, outpost/liveSim.js fromLiveSim)
-    for (const [a, b] of outsideLive(o.liveHarvest, now, until)) harvestFields(o, map, params, b - a, harvestRunning(o, map, params), report, a);
     // the farm's plants, at this stretch's power and water (src/farm/grow.js)
     if (o.farm) growFarm(o, map, now, until, powerGrids(o, map, now).powered, report);
     now = until;

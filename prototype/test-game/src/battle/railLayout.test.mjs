@@ -81,8 +81,8 @@ test('before farming opens: every FARM item is padlocked with how farming opens,
   s.outposts = { ground: { pads: { r1: { kind: 'rig', tier: 1 } } } };
   s.pods = { 'loam-grain': 8 };
   const ship = 'The Iron Harvest';
-  assert.match(farmGateReason(s, 'ground', ship), /^Farming opens with a Mining Rig Mk II — then see the Factor at the Trade Station aboard The Iron Harvest$/);
-  s.outposts.ground.pads.r1.tier = 2;   // the gate opens: the contract waits at the Factor's desk
+  assert.match(farmGateReason(s, 'ground', ship), /^Farming opens when you finish Verdance \(0\/9 maps\) — then see the Factor at the Trade Station aboard The Iron Harvest$/);
+  s.planetMaps = { ...(s.planetMaps || {}), Verdance: Object.fromEntries(Array.from({ length: 9 }, (_, i) => [i + 1, { beaten: true }])) };   // Verdance finished: the gate opens: the contract waits at the Factor's desk
   assert.match(farmGateReason(s, 'ground', ship), /accept the farming contract from the Factor at the Trade Station aboard The Iron Harvest/);
   assert.match(farmGateReason(s, 'ground'), /aboard the Verdance capital ship/, 'no catalogue: a generic ship');
   s.farmContracts = { ground: { step: 1, state: 'active' } };

@@ -140,7 +140,7 @@ def farm_missions(ships, givers, problems):
     """
     The farming contracts as missions (Farming tech plan §5 A5, Farming-Design §2.2): one per Farm_Contracts row of the
     map-data workbook, quest line QL-<PLA>-F, offered in person by the planet faction's Factor at the Trade Station aboard
-    its capital ship once that planet's outpost has a Rig Mk II (farming_open). Phase A ships Verdance F1. → (missions, lines).
+    its capital ship once that planet is finished, every campaign map beaten (farming_open; owner 2026-11-12). Phase A ships Verdance F1. → (missions, lines).
     """
     wb = openpyxl.load_workbook(MAP_XLSX, data_only=True)
     if "Farm_Contracts" not in wb.sheetnames:
@@ -174,7 +174,7 @@ def farm_missions(ships, givers, problems):
         ]
         view = [] if step == 1 else [{"cond": "quest_step_collected", "param": ql, "value": step - 1, "text": "The previous farming contract was collected"}]
         unlock = [{"cond": "capital_ship_arrived", "param": planet, "text": f"{ship['ship']} is in orbit"},
-                  {"cond": "farming_open", "param": key, "text": f"A Mining Rig Mk II at the {planet} outpost"}]
+                  {"cond": "farming_open", "param": key, "text": f"{planet} finished: every campaign map beaten"}]
         missions.append({
             "id": f"FC-{abbr}-{step}", "questLine": ql, "step": step, "role": "primary", "variant": None,
             "planet": planet, "map": None, "title": c["Title"], "type": "farm",
