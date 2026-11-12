@@ -11,6 +11,7 @@
  *   - ore deposits: a rocky outcrop with a crystalline core in the ore's colour; a cut face under a rig; a locked tier
  *     dim with a lock;
  *   - effects: mining debris at working rigs (3× and bigger on Mk II), the storage hologram's fill, the reactor pulse;
+ *   - the capacity gauge on the Storage Tower and the Resource Bay (the model kit's setGauge, from gaugeFill);
  *   - markers: warnings over buildings, no-power bolts over defenses, the power icons, the preview conduit.
  * Placement, its ghost and range rings, selection and picking are the battle session's own (S6 deleted the old farm
  * view's copies and its SELL sequence with it).
@@ -26,6 +27,12 @@ const C = { plate: 0x3b4047, plateTop: 0x4a5058, edge: 0x24282d, trim: 0xeb5c0d,
 
 /** The locked-deposit padlock's brass. */
 export const DEPOSIT_LOCK_BRASS = 0xc9a14a;
+
+/**
+ * The capacity gauge's fill for a planned building (planBuildings item) [MM-task_mwd3zlwd_6]: a finished Storage
+ * Tower's pooled storage, a Resource Bay's hopper; null for everything else (no gauge drives).
+ */
+export const gaugeFill = (item) => (item && (item.kind === 'storage' || item.kind === 'resourceBay' || item.kind === 'harvesterBay') && Number.isFinite(item.fill) ? item.fill : null);
 
 /** The power icons worth drawing: only a building that has no power or would be cut — never one that is powered. */
 export const visiblePowerIcons = (list) => (list || []).filter((i) => i.state !== 'on');
@@ -288,6 +295,8 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       e.inst.setLook({ tint: item.tint, rise: item.rise, mk2: item.mk2, glow: item.glow * (item.kind === 'power' && item.working ? 0.88 + 0.22 * Math.sin(clock * 2.6) : 1) });
       e.inst.setWorking(item.working);
       e.item = item;
+      const gf = gaugeFill(item);
+      if (gf != null && e.inst.setGauge) e.inst.setGauge(gf);
       if (item.kind === 'storage') {
         setHologram(e.inst, item.fill);
         e.hasDoor = setDoor(e.inst, !!item.unpowered || !!item.building);
