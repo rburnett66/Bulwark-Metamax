@@ -6,7 +6,7 @@ Underground views added (§2.4); D16 and D17 decided (17:44); grow rooms at ship
 (§2.6); room machines and irrigation per third of a room (§2.7, 17:51); machine levels and maintenance (§2.8); the
 scale rule and its prototype (§4.4, 18:46) [MM-story_mwa3hi6n_1]; scale signed off, the art direction and the first
 models (§4.5, 19:45) [MM-story_mwa5fhvz_2]. **Draft 3** (20:41): the underground doorway is an **ammunition bunker**;
-the ship's **avatars on the surface farm**; farming **unlocks at Rig Mk II**; **battle quality is pod level 3**; crops
+the ship's **avatars on the surface farm**; farming **unlocks at Rig Mk II** (superseded 2026-11-12: it unlocks when the planet is finished, §2.2); **battle quality is pod level 3**; crops
 are **the 36 surface resources**; who gives what is the companion design `Farming-Distribution-Design.md`
 Repo copy to be: `docs/16 Bulwark MM/design/Farming-Design.md`
 
@@ -171,19 +171,33 @@ support — flat soil, slope, water, grove, collection field. The tags come from
 the methods that suit that planet (Hydrofarming water on Rime, slopes for terraces, and so on). At the §4.4 scale a plot
 is a pad's size, so the land round a 21 × 19 mesa on a 64 × 32 map has room for dozens of plots.
 
-### 2.2 How farming opens: the miner at level 2
+### 2.2 How farming opens: finish the planet
 
-**Farming unlocks when the miner reaches level 2** (owner, 20:41). The miner is the outpost's **Mining Rig**; level 2
-is **Rig Mk II**, the 2× miner that the planet's outpost **contract 2** unlocks (Outpost-Design §2.4: "the rare ore;
-Rig Mk II"). So the order on a planet is: outpost contract 1 → contract 2 → build or upgrade a rig to Mk II → that
-planet's Factor offers its first farming contract, in person, at the Trade Station aboard the planet's capital ship.
+**Farming unlocks when the player finishes the planet** (owner, 2026-11-12: *"Farming should unlock when the player
+finishes the planet."*). This replaces the earlier gate of 2026-11-09 (*"Farming unlocks when the miner reaches level
+2"*, a Rig Mk II at the planet's outpost), which sat behind two outpost contracts, a Tech Tree purchase and a 20-minute
+upgrade, and which the player had no way to learn at the outpost.
 
-- **Per planet** (proposed, Distribution X4): each planet's farming opens with its own outpost's Rig Mk II, as each
-  planet's outpost opens with its own ship. The first Mk II anywhere opens the FARM button.
-- **The rig stays a rig.** Nothing about mining changes; Mk II is only the gate.
+- **Finished** (the orchestrator's definition, stated to the owner; may change): every one of the planet's campaign
+  maps is beaten. That is all of `MAPDATA.maps` (1–9), read from the save's `planetMaps`, keyed by the planet's
+  **name** (`Verdance`). One pure rule: `save/reveals.js` `planetFinished(s, key)` (with `planetMapsBeaten` for the
+  count). Which maps does not matter, only all of them.
+- **The farm stands beside the outpost.** The Farmhouse is placed near the outpost's hub, so the planet also needs an
+  outpost (its outpost contract accepted). `farm/contract.js` `farmingOpen` = finished **and** an outpost.
+- **The order on a planet:** beat every campaign map → the planet's Factor offers its first farming contract, in
+  person, at the Trade Station aboard the planet's capital ship (who, below).
+- **Per planet.** Each planet's farming opens when that planet is finished.
+- **Never take a farm away.** A save that already accepted F1 under the old Rig Mk II gate keeps its farm
+  (`farmingOpen` is true for a farm the player holds). A save with a Rig Mk II that never accepted waits on the new
+  gate.
+- **The rig stays a rig.** Rig Mk II is the outpost's 2× miner again, and gates nothing.
+- **One wording, everywhere.** `farm/contract.js` `farmGate` is the only text of the gate. The FARM tab's padlocks
+  (`farmRail.js` `farmGateReason`), the OUTPOST panel's line and the Factor's desk all read it: *"Farming opens when you
+  finish Verdance (6/9 maps), then see the Factor at the Trade Station aboard Halbrecht's Oath"*. The maps-beaten count
+  is campaign progress, not reward progress (the pod chest stays a surprise).
 
 Colonel Vane already asks it in the outpost scene: *"So tell me: how are you at mining? And farming?"* Farming opens
-on the answer.
+once the planet is won.
 
 #### Who offers it: the faction's Factor, at the Trade Station [MM-story_mwcuzyf7_3k]
 
@@ -213,8 +227,8 @@ the planet I unlock, and it should be a nice character in the room on the capita
 
 - **The flow.** Board the ship, walk to the Trade Station, talk to the Factor. What they say depends on their desk
   (`factorDesk`):
-  - **gate**: farming is shut. The Factor says what is needed: *"Bring your Verdance mine up to a Mining Rig Mk II and
-    come see me."* This is how the player learns the gate. There is no progress bar.
+  - **gate**: farming is shut. The Factor says what is needed: *"Finish the fight for Verdance, every last map of it,
+    and come see me."* The outpost's panel and the FARM tab say the same, with the maps beaten (§2.2).
   - **offer**: F1 is on offer. The room **flags** the Factor: a gold chevron over them, and a tag over the room naming
     them, *FARMING CONTRACT · TAP TO TALK*. Talking plays their lines on the comm card (portrait, their voice,
     breadcrumbs), then the contract card with F1's terms (`farmCard`): **ACCEPT CONTRACT** / **LATER**. Their reply
@@ -230,7 +244,7 @@ the planet I unlock, and it should be a nice character in the room on the capita
 
 | | Verdance, contract F1: *Bread for the Regiments* (proposed) |
 |---|---|
-| Offered | in person by **Quartermaster Ines Roth**, the Factor at the Trade Station aboard Halbrecht's Oath, once the Verdance outpost has a **Rig Mk II** |
+| Offered | in person by **Quartermaster Ines Roth**, the Factor at the Trade Station aboard Halbrecht's Oath, once **Verdance is finished** (every campaign map beaten) |
 | Granted | the **Farmhouse** (the farm's hub, §6) on its plot at the mesa's foot, and a **Pod Crate**: 12 Common seed pods of Loam Grain (three plots' worth) |
 | Step 1 | **Break ground.** Prep three Traditional plots and plant them. |
 | Step 2 | **Bring in a harvest.** Harvest one plot at Fruited and deliver 40 units of grain to the ship. |
@@ -551,7 +565,7 @@ changes. The growth stages and pod levels (§5, §8) apply to the planted method
 
 | Stage | Methods | Unlocked by |
 |---|---|---|
-| Start | Traditional, Surface Collection, Mining (already owned through the outpost) | the first F1 (after Rig Mk II) |
+| Start | Traditional, Surface Collection, Mining (already owned through the outpost) | the first F1 (once the planet is finished) |
 | Early | Irrigated | the first F1's reward |
 | By faction | Orchard, Spatial, Hydroponic, Terraced, Hydrofarming, Solo, Vertical, Subterrain and Truffle Hunting, Tub | each faction's **F2** teaches its specialty method (Distribution §5); once learned it works on every farmed planet, with its research node bought as usual |
 

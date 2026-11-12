@@ -20,6 +20,7 @@
  * Pure: no DOM, no clock.
  */
 import { PLANETS } from '../data/planets.js';
+import { MAPDATA } from '../../content/maps/mapdata.js';
 
 /** Campaign order (Verdance → Vexmire): the planet index the unlock chain walks. */
 export const PLANET_ORDER = Object.freeze(Object.keys(PLANETS));
@@ -44,6 +45,21 @@ export const isSurveyed = (s, key) => !!(s.reveals && s.reveals.surveyed && s.re
 const rec = (o, key) => (o || {})[(PLANETS[key] || {}).name] || (o || {})[key] || null;
 const surveyMapBeaten = (s, key) => !!((rec(s.planetMaps, key) || {})[SURVEY_MAP] || {}).beaten;
 export const shipArrived = (s, key) => !!(rec(s.capitalShips, key) || {}).arrived;
+/**
+ * A planet's campaign progress: its maps beaten of all of them (MAPDATA.maps: every planet plays the same 1..N), from
+ * the save's planetMaps, keyed by the planet's NAME (missionFlow.recordPlanetMap). → { beaten, total }
+ */
+export function planetMapsBeaten(s, key) {
+  const maps = rec(s.planetMaps, key) || {}, total = (MAPDATA.maps || []).length;
+  let beaten = 0;
+  for (let m = 1; m <= total; m++) if ((maps[m] || {}).beaten) beaten++;
+  return { beaten, total };
+}
+/** A planet is FINISHED when every one of its campaign maps is beaten (owner 2026-11-12: farming unlocks then). */
+export function planetFinished(s, key) {
+  const { beaten, total } = planetMapsBeaten(s, key);
+  return total > 0 && beaten >= total;
+}
 
 /** The reveals due now, in play order: [{ kind:'planet', planet }…, { kind:'ship', planet }…]. Read-only. */
 export function revealsDue(s) {
