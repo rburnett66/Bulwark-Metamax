@@ -18,7 +18,7 @@
  *   items:  [{ name, icon (resource icon id) | null, colour, units, rate, rateTone, pct }]   a resource row: icon · name · bar · units · rate
  *   rows:   [[key, value, tone?]]                                                a key / value line
  *   gauges: [{ label, value, pct, tone }]                                         a labelled fill bar (storage, hopper)
- *   lines:  [{ text, tone }]                                                      a note
+ *   lines:  [{ text, tone, oneLine }]                                             a note (oneLine: one line, full text as its title)
  * tone: 'ok' | 'warn' | 'bad' | 'info' | 'gold' | 'dim' (absent = ink). Pure builders (hudCardModel, hudCardHtml) for tests.
  */
 import { AAA_PANEL_BG, AAA_FONT_BODY, AAA_FONT_NUM, aaaTicksCss } from './uiTokens.js';
@@ -48,19 +48,23 @@ ${aaaTicksCss('.bw-card', 12, 'var(--gold)')}
 .bw-card-rule { height:1px; margin:1px 0 2px; background:linear-gradient(90deg, var(--gold-hi), rgba(242,200,105,.15) 70%, transparent); }
 .bw-card-sec { display:flex; flex-direction:column; gap:3px; }
 .bw-card-sec + .bw-card-sec { border-top:1px solid #1e252f; padding-top:4px; }
-.bw-card-h { display:flex; justify-content:space-between; gap:6px; font-size:9.5px; font-weight:700; letter-spacing:.3em; color:var(--steel); text-transform:uppercase; }
+.bw-card-h { display:flex; justify-content:space-between; gap:6px; min-width:0; font-size:9.5px; font-weight:700; letter-spacing:.24em; color:var(--steel); text-transform:uppercase; white-space:nowrap; }
 .bw-card-h span:last-child { letter-spacing:.12em; }
 .bw-card-line { font-size:12px; color:#d6dce4; }
-.bw-card-line.t-gold { font-size:11px; line-height:1.2; }
+.bw-card-line.one { font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }   /* a one-line note: the full text is its title */
 .bw-card-kv { display:flex; justify-content:space-between; gap:8px; font-size:12px; }
 .bw-card-kv .k { color:#9aa6b4; letter-spacing:.04em; }
 .bw-card-kv .v { color:#e8eef5; text-align:right; font-variant-numeric:tabular-nums; }
 .bw-card-num { font-family:${AAA_FONT_NUM}; font-weight:800; font-size:10.5px; letter-spacing:.02em; font-variant-numeric:tabular-nums; color:#f4f7fb; }
-.bw-card-item { display:grid; grid-template-columns:16px minmax(0,1fr) 28px minmax(30px,auto) 40px; align-items:center; gap:0 5px; min-height:19px; }
+/* a resource row: only the name ellipsises and the bar shrinks; the numbers always show whole */
+.bw-card-item { display:grid; grid-template-columns:16px minmax(0,1fr) minmax(12px,26px) max-content max-content; align-items:center; gap:0 5px; min-height:19px; }
 .bw-card-item .ic { width:16px; height:16px; border-radius:2px; box-shadow:0 0 0 1px var(--c), 0 0 8px color-mix(in srgb, var(--c) 45%, transparent); }
 .bw-card-item .d { width:8px; height:8px; margin-left:4px; background:var(--c); box-shadow:0 0 6px var(--c); transform:rotate(45deg); }
 .bw-card-item .n { font-size:12px; font-weight:700; color:#e8eef5; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.bw-card-item .q { text-align:right; }
+.bw-card-item .q { text-align:right; white-space:nowrap; }
+.bw-card-kv .k { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bw-card-kv .v { flex:0 0 auto; white-space:nowrap; }
+.bw-card-sec > .bw-card-kv .v {   /* a section row may wrap; a gauge value never does */ flex:0 1 auto; white-space:normal; }
 .bw-card-item .r { text-align:right; font-size:10.5px; font-weight:700; letter-spacing:.02em; color:var(--gold-hi); white-space:nowrap; font-variant-numeric:tabular-nums; }
 .bw-card-item .r.t-dim { color:#7d8896; }
 .bw-card-bar { height:5px; background:#0a0d12; border:1px solid #222a35; overflow:hidden; }
@@ -114,7 +118,7 @@ export function hudCardBodyHtml(m) {
     x.items.map(itemHtml).join('') +
     x.rows.map((r) => '<div class="bw-card-kv"><span class="k">' + esc(r[0]) + '</span><span class="v' + tone(r[2]) + '">' + esc(r[1]) + '</span></div>').join('') +
     x.gauges.map(gaugeHtml).join('') +
-    x.lines.map((l) => '<div class="bw-card-line' + tone(l.tone) + '">' + esc(l.text) + '</div>').join('') + '</div>').join('');
+    x.lines.map((l) => '<div class="bw-card-line' + tone(l.tone) + (l.oneLine ? ' one' : '') + '"' + (l.oneLine ? ' title="' + esc(l.text) + '"' : '') + '>' + esc(l.text) + '</div>').join('') + '</div>').join('');
 }
 
 /** The whole card's markup (tests and the review page; the live card renders the same pieces into its elements). Pure. */

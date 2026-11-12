@@ -110,7 +110,7 @@ export function outpostCardModel(o, map, { planet = o.planet, gold = 0, now = o.
   const rows = gatheringRows(o, map, planet);
   const items = rows.map((r) => ({ name: r.name, icon: r.icon, colour: r.colour, units: fmtUnits(r.units), pct: r.pct * 100,
     rate: r.full ? 'FULL' : r.parked ? 'OFF' : r.perHour > 0 ? fmtPerHour(r.perHour) : '—', rateTone: r.full ? 'bad' : (r.parked || !(r.perHour > 0)) ? 'dim' : null }));
-  const gather = { head: 'Gathering', aside: 'stored · per hour', items, rows: [], gauges: [], lines: [] };
+  const gather = { head: 'Gathering', aside: 'stored · /h', items, rows: [], gauges: [], lines: [] };
   if (!items.length) gather.lines.push({ text: 'Nothing mined yet: build a Mining Station on a deposit.', tone: 'dim' });
   const trucks = harvesterCounts(live);
   if (trucks.total) gather.rows.push(['Harvesters', trucks.waiting ? `${trucks.working} working · ${trucks.waiting} waiting (${WAIT_WORD[trucks.why] || 'idle'})` : `${trucks.working} working`, trucks.waiting ? 'warn' : 'ok']);
@@ -120,7 +120,7 @@ export function outpostCardModel(o, map, { planet = o.planet, gold = 0, now = o.
   if (h.hopper) stores.gauges.push({ label: 'Hopper', value: `${fmtUnits(h.hopper.units)} / ${fmtUnits(h.hopper.cap)}`, pct: h.hopper.frac * 100, tone: fillTone(h.hopper.frac) });
   const notes = { lines: [] };
   if (!h.online) notes.lines.push(issues.length ? { text: `To go online: ${issues.join('; ')}`, tone: 'warn' } : { text: 'Ready to go online. Raiders will come.', tone: 'info' });
-  if (gate) notes.lines.push({ text: gate, tone: 'gold' });
+  if (gate) notes.lines.push({ text: gate, tone: 'gold', oneLine: true });   // one line on the card; the whole text is its title (and the FARM tab's padlocks)
   const actions = [];
   if (!h.online) actions.push({ label: 'Go online', primary: true, wide: true, enabled: !issues.length, title: issues.length ? 'Go online: ' + issues.join('; ') : '', run: () => act({ type: 'online' }) });
   const sb = sellButton(h);

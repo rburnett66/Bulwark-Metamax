@@ -42,6 +42,14 @@ test('hudCardModel / hudCardHtml: title, status, sections (items · rows · gaug
   assert.match(html, /<span class="k">Storage<\/span>/);
 });
 
+test('values never clip (844×390 review): only the name ellipsises; a one-line note keeps its full text as its title', () => {
+  assert.match(HUD_CARD_CSS, /\.bw-card-item \{ display:grid; grid-template-columns:16px minmax\(0,1fr\) minmax\(12px,26px\) max-content max-content;/,
+    'units and rate columns take their whole width; the bar and the name give way');
+  assert.match(HUD_CARD_CSS, /\.bw-card-body \{[^}]*overflow-y:auto[^}]*scrollbar-width:none/, 'no scrollbar eats the card width');
+  const html = hudCardHtml({ title: 'x', sections: [{ lines: [{ text: 'Farming opens when you finish Verdance (0/9 maps) — then see the Factor', tone: 'gold', oneLine: true }] }] });
+  assert.match(html, /class="bw-card-line t-gold one" title="Farming opens when you finish Verdance \(0\/9 maps\) — then see the Factor">/);
+});
+
 test('createHudCard: render fills the parts, rebuilds only on a change, runs an action and a hotkey', () => {
   const doc = fakeDocument();
   const card = createHudCard(doc, { className: 'x' });
