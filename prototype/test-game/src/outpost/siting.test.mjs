@@ -154,9 +154,9 @@ test('nothing reads map.pads or map.conduits any more (the maps carry neither)',
   const files = [];
   const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { const p = join(d, e.name); if (e.isDirectory()) walk(p); else if (/\.js$/.test(e.name)) files.push(p); } };
   walk(SRC);
-  // constructionFx.js: the farm view's build dust, which lane K moves into the shared render3d FX (it guards a missing
-  // map.pads and draws nothing there); outpostPads.js: the validator that REPORTS a map still carrying pads/conduits
-  const ALLOW = new Set(['outpost/view/constructionFx.js', 'terrain/outpostPads.js']);
+  // outpostPads.js: the validator that REPORTS a map still carrying pads/conduits (constructionFx.js is gone: its effects
+  // are the shared render3d/fx/structureFx.js)
+  const ALLOW = new Set(['terrain/outpostPads.js']);
   const bad = [];
   for (const f of files) {
     const rel = relative(SRC, f).split('\\').join('/');

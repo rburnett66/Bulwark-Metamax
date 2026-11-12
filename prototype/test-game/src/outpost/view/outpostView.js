@@ -33,7 +33,6 @@ import { createFarmCrew } from '../../farm/view/avatar.js';
 import { farmMenu, FARM_MENU, farmAt, farmPanelModel } from '../../farm/view/farmUi.js';
 import { storeCapacity } from '../../farm/model.js';
 import { statusModel } from './statusReport.js';
-import { constructionSites, damageSites, createConstructionFx } from './constructionFx.js';
 import { K as FXK } from '../../render3d/fx/impacts.js';
 import { hudModel, panelModel, KIND_NAME, fmtGold, fmtClock, rigHeadOf } from './hudModel.js';
 import { placementStep, aimValid, IDLE, DEFENSE_STRUCT, isResourceBay, kindOf } from './buildMenu.js';
@@ -680,7 +679,6 @@ async function openOutpostViewInner(opts, stage) {
     refreshMenu();
     if (force) refreshPanel();
   }
-  const siteFx = createConstructionFx({ seed: 41 });
   let frameNo = 0;
 
   // ── probes (visitProbe.js; owner 2026-11-09): now and then a light tank and a trooper come at the online outpost, on the
@@ -755,10 +753,8 @@ async function openOutpostViewInner(opts, stage) {
     stepProbe(dt);
     if (liveAcc === 0) syncFieldStock();
     const out = scene.update(dt, o);
-    // dust and welding sparks on every building under construction (constructionFx.js, the battle's build + repair FX)
+    // construction dust, welding and damage sparks + smoke are the shared render3d FX (fx/structureFx.js, one engine)
     if (r.impacts) {
-      siteFx.step(dt, constructionSites(o, map, clockNow()), r.impacts.emit, FXK, r.impacts.ring, r.tier.key);
-      siteFx.stepDamage(dt, damageSites(o), r.impacts.emit, FXK);   // red sparks off damaged defenses (owner 2026-11-09)
       farmFx.step(dt, o, r.impacts, FXK);   // a few embers drifting off each Fruited plot (none in safe mode)
     }
     if (saleRun) {

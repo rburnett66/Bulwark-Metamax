@@ -53,6 +53,9 @@ import { crumb } from '../../diag/errorLog.js';
 
 const ROOT = new URL('../../../', import.meta.url).href;   // the game root (prototype/test-game/)
 
+/** Has any repair drone finished its work by `now`? (the outpost's d.repair = { at, arrive, done }) */
+export const repairDue = (o, now) => !!(o && o.defenses && o.defenses.some((d) => d.repair && d.repair.done <= now));
+
 /** The outpost's build list on the battle rail: its buildings (the hub is the base, never built), then its defenses. */
 export function outpostCatalogueIds() {
   return [...OUTPOST_BUILDING_KINDS.filter((k) => k !== 'hub'), ...DEFENSE_KINDS].map(outpostStructId);
@@ -295,6 +298,9 @@ async function openSession(opts, opening) {
         since = 0;
         try { view = fromLiveSim(sim, live.link, nowOf()).outpost; scene.sync(view, nowOf(), ctxNow()); }
         catch (e) { console.warn('[outpost] scene sync', e); }
+        // a repair drone finished its work during the visit: settle the save (its clock completes the repair, as it does
+        // while away) and rebuild the live state, so the wreck stands again before the player leaves
+        if (view && repairDue(view, nowOf())) { const keep = ui.selectedStructureId; actOnSave({ type: 'settle' }); ui.selectedStructureId = keep; }
       }
       try { const gp = ghostNow(); scene.setPreview(previewPlan(gp)); scene.setPowerIcons(powerIconsNow(gp)); } catch (e) { console.warn('[outpost] preview conduit', e); }
       try { scene.update(dt, view); } catch (e) { console.warn('[outpost] scene update', e); }

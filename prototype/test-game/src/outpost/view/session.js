@@ -278,6 +278,9 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
           }
         } };
       }
+      // advance only: act() has already run the outpost's clock to `now` (advanceSaved), which finishes what is due —
+      // a repair drone's work (d.repair.done), a build — so a visit settles them without leaving [MM-story_mwc9pkcd_2g]
+      case 'settle': return { outpost: o };
       case 'online': return confirmOnline(o, map, now);
       case 'sell': {
         const r = sell(o, ctx);
