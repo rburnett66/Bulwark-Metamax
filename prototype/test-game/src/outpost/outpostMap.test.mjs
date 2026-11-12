@@ -39,7 +39,7 @@ test('the remote rare rig needs its own station (design §4.5)', () => {
 
 test('the battle loader builds it, with the base on the hub and both raid lanes walking to it', () => {
   const m = buildTerrainMap(FORGE, 1, { seed: 0 });
-  const hub = map.pads.find((p) => p.role === 'hub');
+  const hub = map.hub;
   assert.ok(m.base.x >= hub.x && m.base.x < hub.x + hub.w && m.base.y >= hub.y && m.base.y < hub.y + hub.h);
   const nav = buildNavGrid(m, []);
   const { cols, rows } = m, d = new Int32Array(cols * rows).fill(-1), q = [];
@@ -77,7 +77,7 @@ test('the mesa rim opens for building; the raid grid keeps the cliff (owner 2026
   const m = outpostMapFromForge(forge, 'ground');
   for (const i of rimCells) {
     assert.equal(m.terrain[i], TERRAIN.ROCK_BORDER);
-    assert.ok(buildable(m, i % forge.cols, (i / forge.cols) | 0) || m.pads.some((p) => { const x = i % forge.cols, y = (i / forge.cols) | 0; return x >= p.x && x < p.x + p.w && y >= p.y && y < p.y + p.h; }));
+    assert.ok(buildable(m, i % forge.cols, (i / forge.cols) | 0) || [m.hub, ...m.deposits.map((d) => ({ ...d, w: 2, h: 2 }))].some((p) => { const x = i % forge.cols, y = (i / forge.cols) | 0; return x >= p.x && x < p.x + p.w && y >= p.y && y < p.y + p.h; }));
   }
   assert.equal(m.forge.terrain[rimCells[0]], TERRAIN.CLIFF === forge.terrain[rimCells[0]] ? TERRAIN.CLIFF : forge.terrain[rimCells[0]], 'the raid grid is untouched');
   const ring = new Set(defenseRing(m).map(([x, y]) => y * forge.cols + x));

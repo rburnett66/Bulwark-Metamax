@@ -3,12 +3,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { defenseStructures } from './conduits.js';
-import { constructionSites } from './constructionFx.js';
+import { createBuildFx } from '../../render3d/fx/buildFx.js';
+import { createStructureFx } from '../../render3d/fx/structureFx.js';
+import { K, } from '../../render3d/fx/impacts.js';
+import { SPARK_TINT } from '../../render3d/fx/repairFx.js';
 import { lifecycleLook } from '../../render3d/structures/models.js';
 
 const T = 1_000_000;
 const map = { pads: [{ id: 'p7', x: 10, y: 4, w: 4, h: 4 }] };
-const outpost = (upgrading) => ({ pads: { p7: { kind: 'upgradeBay', tier: 1 } }, building: [],
+// the bay stands at its own spot (S2c.2: model.buildingRect reads `at`); constructionFx.js still reads map.pads (lane K moves it)
+const outpost = (upgrading) => ({ pads: { p7: { kind: 'upgradeBay', tier: 1, at: { x: 10, y: 4, w: 4, h: 4 } } }, building: [],
   defenses: [{ id: 'd1', kind: 'cannon', tier: 1, cell: [5, 5], hp: 400 }], upgrading });
 
 test('the defense on the bay is the battle\'s Upgrading tower (the warm tint)', () => {
@@ -17,12 +21,21 @@ test('the defense on the bay is the battle\'s Upgrading tower (the warm tint)', 
   assert.equal(lifecycleLook(s).key, 'U');
 });
 
-test('the bay throws build dust while the upgrade runs, and stops when it is done', () => {
+test('the bay throws the shared build dust and welding sparks while the upgrade runs, and stops when it is done [MM-story_mwcrfnyf_3c]', () => {
   const o = outpost({ id: 'd1', kind: 'cannon', tier: 2, since: T, done: T + 60000 });
-  const [site] = constructionSites(o, map, T + 15000);
-  assert.deepEqual(site.pos, { x: 13, y: 6 });
-  assert.equal(site.lifecycle, 'Building');
-  assert.ok(Math.abs(site.progress - 0.25) < 1e-9);
-  assert.deepEqual(constructionSites(o, map, T + 60000), []);
-  assert.deepEqual(constructionSites(outpost(null), map, T), []);
+  const run = (u) => {
+    const st = { structures: new Map(defenseStructures(outpost(u), map).map((s) => [s.id, s])) };
+    const dust = createBuildFx({ seed: 2 }), weld = createStructureFx({ seed: 2 });
+    let puffs = 0, blue = 0;
+    for (let i = 0; i < 30; i++) {
+      puffs += dust.step(1 / 30, st, null, () => {}, K);
+      weld.step(1 / 30, st, (kind, x, y, z, vx, vy, vz, life, size, grow, shade) => { if (kind === K.SPARK && shade === SPARK_TINT.repair) blue++; }, K);
+    }
+    return { puffs, blue };
+  };
+  const site = defenseStructures(o, map).find((x) => x.onBay);
+  assert.deepEqual(site.pos, { x: 13.5, y: 6.5 });
+  const busy = run(o.upgrading), idle = run(null);
+  assert.ok(busy.puffs > 0 && busy.blue > 0, JSON.stringify(busy));
+  assert.deepEqual(idle, { puffs: 0, blue: 0 });
 });

@@ -15,6 +15,16 @@ import { harvesterStats, resourceRow, nodeHarvestSec } from '../sim/harvestStats
 /** The tuning (Outpost_Params), by name: Load_Sec, Store_Hours, Deep_Rate_Mult, … */
 export const OUTPOST = Object.freeze({ ...(MAPDATA.outpostParams || {}) });
 
+/**
+ * The landing pad's (the hub's) clearance, in whole cells (One Battle UX S2c.2 [MM-story_mwc9pmbn_2i]; owner playtest
+ * 2026-11-11: "the mining station is too close to the landing pad"). Every building AND defense keeps at least this
+ * many free cells from the hub's footprint (Chebyshev, as the build spacing), wider than the 1 cell buildings keep from
+ * each other. Enforced by the shared placement (outpost/placementRules.js hubClearance → sim/structures.js
+ * spacingConflict); the starting kit and the save migration (outpost/siting.js) place by the same rule. A data dial:
+ * lives here, not in the workbook's Outpost_Params, this round (the workbook is being edited by the Power_Draw retune).
+ */
+export const HUB_CLEARANCE = 2;
+
 /** What the contract grants (design §2.3, owner 2026-11-07): the Outpost Hub only. Everything else is bought. */
 export const GRANTED = Object.freeze(['hub']);
 /** What going online (contract step 1, "Establish") asks for: these four, all powered, the rig on the common ore. */

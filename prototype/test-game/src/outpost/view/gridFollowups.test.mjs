@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { planConduits, conduitRoute, laneRoute, laneGrid, ghostPower, powerCuts, planPowerIcons, withCuts } from './conduits.js';
-import { powerGrids, unlitChains, referenceOutpost } from '../model.js';
+import { powerGrids, unlitChains, referenceOutpost, buildingRect } from '../model.js';
 import { structureDef, POWER_PRIORITY, POWER_PRIORITY_LAST, powerPriority } from '../../data/outpost.js';
 import { MAPDATA } from '../../../content/maps/mapdata.js';
 import { map as groundMap, T0 } from './fixtures.mjs';
@@ -139,7 +139,7 @@ test('on the real Verdance outpost every conduit point between the ends stands o
   const o = referenceOutpost('ground', { seed: 7, map: groundMap, now: T0 });
   const plan = planConduits(o, groundMap);
   assert.ok(plan.length >= 3);
-  const rects = Object.keys(o.pads).map((id) => groundMap.pads.find((p) => p.id === id) || o.pads[id].at).filter(Boolean);
+  const rects = Object.keys(o.pads).map((id) => buildingRect(o, groundMap, id)).filter(Boolean);
   for (const c of plan) {
     for (const p of c.points.slice(1, -1)) {
       const cell = onCell(groundMap, p);

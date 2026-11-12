@@ -25,8 +25,8 @@ test('a building placed off the pads is planned with its own rectangle, so the s
   assert.ok(f1 && f1.kind === 'storage', 'a finished free building is drawn');
   assert.deepEqual(f1.rect, { id: 'f1', x: 5, y: 5, w: 2, h: 2 });
   assert.ok(f2 && f2.building, 'a free building under construction is drawn rising');
-  const padItems = plan.filter((i) => map.pads.some((p) => p.id === i.pad));
-  assert.ok(padItems.length >= 3, 'pad buildings are still drawn');
+  const kitItems = plan.filter((i) => ['hub', 'p1', 'r1', 's1'].includes(i.pad));
+  assert.equal(kitItems.length, 4, 'the hub and the kit (each at its own spot) are drawn too');
 });
 
 test('the battle placeholder block skips outpost buildings (their model is the outpost scene) and sizes others by footprint', () => {

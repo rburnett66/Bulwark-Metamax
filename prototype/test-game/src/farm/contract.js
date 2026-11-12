@@ -42,7 +42,7 @@ export function farmOffer(s, key) {
 
 /** Free ground for a w × h building nearest the outpost's hub (the Farmhouse "at the mesa's foot"). */
 export function spotNearHub(o, map, w, h, cellOk = null) {
-  const hub = (map.pads || []).find((p) => o.pads[p.id] && o.pads[p.id].kind === 'hub') || { x: map.width / 2, y: map.height / 2, w: 0, h: 0 };
+  const hub = map.hub || { x: map.width / 2, y: map.height / 2, w: 0, h: 0 };   // the landing pad (S2c.2: no map pads)
   const c = [hub.x + hub.w / 2, hub.y + hub.h / 2], taken = occupied(o, map);
   let best = null;
   for (let y = 0; y + h <= map.height; y++) {

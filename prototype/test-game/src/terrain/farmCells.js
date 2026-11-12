@@ -11,6 +11,7 @@
  */
 import { TERRAIN, BLOCKING } from './terrainGen.js';
 import { HEIGHT } from './outpostPads.js';
+import { reservedRects } from '../outpost/outpostMap.js';
 
 /** Cell codes, as stored in `farmCells`. NONE: the outpost's (mesa top, pads and their yards) or bare stone. */
 export const FARM_CELL = Object.freeze({ NONE: 0, SOIL: 1, SLOPE: 2, WATER: 3, GROVE: 4, COLLECTION: 5, LANE: 6 });
@@ -34,7 +35,9 @@ export function deriveFarmCells(map, lanes = null) {
   if (!T) return out;
   const mark = (list) => { const s = new Set(); for (const p of list || []) s.add(p.y * cols + p.x); return s; };
   const decor = mark(map.decor), fields = mark(map.resources);
-  const nearPad = (x, y) => (map.pads || []).some((p) => x >= p.x - 1 && x < p.x + p.w + 1 && y >= p.y - 1 && y < p.y + p.h + 1);
+  // the landing pad and the deposits and their 1-cell yard (S2c.2: the maps carry no build pads)
+  const R = reservedRects(map);
+  const nearPad = (x, y) => R.some((p) => x >= p.x - 1 && x < p.x + p.w + 1 && y >= p.y - 1 && y < p.y + p.h + 1);
   const top = (x, y) => x >= 0 && y >= 0 && x < cols && y < rows && H && H[y * cols + x] === HEIGHT.TOP;
   for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
     const i = y * cols + x, t = T[i], h = H ? H[i] : HEIGHT.LOW;

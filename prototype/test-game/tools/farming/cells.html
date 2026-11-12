@@ -32,7 +32,7 @@
   </aside>
 </main>
 <script type="module">
-import { outpostMapFromForge } from '../../src/outpost/outpostMap.js';
+import { outpostMapFromForge, reservedRects } from '../../src/outpost/outpostMap.js';
 import { surfaceFieldGroups } from '../../src/outpost/model.js';
 import { generateTerrain, TERRAIN_COLOR } from '../../src/terrain/terrainGen.js';
 import { stampOutpost } from '../../src/terrain/outpostPads.js';
@@ -45,7 +45,7 @@ const forge = await (await fetch(url, { cache: 'no-store' })).json();
 let derived = false;
 if (!forge.farmCells || !forge.farmCells.length) {   // an older map: derive its layer the way the Forge does
   const g = generateTerrain({ cols: forge.cols, rows: forge.rows, seed: forge.seed, types: forge.types, water: forge.water });
-  stampOutpost(g, { mesa: forge.mesa, pads: forge.pads, spawns: forge.spawns, kitDefenses: forge.kitDefenses });
+  stampOutpost(g, { mesa: forge.mesa, deposits: forge.deposits, clearings: forge.clearings, spawns: forge.spawns, kitDefenses: forge.kitDefenses });
   forge.farmCells = deriveFarmCells(forge, g.lanes); derived = true;
 }
 const map = outpostMapFromForge(forge);
@@ -65,11 +65,12 @@ function draw() {
   ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
   for (let x = 0; x <= W; x++) { ctx.beginPath(); ctx.moveTo(x * PX + 0.5, 0); ctx.lineTo(x * PX + 0.5, H * PX); ctx.stroke(); }
   for (let y = 0; y <= H; y++) { ctx.beginPath(); ctx.moveTo(0, y * PX + 0.5); ctx.lineTo(W * PX, y * PX + 0.5); ctx.stroke(); }
-  for (const p of map.pads) {
+  // the map's fixed spots (S2c.2: the landing pad, the deposits and the clearings — no build pads)
+  for (const p of reservedRects(map)) {
     ctx.fillStyle = 'rgba(20,26,32,.75)'; ctx.fillRect(p.x * PX, p.y * PX, p.w * PX, p.h * PX);
     ctx.strokeStyle = '#e6ebe3'; ctx.lineWidth = 2; ctx.strokeRect(p.x * PX + 1, p.y * PX + 1, p.w * PX - 2, p.h * PX - 2);
     ctx.fillStyle = '#e6ebe3'; ctx.font = '700 10px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(p.id, (p.x + p.w / 2) * PX, (p.y + p.h / 2) * PX);
+    ctx.fillText(p.what === 'the landing pad' ? 'HUB' : p.what.replace(/^the | deposit$/g, '').slice(0, 4), (p.x + p.w / 2) * PX, (p.y + p.h / 2) * PX);
   }
   if (document.getElementById('plots').checked) {
     ctx.strokeStyle = 'rgba(20,40,10,.9)'; ctx.lineWidth = 1.5;

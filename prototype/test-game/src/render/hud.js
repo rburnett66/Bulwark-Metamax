@@ -1028,7 +1028,8 @@ export function updateHud(hud, state, ui) {
     hud.shpfill.style.width = (sfrac * 100).toFixed(1) + '%';
     hud.shptext.textContent = 'HP ' + Math.max(0, Math.ceil(s.hp)) + '/' + Math.ceil(s.maxHp);
 
-    const busy = s.lifecycle === 'Building' || s.lifecycle === 'Upgrading' || s.lifecycle === 'Selling' || s.lifecycle === 'Placing';
+    // a wreck (outpost only: battles never keep one) takes no panel command — the outpost's REPAIR ALL rebuilds it
+    const busy = s.lifecycle === 'Building' || s.lifecycle === 'Upgrading' || s.lifecycle === 'Selling' || s.lifecycle === 'Placing' || s.lifecycle === 'Wrecked';
     const maxTier = def && def.hp ? def.hp.length : 3;
     const upCost = (def && def.cost && s.tier < maxTier) ? def.cost[s.tier] : Infinity;
     // mirror the sim's campaign tier gate (structures.js canUpgrade) so a locked tier reads LOCKED

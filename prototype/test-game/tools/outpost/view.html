@@ -175,7 +175,7 @@ async function open() {
   current = await openOutpostView({ planet: PLANET, tier: document.getElementById('quality').value || null, store, now, raidHook, map,
     reduced: q.get('reduced') === '1' ? true : undefined });
   window.outpost = current.handle;
-  if (q.get('probe') === '1') current.handle.probeNow();   // a visit probe right away (visitProbe.js)
+  if (q.get('probe') === '1' && current.handle && current.handle.probeNow) current.handle.probeNow();   // a visit probe right away (the farm view; the session view runs visit raids)
   window.outpostStore = store;
   window.outpostReady = true;
   current.closed.then(() => { window.outpostReady = false; document.getElementById('closed').style.display = 'grid'; });

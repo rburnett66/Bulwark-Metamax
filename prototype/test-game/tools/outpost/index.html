@@ -94,7 +94,7 @@
 <script type="module">
 import {
   createOutpost, referenceOutpost, confirmOnline, advance, sell, loadsReady, place, upgrade, repair, repairCost, setDeep,
-  raidOutcome, powerGrids, bayCapacity, rigRatePerMin, onlineProblems, status, depositOf,
+  raidOutcome, powerGrids, bayCapacity, rigRatePerMin, onlineProblems, status, buildingRect,
 } from '../../src/outpost/model.js';
 import { outpostMapFor, draftOutpostMap } from '../../src/outpost/outpostMap.js';
 import { mesaFrame, defenseRing, HEIGHT } from '../../src/terrain/outpostPads.js';
@@ -174,9 +174,11 @@ function advanceBy(minutes) {
 // ── drawing ────────────────────────────────────────────────────────────────────────────────────────────────────
 const cv = $('map'), g = cv.getContext('2d');
 const S = 30;                                   // canvas px per cell; the view picks which cells fill the canvas
-const padById = (id) => map.pads.find((p) => p.id === id);
+// S2c.2: no map pads — every building stands on its own rectangle (model.buildingRect)
+const padById = (id) => buildingRect(o, map, id);
+const buildingSpots = () => [...new Set([...Object.keys(o.pads), ...o.building.map((j) => j.pad)])].sort().map((id) => buildingRect(o, map, id)).filter(Boolean);
 const C = (p) => [(p.x + p.w / 2) * S, (p.y + p.h / 2) * S];
-const ROLE_COL = { hub: '#3b4048', power: '#2f3d4f', rig: '#3d3a33', storage: '#3a3f3a', bay: '#383640', spare: '#333333' };
+const KIND_COL = { hub: '#3b4048', power: '#2f3d4f', rig: '#3d3a33', storage: '#3a3f3a', resourceBay: '#383640', upgradeBay: '#383640', habitat: '#383640', pylon: '#2f3d4f' };
 const KIND_LABEL = { hub: 'Hub', power: 'Power', rig: 'Rig', storage: 'Storage', harvesterBay: 'Resource Bay', resourceBay: 'Resource Bay', upgradeBay: 'Upgrade Bay' };
 
 // ── the view: the mesa framed (the default, tech plan §6.1), or the whole map ─────────────────────────
@@ -264,9 +266,9 @@ function draw() {
     }
   }
   // pads
-  for (const p of map.pads) {
+  for (const p of buildingSpots()) {
     const b = o.pads[p.id], bld = o.building.find((x) => x.pad === p.id);
-    g.fillStyle = b ? ROLE_COL[p.role] : 'rgba(24,30,36,0.42)';
+    g.fillStyle = b ? KIND_COL[b.kind] || '#333' : 'rgba(24,30,36,0.42)';
     g.fillRect(p.x * S + 2, p.y * S + 2, p.w * S - 4, p.h * S - 4);
     g.strokeStyle = selected === p.id ? '#f2c869' : grid.off[p.id] ? '#e2564d' : b ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.55)';
     g.lineWidth = selected === p.id ? 4 : 2;
@@ -274,8 +276,7 @@ function draw() {
     g.strokeRect(p.x * S + 2, p.y * S + 2, p.w * S - 4, p.h * S - 4); g.setLineDash([]);
     g.fillStyle = '#e6ebe3'; g.font = `600 ${S * 0.55}px system-ui`; g.textAlign = 'center';
     const [cx, cy] = C(p);
-    g.fillText(b ? `${KIND_LABEL[b.kind]} ${['', 'I', 'II', 'III'][b.tier]}` : `${p.id} · ${p.role}`, cx, cy - S * 0.2);
-    if (p.remote && !b) { g.font = `${S * 0.42}px system-ui`; g.fillStyle = '#c9d4cf'; g.fillText('remote site', cx, cy + S * 0.4); }
+    g.fillText(b ? `${KIND_LABEL[b.kind] || b.kind} ${['', 'I', 'II', 'III'][b.tier]}` : `${p.id} · ${bld.kind}`, cx, cy - S * 0.2);
     g.font = `${S * 0.42}px system-ui`; g.fillStyle = '#9fb0aa';
     if (b && b.kind === 'rig') {
       const ore = ORES.find((x) => x.tier === b.deposit), units = Object.values(o.storage[p.id] || {}).reduce((a, v) => a + v, 0), cap = bayCapacity(o, p.id);
@@ -334,12 +335,8 @@ function renderPanel(grid) {
     btn(`Repair (${cost})`, () => act(repair(o, d.id, ctx()), 'repaired'), !cost);
     return;
   }
-  const pad = map.pads.find((p) => p.id === selected), b = o.pads[selected];
-  if (!b) {
-    $('sel').textContent = `Pad ${pad.id} (${pad.role}${pad.remote ? ', remote' : ''})${depositOf(map, pad.id) ? `, on the ${depositOf(map, pad.id)} deposit` : ''}: empty.`;
-    for (const kind of ['rig', 'power', 'storage', 'resourceBay', 'upgradeBay']) btn(`Build ${KIND_LABEL[kind]} (${structureDef(kind, 1).cost})`, () => act(place(o, { pad: pad.id, kind }, ctx()), `started a ${KIND_LABEL[kind]}`));
-    return;
-  }
+  const pad = buildingRect(o, map, selected), b = o.pads[selected];
+  if (!b) { $('sel').textContent = pad ? `${selected}: under construction.` : 'Nothing selected.'; return; }
   const next = structureDef(b.kind, b.tier + 1);
   $('sel').textContent = `${KIND_LABEL[b.kind]} ${['', 'I', 'II', 'III'][b.tier]} on ${pad.id}${grid.off[pad.id] ? `, unpowered (${grid.off[pad.id]})` : grid.powered.has(pad.id) ? ', powered' : ''}`
     + (b.kind === 'rig' ? `: bay ${fmt(Object.values(o.storage[pad.id] || {}).reduce((a, v) => a + v, 0))} / ${fmt(bayCapacity(o, pad.id, map))}` : '');
@@ -360,7 +357,7 @@ cv.addEventListener('click', (e) => {
   const cell = [Math.floor(x), Math.floor(y)];
   if (placing) { const k = placing; placing = null; act(place(o, { kind: k, cell }, ctx()), `placed a ${k}`); return; }
   const d = o.defenses.find((q) => q.cell[0] === cell[0] && q.cell[1] === cell[1]);
-  const p = map.pads.find((q) => x >= q.x && x < q.x + q.w && y >= q.y && y < q.y + q.h);
+  const p = buildingSpots().find((q) => x >= q.x && x < q.x + q.w && y >= q.y && y < q.y + q.h);
   selected = d ? d.id : p ? p.id : null;
   draw();
 });

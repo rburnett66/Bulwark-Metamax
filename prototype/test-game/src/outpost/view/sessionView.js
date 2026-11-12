@@ -1,7 +1,8 @@
 /**
  * src/outpost/view/sessionView.js — the outpost on the shared BATTLE SESSION [MM-subtask_mwciiylh_31]
- * (S2.4a of One Battle UX, TECH_PLAN::One-Battle-UX.md §4). Opened instead of outpostView.js while `?outpost=session`
- * is in the URL; the old view stays the default until the owner's playtest (S2.4d deletes it).
+ * (S2.4a of One Battle UX, TECH_PLAN::One-Battle-UX.md §4). Since S2.4d [MM-story_mwc9pkcd_2g] this IS the outpost:
+ * outpostView.js opens it for the OUTPOST tab, for everyone (the old pad-based view is deleted; ?outpost=session is
+ * still accepted and changes nothing).
  *
  * Owner 2026-11-11: "users are trained to work with camera, characters, and structure in one pattern … we should never
  * have to change UX in two places." So this view writes no input, camera, placement, build rail, selection panel or
@@ -51,8 +52,9 @@ import { loadMissionCatalog } from '../../save/missionCatalog.js';
 import { crumb } from '../../diag/errorLog.js';
 
 const ROOT = new URL('../../../', import.meta.url).href;   // the game root (prototype/test-game/)
-/** Is the session path asked for? (?outpost=session) */
-export const sessionViewWanted = (win) => { try { return new URLSearchParams(win.location.search).get('outpost') === 'session'; } catch (e) { return false; } };
+
+/** Has any repair drone finished its work by `now`? (the outpost's d.repair = { at, arrive, done }) */
+export const repairDue = (o, now) => !!(o && o.defenses && o.defenses.some((d) => d.repair && d.repair.done <= now));
 
 /** The outpost's build list on the battle rail: its buildings (the hub is the base, never built), then its defenses. */
 export function outpostCatalogueIds() {
@@ -70,7 +72,18 @@ function bankVisit(store, planet, outpost, gold) {
   });
 }
 
+/** Open the outpost. A failure while opening takes its full-screen host away again (never a dead end over the menu). */
 export async function openOutpostSessionView(opts = {}) {
+  const opening = { host: null };
+  try { return await openSession(opts, opening); } catch (e) {
+    console.error('[outpost] the outpost failed to open', e);
+    crumb('outpost: failed to open · ' + ((e && e.message) || e));
+    if (opening.host) opening.host.remove();
+    throw e;
+  }
+}
+
+async function openSession(opts, opening) {
   const planet = opts.planet || 'ground';
   const doc = (opts.mount && opts.mount.ownerDocument) || document;
   const mount = opts.mount || doc.body;
@@ -85,6 +98,7 @@ export async function openOutpostSessionView(opts = {}) {
   host.className = 'outpost-view outpost-session';
   Object.assign(host.style, { position: 'fixed', inset: '0', zIndex: '2000', background: '#0f1412', overflow: 'hidden', touchAction: 'none' });
   mount.appendChild(host);
+  opening.host = host;
 
   const map = opts.map || await outpostMapFor(planet);
   const catalog = opts.catalog !== undefined ? opts.catalog : await loadMissionCatalog().catch(() => null);
@@ -284,6 +298,9 @@ export async function openOutpostSessionView(opts = {}) {
         since = 0;
         try { view = fromLiveSim(sim, live.link, nowOf()).outpost; scene.sync(view, nowOf(), ctxNow()); }
         catch (e) { console.warn('[outpost] scene sync', e); }
+        // a repair drone finished its work during the visit: settle the save (its clock completes the repair, as it does
+        // while away) and rebuild the live state, so the wreck stands again before the player leaves
+        if (view && repairDue(view, nowOf())) { const keep = ui.selectedStructureId; actOnSave({ type: 'settle' }); ui.selectedStructureId = keep; }
       }
       try { const gp = ghostNow(); scene.setPreview(previewPlan(gp)); scene.setPowerIcons(powerIconsNow(gp)); } catch (e) { console.warn('[outpost] preview conduit', e); }
       try { scene.update(dt, view); } catch (e) { console.warn('[outpost] scene update', e); }

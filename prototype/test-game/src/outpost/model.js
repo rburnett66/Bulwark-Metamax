@@ -27,9 +27,12 @@
  * finished, powered Storage Tower raises every rig's bay to Bay_Hours; an unpowered tower's door is closed. Ore
  * already stored is never lost to a power cut, and the hub can always ship it (sell).
  *
- * The map (Forge format, tech plan §6.6; src/outpost/draftLayout.js until O4): { pads: [{ id, x, y, w, h, role,
- * remote }], deposits: [{ tier, pad }], kitDefenses: [{ kind, cell }] } — kitDefenses is the reference defense set
- * (referenceOutpost, the raid measurement); it is not granted.
+ * The map (Forge format, tech plan §6.6; outpostMap.js): { hub: { id, x, y, w, h } (the landing pad), deposits:
+ * [{ tier, x, y }] (2 × 2 cells each), kitDefenses: [{ kind, cell }] } — kitDefenses is the reference defense set
+ * (referenceOutpost, the raid measurement); it is not granted. No build pads (One Battle UX S2c.2
+ * [MM-story_mwc9pmbn_2i]): a building's key in o.pads is just its id; where it stands is its own `at` rectangle
+ * (buildingRect). Old saves keyed buildings by the map pads they stood on — legacyPads.js remembers those rectangles
+ * and siting.js migrateOutpostLayout moves such buildings onto their own `at`.
  *
  * Harvesters (story O10, design §6, §6.2): a finished, powered Resource Bay sends its harvesters to the outpost map's
  * surface fields (common and uncommon, off the mesa). They drive and load at the battle harvest rate (data/outpost.js
@@ -54,7 +57,10 @@
 import { createRng } from '../sim/rng.js';
 import { ASSUMPTIONS, getStructureDef } from '../data/tables.js';
 import { oresOf, oreById, oreItemId } from '../data/ores.js';
-import { POWER_NODE_KINDS } from '../data/outpostStructures.js';
+import { POWER_NODE_KINDS, outpostStructId } from '../data/outpostStructures.js';
+import { legacyPadRect } from './legacyPads.js';
+import { referenceKit, LAYOUT_VERSION } from './siting.js';
+import { reservedRects } from './outpostMap.js';
 import { OUTPOST, structureDef, DEFENSE_KINDS, GUN_KINDS, canonicalKind, harvesterDef, harvesterRate, surfaceStock, powerPriority } from '../data/outpost.js';
 // the farm is a layer on the outpost (owner rule 7): it grows inside this advance() and its buildings join this power grid
 import { growFarm, farmBuildEvents } from '../farm/grow.js';
@@ -67,23 +73,41 @@ const clone = (o) => (typeof structuredClone === 'function' ? structuredClone(o)
 const P = (ctx) => (ctx && ctx.params) || OUTPOST;
 
 // ── the map ──────────────────────────────────────────────────────────────────────────────────────────────────────
-const padOf = (map, id) => map.pads.find((p) => p.id === id) || null;
 /**
- * Where a building stands, as a rectangle { id, x, y, w, h } [MM-story_mwc9pmbn_2i]. A building placed freely on the
- * shared battle placement (One Battle UX S2c) carries its own `at` rectangle; one on a map pad is that pad. Every
- * "where is this building" question goes through here, so free and pad buildings answer alike. id: its key in o.pads
- * (or a construction job's `pad`).
+ * Where a building stands, as a rectangle { id, x, y, w, h } [MM-story_mwc9pmbn_2i]. Every building carries its own
+ * `at` rectangle (One Battle UX S2c); the hub stands on the map's landing pad (map.hub); a building from a save written
+ * before S2c.2 that has no `at` yet stands where its legacy map pad was (legacyPads.js — the same rectangle, so
+ * nothing moves). Every "where is this building" question goes through here. id: its key in o.pads (or a
+ * construction job's `pad`). → the rect, or null when there is no such building.
  */
 export function buildingRect(o, map, id) {
-  const b = (o.pads && o.pads[id]) || ((o.building || []).find((j) => j.pad === id)) || null;
-  if (b && b.at) return { id, x: b.at.x, y: b.at.y, w: b.at.w, h: b.at.h };
-  return padOf(map, id);
+  const b = (o.pads && o.pads[id]) || ((o.building || []).find((j) => j.pad === id && j.at)) || ((o.building || []).find((j) => j.pad === id)) || null;
+  if (!b) return null;
+  if (b.at) return { id, x: b.at.x, y: b.at.y, w: b.at.w, h: b.at.h };
+  if (b.kind === 'hub' && map && map.hub) return { id, x: map.hub.x, y: map.hub.y, w: map.hub.w, h: map.hub.h };
+  return legacyPadRect(map, id);
+}
+/**
+ * The ground the outpost's fixed features and buildings take: the map's landing pad and deposits (outpostMap.js
+ * reservedRects), then every building and construction job where it stands (buildingRect), by id. → [{ x, y, w, h, what }].
+ * What the farm keeps off and its walkers walk round (it replaced "the map's pads").
+ */
+export function takenRects(o, map) {
+  const out = reservedRects(map);
+  const ids = [...new Set([...Object.keys((o && o.pads) || {}), ...((o && o.building) || []).map((j) => j.pad)])].sort();
+  for (const id of ids) {
+    const kind = ((o.pads && o.pads[id]) || (o.building || []).find((j) => j.pad === id) || {}).kind;
+    if (kind === 'hub') continue;   // the landing pad, above
+    const r = buildingRect(o, map, id);
+    if (r) out.push({ x: r.x, y: r.y, w: r.w, h: r.h, what: `${kind} ${id}` });
+  }
+  return out;
 }
 const centre = (p) => [p.x + p.w / 2, p.y + p.h / 2];
 const cellCentre = (c) => [c[0] + 0.5, c[1] + 0.5];
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
-/** The deposit tier a rig pad sits on, or null. */
-export const depositOf = (map, padId) => (map.deposits.find((d) => d.pad === padId) || {}).tier || null;
+/** The deposit tier a rig standing on rectangle `rect` mines (its top-left on the deposit's, the rig rule), or null. */
+export const depositAt = (map, rect) => (rect && ((map && map.deposits) || []).find((d) => d.x === rect.x && d.y === rect.y) || {}).tier || null;
 
 // ── the seed and the raid schedule ───────────────────────────────────────────────────────────────────────────────
 function mix(a, b) {
@@ -171,14 +195,9 @@ function outpostRaids(o, fromWindow, toWindow, params) {
 }
 
 // ── creating the outpost (the contract grants the hub) ───────────────────────────────────────────────────────────
-const firstPad = (map, role, f = () => true) => map.pads.find((p) => p.role === role && !p.remote && f(p));
-/** The default pads the first setup goes on: { hub, power, rig (on the common deposit), storage } → pad ids. */
-export function defaultPads(map) {
-  const id = (p) => (p ? p.id : null);
-  return {
-    hub: id(firstPad(map, 'hub')), power: id(firstPad(map, 'power')),
-    rig: id(firstPad(map, 'rig', (p) => depositOf(map, p.id) === 'common')), storage: id(firstPad(map, 'storage')),
-  };
+/** The reference kit's building ids: { hub, power, rig (on the common deposit), storage } (siting.js referenceKit). */
+export function defaultPads() {
+  return { hub: 'hub', power: 'p1', rig: 'r1', storage: 's1' };
 }
 
 /**
@@ -189,8 +208,9 @@ export function defaultPads(map) {
 export function createOutpost(planet, { seed, map, now }) {
   return {
     planet, seed: seed >>> 0, online: false, t: now, firstRaidAt: null,
-    pads: { [firstPad(map, 'hub').id]: { kind: 'hub', tier: 1 } }, building: [], defenses: [], storage: {},
+    pads: { [(map.hub && map.hub.id) || 'hub']: { kind: 'hub', tier: 1 } }, building: [], defenses: [], storage: {},
     harvesters: 0, hopper: {}, fields: {}, raids: { window: null, log: [] }, sold: {},
+    layout: LAYOUT_VERSION,   // sited by the S2c.2 rules from the start (siting.js migrateOutpostLayout skips it)
     lifetime: newLifetime(now),
   };
 }
@@ -199,15 +219,15 @@ export function createOutpost(planet, { seed, map, now }) {
  * The reference outpost (the former contract kit): the hub, Power Station I, a Rig I on the common deposit, Storage
  * Tower I, all finished, and the map's `kitDefenses` (the reference "starter defense set" the raid measurement uses,
  * tech plan §4.3). Nothing in play grants it; the measurement, the tests and the review pages build it directly.
+ * Where each piece stands is siting.js referenceKit: by the shared placement rules (the hub clearance, the 1-cell
+ * build spacing, the rig on its deposit), deterministic per map.
  */
 export function referenceOutpost(planet, { seed, map, now }) {
   const o = createOutpost(planet, { seed, map, now });
-  const d = defaultPads(map);
-  o.pads[d.power] = { kind: 'power', tier: 1 };
-  o.pads[d.rig] = { kind: 'rig', tier: 1, deposit: 'common', deep: false };
-  o.pads[d.storage] = { kind: 'storage', tier: 1 };
-  o.storage[d.rig] = {};
-  o.defenses = (map.kitDefenses || []).map((k, i) => ({
+  const kit = referenceKit(map);
+  for (const [id, b] of Object.entries(kit.pads)) o.pads[id] = clone(b);
+  o.storage[defaultPads().rig] = {};
+  o.defenses = kit.defenses.map((k, i) => ({
     id: `d${i + 1}`, kind: k.kind, tier: 1, cell: [...k.cell], hp: structureDef(k.kind, 1).battle.hp,
   }));
   return o;
@@ -414,11 +434,12 @@ export const HARVEST_TIERS = Object.freeze(['common', 'uncommon']);
 const ROLE_TIER = { primary: 'common', premium: 'uncommon' };
 /**
  * The surface fields the harvesters can reach: the outpost map's resources (Forge `resources`) of the two tiers, off
- * the mesa (heights > 0) and off the pads and their 1-cell margin, the cells the view draws. -> [{ x, y, tier }]
+ * the mesa (heights > 0) and off the map's landing pad and deposits and their 1-cell margin (outpostMap.js
+ * reservedRects), the cells the view draws. -> [{ x, y, tier }]
  */
 export function surfaceFields(map) {
-  const cols = map.width, H = map.heights;
-  const onPad = (x, y) => (map.pads || []).some((p) => x >= p.x - 1 && x < p.x + p.w + 1 && y >= p.y - 1 && y < p.y + p.h + 1);
+  const cols = map.width, H = map.heights, R = reservedRects(map);
+  const onPad = (x, y) => R.some((p) => x >= p.x - 1 && x < p.x + p.w + 1 && y >= p.y - 1 && y < p.y + p.h + 1);
   return (map.resources || []).filter((r) => ROLE_TIER[r.role] && !(H && H[r.y * cols + r.x] > 0) && !onPad(r.x, r.y))
     .map((r) => ({ x: r.x, y: r.y, tier: ROLE_TIER[r.role] }));
 }
@@ -851,11 +872,7 @@ export function sell(outpost, ctx = {}, { buyer = null } = {}) {
 }
 
 // ── building, upgrading, repairing (design §6, §6.1) ─────────────────────────────────────────────────────────────
-const ROLE_FITS = {
-  hub: ['hub'], power: ['power', 'spare'], rig: ['rig'], storage: ['storage'],
-  resourceBay: ['bay', 'spare'], upgradeBay: ['bay', 'spare'], habitat: ['bay', 'spare'],
-};
-/** The pad kinds the build list offers (everything but the granted hub), and the defenses (placed on cells). */
+/** The building kinds the build list offers (everything but the granted hub), and the defenses (placed on cells). */
 export const PAD_KINDS = Object.freeze(['power', 'rig', 'storage', 'resourceBay', 'upgradeBay', 'habitat']);
 
 // ── the gun cap (owner 2026-11-07, design §6, story O15) ─────────────────────────────────────────────────────────
@@ -889,9 +906,13 @@ export function gunRefusalFor(n, h, params = OUTPOST) {
 const busy = (o, pad) => !!o.pads[pad] || o.building.some((b) => b.pad === pad);
 
 /**
- * Build something new on an empty pad, or a defense on a free cell, with the player's gold (owner 2026-11-07: the
- * contract grants only the hub). what: { pad, kind } with kind one of PAD_KINDS ('harvesterBay' is read as
- * 'resourceBay'), or { cell, kind } with kind one of DEFENSE_KINDS ('mg', 'cannon', 'wall').
+ * Build something new, or a defense on a free cell, with the player's gold (owner 2026-11-07: the contract grants only
+ * the hub). what: { kind, at: { x, y }, pad? } with kind one of PAD_KINDS ('harvesterBay' is read as 'resourceBay'):
+ * the building's top-left cell (its footprint from the data) and optionally its id (default the next free 'f<n>'). An
+ * old caller's { pad } alone (the tests and review pages): a reference-kit id (p1 / r1 / s1) stands where the kit puts
+ * it (siting.js referenceKit), any other legacy pad id where that pad was (legacyPads.js). Or { cell, kind } with kind one of
+ * DEFENSE_KINDS ('mg', 'cannon', 'wall'). The game places through the battle sim (liveSim.js); this is the save-side
+ * rule S3 retires. A rig must stand on a deposit (its top-left on the deposit's).
  * ctx: { map, gold, now, unlockedTiers: ['common', …], unlocks: Set|[] of tech ids }.
  * → { outpost, cost } or { error }. A pad building goes into `building` and lands after its Build_Sec (advance()
  * finishes it); a defense is placed at once, at full HP; only repair() restores HP afterwards.
@@ -913,7 +934,9 @@ export function place(outpost, what, ctx) {
   if (DEFENSE_KINDS.includes(kind)) {
     if (!what.cell) return { error: 'a defense goes on a cell' };
     if (o.defenses.some((d) => d.cell[0] === what.cell[0] && d.cell[1] === what.cell[1])) return { error: 'that cell is taken' };
-    if (map.pads.some((p) => what.cell[0] >= p.x && what.cell[0] < p.x + p.w && what.cell[1] >= p.y && what.cell[1] < p.y + p.h)) return { error: 'defenses go off the pads' };
+    const inR = (p) => what.cell[0] >= p.x && what.cell[0] < p.x + p.w && what.cell[1] >= p.y && what.cell[1] < p.y + p.h;
+    const ids = [...new Set([...Object.keys(o.pads), ...o.building.map((b) => b.pad)])];
+    if ((map.hub && inR(map.hub)) || ids.some((id) => { const r = buildingRect(o, map, id); return r && inR(r); })) return { error: 'defenses go off the buildings' };
     const n = Math.max(0, ...o.defenses.map((d) => +d.id.slice(1) || 0)) + 1;
     const nd = { id: `d${n}`, kind, tier: 1, cell: [...what.cell], hp: def.battle.hp };
     // owner 2026-11-10 (tower parity): a defense is built over its buildSec, as a battle tower is; it does not fight a
@@ -922,18 +945,22 @@ export function place(outpost, what, ctx) {
     o.defenses.push(nd);
     return { outpost: o, cost: def.cost };
   }
-  const pad = padOf(map, what.pad);
-  if (!pad) return { error: `no pad ${what.pad}` };
-  if (busy(o, pad.id)) return { error: `pad ${pad.id} is taken` };
-  if (!(ROLE_FITS[kind] || []).includes(pad.role)) return { error: `a ${kind} cannot go on a ${pad.role} pad` };
+  const taken = new Set([...Object.keys(o.pads), ...o.building.map((b) => b.pad)]);
+  const id = what.pad || `f${1 + Math.max(0, ...[...taken].filter((x) => /^f\d+$/.test(x)).map((x) => +x.slice(1)))}`;
+  if (busy(o, id)) return { error: `${id} is taken` };
+  const fp = getStructureDef(outpostStructId(kind)).footprint || { w: 2, h: 2 };
+  const kitAt = what.at ? null : ((referenceKit(map).pads[id] || {}).at || null);
+  const legacy = what.at ? null : kitAt || legacyPadRect(map, id);
+  const at = what.at ? { x: what.at.x, y: what.at.y, w: fp.w, h: fp.h } : legacy ? { x: legacy.x, y: legacy.y, w: fp.w, h: fp.h } : null;
+  if (!at) return { error: `no spot for ${id}: give its cell (at)` };
   let deposit;
   if (kind === 'rig') {
-    deposit = depositOf(map, pad.id);
+    deposit = depositAt(map, at);
     if (!deposit) return { error: 'a rig goes on a deposit' };
     if (!(ctx.unlockedTiers || ['common']).includes(deposit)) return { error: `the ${deposit} ore is not unlocked` };
   }
-  o.building.push({ pad: pad.id, kind, tier: 1, done: now + def.buildSec * 1000, ...(deposit ? { deposit } : {}) });
-  return { outpost: o, cost: def.cost };
+  o.building.push({ pad: id, kind, tier: 1, done: now + def.buildSec * 1000, at, ...(deposit ? { deposit } : {}) });
+  return { outpost: o, cost: def.cost, id };
 }
 
 /** Upgrade the building on a pad to its next tier (Power Station II, Rig Mk II, Storage Tower II). */
@@ -1089,7 +1116,7 @@ export function repairCost(o, id, params = OUTPOST) {
  */
 export function droneHome(o, map) {
   const id = Object.keys(o.pads || {}).sort().find((p) => o.pads[p].kind === 'hub');
-  const pad = id && map && map.pads ? map.pads.find((p) => p.id === id) : null;
+  const pad = id && map ? buildingRect(o, map, id) : null;
   return pad ? [pad.x + pad.w / 2, pad.y + pad.h / 2] : null;
 }
 /** A repair drone's flight from the hub to a defense, in ms (Repair_Drone_Speed cells / s). */
