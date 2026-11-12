@@ -1,6 +1,7 @@
 /**
- * src/menu/farmButton.js — what the main menu's FARM button shows (Farming-Design §2.3, story A5)
- * [MM-story_mwabgpsa_e].
+ * src/menu/farmButton.js — the farm's status on the main menu (Farming-Design §2.3, story A5) [MM-story_mwabgpsa_e].
+ * Since S6 [MM-story_mwcgbd9q_2y] there is no FARM button (owner 2026-11-11: the farm is the outpost's FARM tab): this
+ * status joins the OUTPOST button's line ("… · farm: 2 plots fruited") and its red dot (menu.js refreshOutpost).
  *
  * The OUTPOST button's twin (src/menu/outpostButton.js), on the same outpost: locked until a farming contract is
  * accepted ("Upgrade a Mining Rig to Mk II, then accept a farming contract aboard a capital ship"). Its status line

@@ -251,6 +251,13 @@ function onPointerDown(handle, ev) {
     return;
   }
 
+  // A MODE'S OWN GROUND (opts.onGroundTap, e.g. the outpost farm's plots [MM-story_mwc9q1y6_2n]): a tap on a cell with no
+  // structure goes to the mode first; when it takes the tap (a plot selected) the battle selection clears. Battles set none.
+  if (handle.onGroundTap && findStructureAtCell(state, cell) === null && findUnitAtCell(state, cell) === null && handle.onGroundTap(cell, ui)) {
+    ui.selectedStructureId = null; ui.selectedUnitId = null; ui.selectedResourceId = null;
+    return;
+  }
+
   // Selection mode: click a structure to select; else a unit (enemy/defender) to inspect its range; else deselect.
   const structId = findStructureAtCell(state, cell);
   ui.selectedStructureId = structId;
@@ -303,7 +310,7 @@ function onKeyDown(handle, ev) {
 
   const buildIdx = BUILD_KEYS.indexOf(key);
   if (buildIdx !== -1) {
-    const order = handle.buildOrder;
+    const order = handle.catalogue ? handle.catalogue.shown() : handle.buildOrder;   // the visible tab's items
     if (buildIdx < order.length) {
       const structId = order[buildIdx];
       const locked = handle.catalogue && handle.catalogue.isLocked(structId);
@@ -378,6 +385,7 @@ export function createInput(canvas, renderer, getState, submit, ui, opts = {}) {
     pick: opts.pick || null,
     catalogue: opts.catalogue || null,
     buildOrder: buildOrder(opts.catalogue),
+    onGroundTap: typeof opts.onGroundTap === 'function' ? opts.onGroundTap : null,
     listeners: [],
     destroyed: false,
   };

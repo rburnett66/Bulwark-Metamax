@@ -708,7 +708,7 @@ export function boot(mountEl, seed) {
     // is open and is rebuilt when it closes — two at once crashed the page on an iPhone (owner 2026-11-07)
     onOutpostOpen: () => { session.suspend3D(); },
     onOutpostClose: () => { session.resume3D(); },
-    // OUTPOST (O8): the menu opens the outpost view itself (O6, src/outpost/view/outpostView.js) and calls
+    // OUTPOST (O8): the menu opens the outpost itself (src/outpost/view/sessionView.js; S6: its FARM tab is the farm) and calls
     // onTechChanged when it closes, so the next battle sees the bank the outpost changed
     // a Battle History card's REPLAY (O8): that battle's own stored replay
     hasReplay: (at) => !!replayFor(replayStore, at),

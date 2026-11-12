@@ -4,9 +4,9 @@ import assert from 'node:assert/strict';
 import { map, T0 } from './view/fixtures.mjs';
 import { referenceOutpost } from './model.js';
 import { toLiveSim } from './liveSim.js';
-import { createVisitRaids } from './visitRaids.js';
-import { probeDelay, probeRules, PROBE_FIRST_S } from './view/visitProbe.js';
+import { createVisitRaids, probeDelay, probeUnits, probeRules, PROBE_FIRST_S, PROBE_GAP_S } from './visitRaids.js';
 import { OUTPOST, raidFor } from '../data/outpost.js';
+import '../data/factions.js';
 import { stepSim, FIXED_DT, createSim } from '../sim/core.js';
 
 function visit(seed = 7) {
@@ -96,4 +96,35 @@ test('a visit probe is mild: the starter kit kills it, loses < 25% HP on any def
 test('a battle (no endless flag) still wins when its last wave clears', () => {
   const s = createSim(7, { waves: [{ faction: 'Ground / Powder', spawns: [] }] });
   assert.equal(s.waves.endless, undefined);
+});
+
+// the probes' timing and raiders (moved from view/visitProbe.js with the old farm view's deletion, S6)
+test('probes come 45–75 s into a visit, then every 100–180 s, the same for the same seed', () => {
+  for (const seed of [1, 11, 999]) {
+    const d0 = probeDelay(seed, 0);
+    assert.ok(d0 >= PROBE_FIRST_S[0] && d0 <= PROBE_FIRST_S[1], `first ${d0}`);
+    for (let n = 1; n < 6; n++) { const d = probeDelay(seed, n); assert.ok(d >= PROBE_GAP_S[0] && d <= PROBE_GAP_S[1], `gap ${d}`); }
+    assert.equal(probeDelay(seed, 3), probeDelay(seed, 3));
+  }
+});
+
+test('a probe is the planet\'s light tank and a trooper, a second tank every other time', () => {
+  assert.deepEqual(probeUnits('ground', 0), ['GND-Tanks', 'GND-Troops']);
+  assert.deepEqual(probeUnits('ground', 1), ['GND-Tanks', 'GND-Troops', 'GND-Tanks']);
+  for (const p of ['air', 'water', 'dark', 'greenies']) assert.ok(probeUnits(p, 0).some((u) => /-Tanks$/.test(u)), p);
+});
+
+
+// S6 [MM-story_mwc9q1y6_2n]: a visit raid tramples the farm as a raid does — the cells its raiders stood on, once it clears
+test('a cleared visit raid hands over the cells its raiders stood on, once, the same every run', () => {
+  const a = visit(11), b = visit(11);
+  let got = null, at = -1;
+  run(a.state, a.raids, 400, () => { const c = a.raids.takeCells(); if (c && !got) { got = c; at = a.state.time; } });
+  assert.ok(got && got.length > 0, 'the first raid reported cells when it cleared');
+  assert.ok(got.every((c) => Array.isArray(c) && Number.isInteger(c[0]) && Number.isInteger(c[1])), 'whole [x, y] cells');
+  assert.equal(a.raids.takeCells(), null, 'handed over once');
+  let again = null;
+  run(b.state, b.raids, 400, () => { const c = b.raids.takeCells(); if (c && !again) again = c; });
+  assert.deepEqual(again, got, 'same seed, same cells');
+  assert.ok(at > 0);
 });

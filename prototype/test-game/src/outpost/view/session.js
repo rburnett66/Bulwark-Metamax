@@ -25,7 +25,6 @@ import { structureDef, OUTPOST, OUTPOST_TECH_IDS } from '../../data/outpost.js';
 import { raidHookFor } from './raidSeam.js';
 import { migrateOutpostLayout, LAYOUT_VERSION } from '../siting.js';
 import { awayReportModel } from './awayReport.js';
-import { applyProbeWear } from './visitProbe.js';
 import { trample, placePlot, placeFarmBuilding, prep, plant, harvest, harvestAll, applyFarmLoss } from '../../farm/model.js';
 // the FARM tab (story A7): the farm's actions run through this same session, on the same save and settle (owner rule 7)
 import { cellRule } from '../../farm/cells.js';
@@ -304,12 +303,12 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         return cost ? { outpost: cur, cost } : { error: 'nothing is worn' };
       }
       case 'deep': return setDeep(o, a.pad, a.on, ctx);
-      // the wear a visit probe left on the defenses (visitProbe.js): HP only, never ore or buildings; and the farm plots
-      // its raiders crossed (a.cells, probeCells), trampled as a raid tramples them (Farming-Design §10, story A11)
-      case 'probeWear': {
-        const wear = a.wear || [], tr = trample(o, a.cells || []);
-        if (!wear.length && !tr.trampled.length) return { error: 'no wear' };
-        return { outpost: wear.length ? applyProbeWear(tr.outpost, wear) : tr.outpost, trampled: tr.trampled };
+      // the farm plots a visit raid's raiders crossed (a.cells: visitRaids.js takeCells), trampled as a raid tramples
+      // them (Farming-Design §10, story A11). The raid's wear on the defenses is the live sim's own (S2.4c).
+      case 'trample': {
+        const tr = trample(o, a.cells || []);
+        if (!tr.trampled.length) return { error: 'nothing trampled' };
+        return { outpost: tr.outpost, trampled: tr.trampled };
       }
       // the Upgrade Bay (story O10): a defense to its next tier, as far as the tech tree's tier
       case 'upgradeDefense': return upgradeDefense(o, a.id, ctx);

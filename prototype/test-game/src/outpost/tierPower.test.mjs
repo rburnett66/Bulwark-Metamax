@@ -153,7 +153,8 @@ test('the save session passes the warning on: an upgrade that shorts the grid su
 
 test('the live (battle-session) path: the battle U command on a rig, then the save check flags it', () => {
   const o = referenceOutpost('ground', { seed: 7, map: forgeMap, now: T0 });
-  const { state, link } = toLiveSim(o, { map: forgeMap, now: T0, gold: 1e6 });
+  // Rig Mk II is owned: the live upgrade asks the outpost's tech gate too [MM-task_mwcunn53_3f]
+  const { state, link } = toLiveSim(o, { map: forgeMap, now: T0, gold: 1e6, unlocks: ['rig_mk2'] });
   const rigPad = defaultPads(forgeMap).rig;
   const sid = [...link.ids.entries()].find(([, e]) => e.pad === rigPad)[0];
   const res = applyCommand(state, { type: 'upgrade', id: sid });

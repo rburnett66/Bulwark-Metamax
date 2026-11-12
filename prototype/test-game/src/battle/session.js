@@ -48,10 +48,12 @@ export function hudInsets(mountEl) {
  *   mapId             → the starting board's map id (FX scale tiers)
  *   mountOptions()    → per-mount 3D options the mode decides: { planet, landing, landingHeld, render3d }, where
  *                       render3d is merged last into createRenderer3D's options (the outpost: no craft, its base url)
- *   catalogue         → what the build rail and the number keys offer (battle/catalogue.js; default: the campaign's)
+ *   catalogue         → what the build rail and the number keys offer (battle/catalogue.js; default: the campaign's;
+ *                       a mode may give it several tabs, e.g. the outpost's BUILD | FARM)
+ *   onGroundTap(cell) → a mode's own ground (the outpost farm's plots): true when it took the tap (input/input.js)
  * Returns the session handle (see the object at the end).
  */
-export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0, mountOptions = () => ({}), catalogue = createCatalogue() }) {
+export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0, mountOptions = () => ({}), catalogue = createCatalogue(), onGroundTap = null }) {
   let hud = null;
 
   // ---------------------------------------------------------------------
@@ -245,9 +247,9 @@ export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0,
   function makeInput() {
     if (renderer3d) {
       return createInput(renderer3d.canvas, renderer, getSim, submit, getUi(),
-        { pick: (ev, u) => render3dMod.eventToCell(renderer3d, ev, u), tapToAct: true, catalogue });
+        { pick: (ev, u) => render3dMod.eventToCell(renderer3d, ev, u), tapToAct: true, catalogue, onGroundTap });
     }
-    return createInput(canvas, renderer, getSim, submit, getUi(), { catalogue });
+    return createInput(canvas, renderer, getSim, submit, getUi(), { catalogue, onGroundTap });
   }
   function rebindInput() {
     if (!inputHandle) return;   // no session yet — the boot path creates it

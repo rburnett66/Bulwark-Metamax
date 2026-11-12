@@ -9,7 +9,6 @@ import { referenceOutpost, confirmOnline, advance, powerGrids } from '../outpost
 import { outpostMapFromForge } from '../outpost/outpostMap.js';
 import { DRAFT_LAYOUT as draft } from '../outpost/draftLayout.js';
 import { runRaid, createRaid, makeRaidHook, RAID_DT } from '../outpost/raid.js';
-import { startProbe, probeCells } from '../outpost/view/visitProbe.js';
 import { FARM, yieldOf } from '../data/farm.js';
 import { windowSec } from './grow.js';
 import { trample, applyFarmLoss, plotState, harvest } from './model.js';
@@ -171,19 +170,6 @@ test('a plot on the raiders\' way is trampled by the real raid through advance()
   assert.equal(st(r.outpost, 'p1', at + MIN), 'sprout');
   assert.equal(st(r.outpost, 'p2', at + MIN), 'plant');
   assert.equal(e.farmLoss, e.result === 'breach' ? 0.25 : 0);
-});
-
-test('a visit probe reports its raider cells the same way', () => {
-  const o = confirmOnline(referenceOutpost('ground', { seed: 11, map: forgeMap, now: T0 }), forgeMap, T0).outpost;
-  const mk = () => startProbe(o, 0, { map: forgeMap, powered: [...powerGrids(o, forgeMap).powered] });
-  const a = mk(), b = mk();
-  assert.deepEqual(probeCells(a), []);
-  const end = a.finish();
-  b.finish();
-  assert.ok(probeCells(a).length > 0);
-  assert.deepEqual(probeCells(a), end.cells);
-  assert.deepEqual(probeCells(b), probeCells(a), 'same seed, same cells');
-  assert.deepEqual(probeCells(null), []);
 });
 
 test('the battle sim is untouched by this story (src/sim/ unchanged against feat/farm-model)', (t) => {

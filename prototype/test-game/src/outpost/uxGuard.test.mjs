@@ -6,8 +6,8 @@
 // and fog.
 // This test FAILS if src/outpost/** or src/farm/** grows its own copy of any of them.
 //
-// THE ALLOW-LIST below is the old outpost view and the save-model rules that the One-Battle-UX stories still have to
-// delete (S2.4d removed the old OUTPOST view — what is left of these files is the FARM view's, S6; S3 the model's build/upgrade/repair/sell; S6 the farm's own placement). It is
+// THE ALLOW-LIST below is the save-model rules that the One-Battle-UX stories still have to delete (S2.4d removed the
+// old OUTPOST view, S6 the FARM view that was left of it; S3 the models' build/upgrade/repair/sell). It is
 // meant to SHRINK TO EMPTY: an entry that no longer matches FAILS too, so when a file is deleted (or cleaned) its entry
 // must be deleted with it — never widen it to let new code in. A new file on the session path gets no entry.
 import { test } from 'node:test';
@@ -74,18 +74,16 @@ const SYSTEMS = Object.freeze({
 
 /**
  * file → the systems it may still match, and the story that deletes it. EVERY entry must still match (else delete it).
- * Shrinks to {} when S3 and S6 land.
+ * Shrinks to {} when S3 lands.
  */
 const ALLOWED = Object.freeze({
-  // ── the FARM view's own loop (S2.4d made the outpost the session; the farm still runs on these): S6 deletes them ──
-  'outpost/view/outpostView.js': { systems: ['pointer', 'camera', 'placement', 'fog'], goes: 'S6 deletes the farm view (the outpost left it in S2.4d)' },
-  'outpost/view/hud.js': { systems: ['pointer', 'buildRail', 'hudRoot'], goes: 'S6 deletes the farm view HUD + rail' },
-  'outpost/view/layout.js': { systems: ['camera'], goes: 'S6 deletes the farm view layout + camera framing' },
-  'outpost/view/buildMenu.js': { systems: ['placement'], goes: 'S6 deletes the farm view placement steps' },
+  // (S6 [MM-story_mwc9q1y6_2n] deleted the FARM view's own loop — outpostView.js, its HUD + rail hud.js, its camera
+  //  framing layout.js and its placement steps buildMenu.js: the farm is a tab of the session's battle rail)
   // ── the save model's own build / upgrade / repair / sell rules: S3 moves them onto sim commands and deletes these ──
   'outpost/model.js': { systems: ['placement'], goes: 'S3 deletes model.js place / upgrade / upgradeDefense / repair / sell / sellStructure' },
-  // ── the farm's own placement: S6 puts the farm on the session ──
-  'farm/model.js': { systems: ['placement'], goes: 'S6 deletes the farm\'s placePlot / placeFarmBuilding' },
+  // ── the farm's save rules for a placement the battle placement has already checked (session.js act farmPlace): they go
+  //    with the outpost model's in S3 ──
+  'farm/model.js': { systems: ['placement'], goes: 'S3 moves the farm placePlot / placeFarmBuilding onto sim commands with the outpost model' },
 });
 
 const FILES = [...filesUnder('outpost'), ...filesUnder('farm')];
