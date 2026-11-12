@@ -1,6 +1,6 @@
 /**
- * src/render/buildPalette.js — the BUILD palette's look and its reactive left rail, shared by the battle HUD
- * (render/hud.js) and the outpost's build menu (outpost/view/hud.js) [MM-story_mw6k9xec_5].
+ * src/render/buildPalette.js — the BUILD palette's look and its reactive left rail: the battle HUD's (render/hud.js),
+ * the one rail every mode uses — the outpost's BUILD and FARM tabs included (S6) [MM-story_mw6k9xec_5].
  *
  * Factored out of render/hud.js unchanged: the palette's CSS (picture + name + cost buttons [MM-story_mvg3xsca_1x],
  * the reactive rail [MM-task_mvd3mpby_l]), the SVG glyphs a button falls back to when its picture can't load, and the
@@ -19,6 +19,10 @@ export const PALETTE_CSS = `
 .bw-lock { position:absolute; top:2px; right:3px; width:11px; height:12px; }
 .bw-palette { position:absolute; left:6px; top:56px; display:flex; flex-direction:column; gap:4px; }
 .bw-palette .bw-title { font-size:11px; color:#9ab; margin-bottom:2px; }
+/* catalogue TABS (a mode with several catalogues, e.g. the outpost's BUILD | FARM) [MM-story_mwcgbd9q_2y]; battles have none */
+.bw-palette .bw-tabs { display:flex; gap:2px; margin-bottom:2px; }
+.bw-tab { flex:1; min-width:0; font-family:inherit; font-size:9px; font-weight:800; line-height:1; letter-spacing:.08em; padding:4px 2px; color:#9ab; background:#151b22; border:1px solid #2b3540; border-radius:3px; cursor:pointer; }
+.bw-tab.bw-tab-on { color:#1a1206; background:#D9A441; border-color:#D9A441; }
 .bw-palette-row { display:flex; flex-direction:column; gap:4px; }
 .bw-buildbtn { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:0; width:76px; padding:4px 3px 3px; }
 /* BUILD ICONS [MM-story_mvg3xsca_1x]: each button = a picture of the item's own model (content/icons/build) + its name + cost */

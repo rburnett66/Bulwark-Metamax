@@ -6,7 +6,7 @@ import { createUnit, createBase, createStructure } from './entities.js';
 import { acquireTarget, applyDamage, stepCombat, inBaseReach } from './combat.js';
 import { buildSightGrid, attackerSees } from './sight.js';
 import { initEconomy, stepEconomy, canAfford, spend, grantKillIncome } from './economy.js';
-import { validatePlacement, placeStructure, startUpgrade, startSell, requestRepair, stepStructures } from './structures.js';
+import { validatePlacement, placeStructure, startUpgrade, upgradeRuleRefusal, startSell, requestRepair, stepStructures } from './structures.js';
 import { initWaves, startNextWave, stepWaves } from './waves.js';
 import { initHarvest, cmdHarvest, stepHarvest, cmdBuyHarvester, resetFleetForWave, initContract } from './harvest.js';
 import { deployMine, stepMines } from './mines.js';
@@ -494,7 +494,8 @@ function cmdUpgrade(state, cmd) {
   const s = state.structures.get(sid);
   if (!s) return { ok: false, reason: 'noStructure' };
   if (!startUpgrade(state, sid)) {   // startUpgrade→spend() tracks state.goldSpent
-    return { ok: false, reason: s.tier >= 3 ? 'maxTier' : 'cost' };
+    // a mode's upgrade rule (state.upgradeRules; battles set none) names its own refusal
+    return { ok: false, reason: s.tier >= 3 ? 'maxTier' : (upgradeRuleRefusal(state, s) || 'cost') };
   }
   emitEvent(state, { type: 'upgradeStart', tick: state.tick, structureId: sid });
   return { ok: true, reason: '' };

@@ -3,6 +3,7 @@ import { createCatalogue } from '../battle/catalogue.js';
 import { SELPANEL_CSS, PALETTE_CSS, STRUCT_ICONS, railFit, applyRailFit, LOCK_SVG } from './buildPalette.js';
 import { STRUCTURES, ASSUMPTIONS, ABILITIES, getStructureDef, factionsInRoster } from '../data/tables.js';
 import { getSellValue } from '../sim/economy.js';
+import { upgradeRuleRefusal } from '../sim/structures.js';
 import { VERSION, VERSION_NOTE } from '../version.js';
 import { levelFromXp } from '../data/progression.js';
 import { resultsModel, mountResults } from './resultsScreen.js';
@@ -362,14 +363,34 @@ export function createHud(mountEl, callbacks) {
     return paintBuildIcon(wrap, icon ? buildIconUrl(icon) : null, glyph);
   }
   const palette = el(doc, 'div', 'bw-palette bw-panel');
-  palette.appendChild(el(doc, 'div', 'bw-title', 'BUILD'));
-  const paletteRow = el(doc, 'div', 'bw-palette-row');
-  const paletteBtns = {};
-  // Harvestor moved to BASE PURCHASE (owner 2026-07-16) — no longer a build-palette entry.
   // The rail lists the MODE's catalogue (battle/catalogue.js [MM-task_mwcdvlf8_2t]); the campaign's is every STRUCTURES
   // entry but the harvester bay, as before. A locked item keeps its place, shows a padlock and says why when tapped.
   const catalogue = cbs.catalogue || createCatalogue();
+  const tabs = catalogue.tabs || [];
+  // TABS [MM-story_mwcgbd9q_2y]: a mode with several catalogues (the outpost: BUILD | FARM) gets a toggle in the title's
+  // place; one catalogue (every battle) keeps the BUILD title exactly as before.
+  const tabBtns = {};
+  if (tabs.length > 1) {
+    const bar = el(doc, 'div', 'bw-title bw-tabs');
+    for (const t of tabs) {
+      const b = el(doc, 'button', 'bw-tab', t.label);
+      b.dataset.tab = t.id;
+      b.addEventListener('click', () => catalogue.setTab(t.id));
+      bar.appendChild(b);
+      tabBtns[t.id] = b;
+    }
+    palette.appendChild(bar);
+  } else palette.appendChild(el(doc, 'div', 'bw-title', 'BUILD'));
+  const paletteRow = el(doc, 'div', 'bw-palette-row');
+  const paletteBtns = {};
+  // Harvestor moved to BASE PURCHASE (owner 2026-07-16) — no longer a build-palette entry.
   const structOrder = catalogue.ids;
+  // a button's number key is its place in ITS tab (the keys follow the visible tab, input.js)
+  const keyOf = (structId, i) => {
+    if (tabs.length < 2) return i + 1;
+    const t = tabs.find((x) => x.ids.includes(structId));
+    return t ? t.ids.indexOf(structId) + 1 : i + 1;
+  };
   const toggleBuild = (structId) => {
     const locked = catalogue.isLocked(structId);
     if (locked) { flashMessage(hud, locked); return; }
@@ -379,7 +400,7 @@ export function createHud(mountEl, callbacks) {
   structOrder.forEach((structId, i) => {
     const def = getStructureDef(structId);
     const btn = el(doc, 'button', 'bw-btn bw-buildbtn');
-    const key = i + 1;                                      // 1,2,3,4...
+    const key = keyOf(structId, i);                         // 1,2,3,4...
     btn.title = (key <= 9 ? '[' + key + '] ' : '') + (def.name || structId);
     const icon = buildIconEl(buildIcon(structId), def, STRUCT_ICONS[def.kind]);
     if (key <= 9) icon.appendChild(el(doc, 'b', 'bw-bkey', String(key)));
@@ -417,6 +438,19 @@ export function createHud(mountEl, callbacks) {
   paletteRow.appendChild(harvBtn);
   palette.appendChild(paletteRow);
   root.appendChild(palette);
+  /** Show the visible tab's buttons (the harvester tile sits on the first tab); disarm an item of another tab. */
+  function showTab(id) {
+    if (tabs.length < 2) return;
+    const shown = new Set(catalogue.shown());
+    for (const [sid, btn] of Object.entries(paletteBtns)) btn.style.display = shown.has(sid) ? '' : 'none';
+    harvBtn.style.display = id === tabs[0].id ? '' : 'none';
+    for (const [tid, b] of Object.entries(tabBtns)) b.classList.toggle('bw-tab-on', tid === id);
+    if (hud.currentBuildSelection && !shown.has(hud.currentBuildSelection) && cbs.onBuildSelect) cbs.onBuildSelect(null);
+    if (cbs.onTab) cbs.onTab(id);
+    const view = doc.defaultView;
+    if (view) view.requestAnimationFrame(layoutLeftRail);
+  }
+  if (tabs.length > 1 && catalogue.onTab) catalogue.onTab(showTab);
   // ---- REACTIVE LEFT RAIL [MM-task_mvd3mpby_l] (owner 2026-10-17: "make left nav reactive so it always fits on screen
   // and move the minimap to never sit over the left nav"). The rail runs from under the top bar to the screen's bottom
   // edge; its buttons take whatever height that leaves (52 px down to 30 px, icon and cost scaling with them), and if
@@ -424,7 +458,7 @@ export function createHud(mountEl, callbacks) {
   function layoutLeftRail() {
     const view = doc.defaultView;
     if (!view || !palette.isConnected) return;
-    const btns = paletteRow.children.length;
+    const btns = tabs.length > 1 ? [...paletteRow.children].filter((b) => b.style.display !== 'none').length : paletteRow.children.length;
     if (!btns) return;
     palette.classList.add('bw-fit');
     const top = palette.getBoundingClientRect().top;
@@ -847,6 +881,8 @@ export function createHud(mountEl, callbacks) {
     },
   };
 
+  if (tabs.length > 1) showTab(catalogue.tab);   // the first look: the visible tab's buttons only
+
   // ---- MINIMAP radar (epic mm-8e045fed61fb): 128x64 lower-left, above the gear button ----
   const minimap = el(doc, 'canvas', 'bw-minimap');
   minimap.width = 128; minimap.height = 64;
@@ -979,7 +1015,10 @@ export function updateHud(hud, state, ui) {
   // by its own rules supplies callbacks.harvesterTile(state) → { cost, poor, title } (or null to hide the tile) — the
   // outpost visit: its Resource Bay's price and refusals (outpost/view/hudModel.js harvesterTile); the battle has none.
   const tileOf = hud.callbacks && hud.callbacks.harvesterTile;
-  if (hud.harvCost && tileOf) {
+  // with catalogue tabs the tile belongs to the first tab (the outpost's BUILD, not its FARM) [MM-story_mwcgbd9q_2y]
+  const cat = hud.catalogue, harvTab = !cat || !cat.tabs || cat.tabs.length < 2 || cat.tab === cat.tabs[0].id;
+  if (hud.harvCost && !harvTab) hud.harvBtn.style.display = 'none';
+  else if (hud.harvCost && tileOf) {
     const t = tileOf(state);
     if (t) {
       hud.harvCost.textContent = t.cost;
@@ -1094,9 +1133,13 @@ export function updateHud(hud, state, ui) {
     // instead of enabling on gold and silently failing (owner 2026-07-16 mobile playtest)
     const tierGroup = s.kind === 'antiGround' ? 'cannon' : s.kind === 'antiAir' ? 'flak' : 'wall';
     const tierLocked = !!(state.structTiers && s.tier + 1 > (state.structTiers[tierGroup] || 1));
-    hud.upgradeBtn.disabled = busy || s.tier >= maxTier || tierLocked || money < upCost;
+    // …and a mode's own upgrade rule (state.upgradeRules — the outpost's tech gate; battles set none) [MM-task_mwcunn53_3f]
+    const ruleWhy = busy || s.tier >= maxTier || tierLocked ? null : upgradeRuleRefusal(state, s);
+    hud.upgradeBtn.disabled = busy || s.tier >= maxTier || tierLocked || !!ruleWhy || money < upCost;
+    hud.upgradeBtn.title = ruleWhy || '';
     hud.upgradeBtn._label.textContent = ' ' + (s.tier >= maxTier ? 'Max Tier'
       : tierLocked ? 'T' + (s.tier + 1) + ' locked (campaign)'
+      : ruleWhy ? 'T' + (s.tier + 1) + ' locked'   // the reason is the button's title
       : 'Upgrade (' + upCost + 'g)');   // keep bold U
     let sellVal = 0;
     try { sellVal = getSellValue(s, STRUCTURES, ASSUMPTIONS); } catch (e) { sellVal = 0; }

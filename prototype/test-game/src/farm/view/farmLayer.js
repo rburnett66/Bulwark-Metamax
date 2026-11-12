@@ -12,19 +12,18 @@
  * farmhouse, silo, pump) when the kit lists them, else a built-in shape, the way the outpost scene stands in for a
  * building with no model yet. World units: one battle cell = one unit, x = column, z = row (as the outpost scene).
  *
- * createFarmLayer(THREE, r, { map, kit, reduced }) → { sync(o, now), showTargets(rects), showGhost(g), select(rect),
+ * createFarmLayer(THREE, r, { map, kit, reduced }) → { sync(o, now), select(rect),
  *   update(dt), counts(), dispose() }
  */
 import { POD_LEVELS, cropOf } from '../../data/farm.js';
 import { plotState } from '../model.js';
+import { RIPE } from './farmUi.js';   // a ripe crop's colour by category (shared with the FARM tab's crop pictures)
 import { mergeGeos } from '../../outpost/view/outpostScene.js';   // the outpost scene's merge (one draw call per material)
 import { PAD_SIZE, MODEL_PAD_SIZE } from '../../terrain/outpostPads.js';
 const KIT_SCALE = PAD_SIZE.pad / MODEL_PAD_SIZE.pad;   // 0.5: the outpost kit's authoring scale to the map's (task_mwagi1nr_1e)
 
 const Y = 0.05;   // the ground plate height the outpost scene stands its pads on (outpostScene.js PAD_Y)
 const C = { soil: 0x3b2a1c, ridge: 0x4a3524, frame: 0x6d5a44, sprout: 0x7bc24a, leaf: 0x4f9a37, dead: 0x8a8578, stubble: 0xb89b5e, cyan: 0x34e1ff, bad: 0xff5a4a, sel: 0xffd34a };
-// a ripe crop's colour by category (the scale prototype's grain gold; the others read apart at a glance)
-const RIPE = { Grain: 0xe8c860, Vegetable: 0xb05ad8, Fruit: 0xff7a3a, Materials: 0xf2a33a, Minerals: 0xcfd8e0, Gems: 0x7ad8ff };
 
 /** The 16 plant spots of a plot (world x, z): four rows along z (north–south, the battle camera's view), four plants
  *  each. The plants stand on them, and the harvest embers rise from them (embers.js). */
@@ -46,9 +45,6 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
     frame: new THREE.MeshStandardMaterial({ color: C.frame, roughness: 0.8 }),
     plant: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 }),
     glow: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
-    target: new THREE.MeshBasicMaterial({ color: C.cyan, transparent: true, opacity: 0.32, depthWrite: false, toneMapped: false }),
-    ghostOk: new THREE.MeshBasicMaterial({ color: C.cyan, transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false }),
-    ghostBad: new THREE.MeshBasicMaterial({ color: C.bad, transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false }),
     sel: new THREE.MeshBasicMaterial({ color: C.sel, toneMapped: false }),
   };
   // the plant shapes, one per state, unit-sized (scaled per instance): 16 to a plot, four rows running north–south
@@ -177,26 +173,7 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
     syncBuildings(o, now);
   }
 
-  // placement marks: the anchors an armed item can take (thin cyan rects), the ghost at the aimed spot, the selection
-  let targetsSig = '';
-  function showTargets(rects) {
-    const s = rects ? rects.map((t) => `${t.x},${t.y},${t.w},${t.h}`).join(';') : '';
-    if (s === targetsSig) return;
-    targetsSig = s;
-    for (const c of [...groups.marks.children].filter((c) => c.name === 'farm-targets')) { groups.marks.remove(c); c.geometry.dispose(); }
-    if (!rects || !rects.length) return;
-    const geos = rects.slice(0, 400).map((t) => new THREE.BoxGeometry(t.w - 0.3, 0.02, t.h - 0.3).translate(t.x + t.w / 2, Y + 0.14, t.y + t.h / 2));
-    const m = new THREE.Mesh(mergeGeos(THREE, geos), mats.target); m.name = 'farm-targets'; m.renderOrder = 2;
-    groups.marks.add(m);
-  }
-  let ghost = null;
-  function showGhost(g) {
-    if (ghost) { groups.marks.remove(ghost); ghost.geometry.dispose(); ghost = null; }
-    if (!g) return;
-    ghost = new THREE.Mesh(new THREE.BoxGeometry(g.w, 0.12, g.h).translate(g.x + g.w / 2, Y + 0.12, g.y + g.h / 2), g.valid ? mats.ghostOk : mats.ghostBad);
-    ghost.name = 'farm-ghost'; ghost.renderOrder = 3;
-    groups.marks.add(ghost);
-  }
+  // the selection outline (placement and its ghost are the battle's own: render3d/overlays/placement.js, S6)
   let selMesh = null;
   function select(rect) {
     if (selMesh) { groups.marks.remove(selMesh); selMesh.geometry.dispose(); selMesh = null; }
@@ -211,8 +188,8 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
   }
 
   return {
-    group: root, sync, showTargets, showGhost, select,
-    update(dt) { clock += dt; if (!reduced && ghost) ghost.material.opacity = 0.45 + Math.sin(clock * 5) * 0.12; },
+    group: root, sync, select,
+    update(dt) { clock += dt; },
     counts: () => ({ ...counts }),
     setVisible(v) { root.visible = v; },
     dispose() {

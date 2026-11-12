@@ -33,7 +33,7 @@ import { buildNavGrid } from '../sim/pathfinding.js';
 import { getStructureDef } from '../data/tables.js';
 import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../data/outpostStructures.js';
 import { structureDef, surfaceResource, surfaceStock } from '../data/outpost.js';
-import { buildingRect, surfaceFieldGroups, fieldStock, harvestPlan, resourceBayPad, powerGrids, hopperUnits, hopperCap } from './model.js';
+import { buildingRect, surfaceFieldGroups, fieldStock, harvestPlan, resourceBayPad, powerGrids, hopperUnits, hopperCap, upgradeRefusal } from './model.js';
 import { resourceNode, spawnHarvester, initContract } from '../sim/harvest.js';
 import { raidSimMap } from './raid.js';
 import { outpostPlacementRules } from './placementRules.js';
@@ -69,9 +69,10 @@ function addStructure(state, kind, cell, tier) {
 
 /**
  * The outpost as a live SimState. outpost: save.outposts[planet] (already advanced to `now`). ctx: { map (the outpost
- * map), now (ms), gold (the player's gold) }. → { state, link } — keep `link` for fromLiveSim.
+ * map), now (ms), gold (the player's gold), unlocks, techOwned (the save's owned Outpost tech and tree ids, as the
+ * model's ctx: session.js ctxFor) }. → { state, link } — keep `link` for fromLiveSim.
  */
-export function toLiveSim(outpost, { map, now, gold = 0 }) {
+export function toLiveSim(outpost, { map, now, gold = 0, unlocks = null, techOwned = null }) {
   if (!map) throw new Error('toLiveSim: ctx.map (the outpost map) is required');
   if (now == null) throw new Error('toLiveSim: ctx.now is required');
   // the raid's board, with no building cells blocked: here the buildings are structures and block by themselves
@@ -81,6 +82,10 @@ export function toLiveSim(outpost, { map, now, gold = 0 }) {
   state.economy.money = gold;
   state.economy.incomePerSec = 0;            // an outpost earns by mining and kills, not a battle's passive income
   state.placementRules = outpostPlacementRules(map, getStructureDef);
+  const link = { outpost, map, ids: null, wrecks: null, now, harvest: null };
+  // the battle's upgrade command on an outpost structure asks the outpost's own rule (model.upgradeRefusal: tech
+  // unlocks, the Upgrade Bay and its power, the tree's tiers) — the save's rule, not a copy [MM-task_mwcunn53_3f]
+  state.upgradeRules = [outpostUpgradeRule(link, { unlocks: unlocks || [], techOwned: techOwned || [] })];
   const padAt = (id) => buildingRect(outpost, map, id);
   const ids = new Map();                     // sim structure id → { pad, extra } | { defense, extra }
   const byPad = new Map();
@@ -133,8 +138,27 @@ export function toLiveSim(outpost, { map, now, gold = 0 }) {
     ids.set(s.id, { defense: id, extra, building, selling, upgrading: u });
   }
   state.navGrid = buildNavGrid(state.map, Array.from(state.structures.values()));
-  const harvest = seedHarvest(state, outpost, map);
-  return { state, link: { outpost, map, ids, wrecks, now, harvest } };
+  Object.assign(link, { ids, wrecks, harvest: seedHarvest(state, outpost, map) });
+  return { state, link };
+}
+
+/**
+ * sim/structures.js state.upgradeRules entry: an outpost structure's upgrade, refused as the save refuses it. Reads the
+ * live state as the save would see it at the sim's time (fromLiveSim, as syncHarvestPower does) and asks the model's
+ * upgradeRefusal for that building's pad or that defense. Gold is the sim's own check (no ctx.gold). Not an outpost
+ * structure → null.
+ */
+function outpostUpgradeRule(link, owned) {
+  return (state, s) => {
+    let def = null;
+    try { def = getStructureDef(s.structId); } catch (e) { return null; }
+    if (!def || !def.outpostKind) return null;
+    const now = link.now + Math.round(state.time * 1000), where = new Map();
+    const o = fromLiveSim(state, link, now, where).outpost;
+    const target = where.get(s.id);
+    if (!target) return null;
+    return upgradeRefusal(o, target, { map: link.map, now, ...owned });
+  };
 }
 
 const TIER_OF_COLOR = { blue: 'common', yellow: 'uncommon' };
@@ -259,9 +283,10 @@ export function syncHarvestPower(state, link) {
 
 /**
  * The live SimState back into the save at `now`. → { outpost, gold }. A building placed during the visit gets a new
- * free id and its own `at` rectangle.
+ * free id and its own `at` rectangle. `where` (optional Map) is filled with each sim structure id → its place in the
+ * save: { pad } for a building, { defense: id } for a defense (the upgrade rule above reads it).
  */
-export function fromLiveSim(state, link, now) {
+export function fromLiveSim(state, link, now, where = null) {
   const { outpost: before, map, ids } = link;
   const o = clone(before);
   o.pads = {};
@@ -300,8 +325,9 @@ export function fromLiveSim(state, link, now) {
     }
     if (isBuilding(kind)) {
       if (s.lifecycle === 'Selling') continue;  // buildings sell at once
-      const where = e ? { pad: e.pad, extra: e.extra } : placeOf(s, def);
-      const pad = where.pad, extra = where.extra;
+      const at = e ? { pad: e.pad, extra: e.extra } : placeOf(s, def);
+      const pad = at.pad, extra = at.extra;
+      if (where) where.set(s.id, { pad });
       if (s.lifecycle === 'Building') {
         const ms = structureDef(kind, 1).buildSec * 1000;
         const { deep, ...jobExtra } = extra;   // a job carries its spot and deposit; `deep` belongs to the finished rig
@@ -317,6 +343,7 @@ export function fromLiveSim(state, link, now) {
     }
     // a defense
     const id = e ? e.defense : `d${nextDefense++}`;
+    if (where) where.set(s.id, { defense: id });
     const d = { id, kind, tier: s.tier, cell: [s.pos.x, s.pos.y], hp: s.hp, ...(e ? e.extra : {}) };
     if (s.lifecycle === 'Building') {
       const b = (e && e.building) || { since: now, done: now + def.buildTime * 1000 };

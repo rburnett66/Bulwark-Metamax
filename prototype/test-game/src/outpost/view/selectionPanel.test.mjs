@@ -35,6 +35,16 @@ test('the battle panel takes the corner while a structure is selected, and draws
   assert.match(HUD, /hud\.callbacks && hud\.callbacks\.selectionExtras/);
 });
 
+test('a farm plot tap still shows its farm panel: it selects no structure, so the outpost panel keeps the corner', () => {
+  // the mode panels hide ONLY for a selected sim structure (above); the farm's ground tap clears that selection …
+  const INPUT = strip(readFileSync(new URL('../../input/input.js', import.meta.url), 'utf8'));
+  assert.match(INPUT, /handle\.onGroundTap\(cell, ui\)\) \{\s*ui\.selectedStructureId = null;/);
+  // … and the farm panel lives in the outpost panel, shown while a plot is selected
+  assert.match(SV, /onGroundTap: \(cell\) => tapFarm\(cell\)/);
+  assert.match(SV, /panel\.appendChild\(farmBox\)/);
+  assert.match(SV, /farmBox\.style\.display = fm \? 'flex' : 'none'/);
+});
+
 test('selectionExtrasModel: a battle (no hook) draws nothing extra; a key changes only when what is drawn changes', () => {
   const none = selectionExtrasModel(null);
   assert.deepEqual([none.lines, none.actions], [[], []]);
