@@ -27,6 +27,9 @@ const C = { plate: 0x3b4047, plateTop: 0x4a5058, edge: 0x24282d, trim: 0xeb5c0d,
 /** The locked-deposit padlock's brass. */
 export const DEPOSIT_LOCK_BRASS = 0xc9a14a;
 
+/** The power icons worth drawing: only a building that has no power or would be cut — never one that is powered. */
+export const visiblePowerIcons = (list) => (list || []).filter((i) => i.state !== 'on');
+
 export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced = false }) {
   const scene = r.scene, root = new THREE.Group();
   root.name = 'outpost';
@@ -415,7 +418,11 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
   const ICON_SIZE = 0.022;   // a warning marker is 0.058: the icon is a status, not an alarm
   let iconSig = '';
   /** list: planPowerIcons' answer ([{ id, at: [x, z], defense, state }]), or null to clear. */
-  function setPowerIcons(list) {
+  function setPowerIcons(all) {
+    // a marker only when something is wrong (owner 2026-11-12: "I have energy warnings on every building even with 2
+    // generators" — a bolt over every POWERED building read as a warning): unpowered (red) or cut by the armed placement
+    // (amber); a powered building shows nothing
+    const list = visiblePowerIcons(all);
     const sig = (list || []).map((i) => `${i.id}:${i.state}:${i.at[0]},${i.at[1]}`).join('|');
     if (sig === iconSig) return;
     iconSig = sig;
