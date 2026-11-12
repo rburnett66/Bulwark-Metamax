@@ -12,13 +12,14 @@ const FORGE = JSON.parse(readFileSync(new URL('../../content/maps/forge/ground-o
 const map = outpostMapFromForge(FORGE);
 const T0 = Date.UTC(2026, 10, 7, 12);
 
-test('the contract kit goes online on the Verdance map, drawing 9 of the first station\'s 10', () => {
+// 9 of 10 until defenses stopped drawing power (owner 2026-11-11 [MM-task_mwcutmnk_3h]): the buildings draw 7
+test('the contract kit goes online on the Verdance map, drawing 7 of the first station\'s 10', () => {
   const o = referenceOutpost('ground', { seed: 1, map, now: T0 });
   assert.deepEqual(Object.keys(o.pads).sort(), ['hub', 'p1', 'r1', 's1']);
   assert.deepEqual(onlineProblems(o, map), []);
   const g = powerGrids(o, map);
   assert.equal(g.grids.length, 1);
-  assert.equal(g.grids[0].draw, 9);
+  assert.equal(g.grids[0].draw, 7);
   assert.equal(g.grids[0].supply, 10);
   assert.ok(confirmOnline(o, map, T0).outpost.online);
 });

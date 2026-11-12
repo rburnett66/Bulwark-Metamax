@@ -27,12 +27,15 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 XLSX = os.path.join(ROOT, "docs", "sources", "Bulwark-Map-Data.xlsx")
 SHEET = "Outpost_Structures"
 HEADER = "Power_Draw"
-# (Kind, Tier) → Power_Draw. Tier N = N x tier I.
+# (Kind, Tier) → Power_Draw. Buildings: tier N = N x tier I.
+# Defenses draw nothing at any tier (owner 2026-11-11: "Defense towers do not need power") [MM-task_mwcutmnk_3h] —
+# a gun or wall never goes dark for power, so the grid only ever runs buildings.
 DRAW = {
     ("rig", 1): 4, ("rig", 2): 8,
     ("storage", 1): 1, ("storage", 2): 2,
-    ("mg", 1): 1, ("mg", 2): 2, ("mg", 3): 3,
-    ("cannon", 1): 1, ("cannon", 2): 2, ("cannon", 3): 3,
+    ("mg", 1): 0, ("mg", 2): 0, ("mg", 3): 0,
+    ("cannon", 1): 0, ("cannon", 2): 0, ("cannon", 3): 0,
+    ("wall", 1): 0, ("wall", 2): 0,
 }
 
 ROW = re.compile(r'<row r="(\d+)"[^>]*?(?:/>|>(.*?)</row>)', re.S)

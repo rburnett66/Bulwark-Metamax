@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { map, T0 } from './view/fixtures.mjs';
 import { referenceOutpost } from './model.js';
 import { toLiveSim } from './liveSim.js';
-import { createVisitRaids, probeDelay, probeUnits, PROBE_FIRST_S, PROBE_GAP_S } from './visitRaids.js';
+import { createVisitRaids, probeDelay, probeUnits, probeRules, PROBE_FIRST_S, PROBE_GAP_S } from './visitRaids.js';
+import { OUTPOST, raidFor } from '../data/outpost.js';
 import '../data/factions.js';
 import { stepSim, FIXED_DT, createSim } from '../sim/core.js';
 
@@ -51,6 +52,45 @@ test('raids keep coming: the next one is timed from the clear, deterministic fro
   assert.ok(a.raids.probes >= 2, `${a.raids.probes} probes in 10 minutes`);
   assert.equal(a.raids.probes, b.raids.probes, 'same seed, same raids');
   assert.equal(a.state.economy.money, b.state.economy.money, 'and the same bounty');
+});
+
+// Owner 2026-11-11: "the attacks on the outpost are supposed to be mild but they are crushing my base" [MM-task_mwcutmnk_3h].
+// Measured on the ground (Verdance) outpost, the starter kit online, 10 minutes, seeds 7 11 222 3333 44444: at the
+// step-1 raid's full strength a probe (tank + trooper, + a tank every other probe) took up to 71% off one defense, 11
+// defenses fell and 10 of 17 probes reached the hub; at Probe_Strength 0.4 the worst single probe takes 17% off one wall,
+// nothing falls and the hub is never hit. The bound below is the "mild" target: < 25% off any defense per probe.
+test('a visit probe is mild: the starter kit kills it, loses < 25% HP on any defense, and nothing falls in 10 minutes', () => {
+  assert.ok(OUTPOST.Probe_Strength > 0 && OUTPOST.Probe_Strength < 1, 'Probe_Strength is a workbook dial below the raid');
+  const r = raidFor('ground', 1);
+  assert.deepEqual(probeRules('ground'), { hpMult: r.hpMult * OUTPOST.Probe_Strength, dmgMult: r.dmgMult * OUTPOST.Probe_Strength });
+  for (const seed of [7, 11, 222]) {
+    const { state, raids } = visit(seed);
+    const hp0 = state.base.hp;
+    const snap = () => new Map([...state.structures.values()].map((s) => [s.id, s.hp]));
+    let start = null, seen = new Set(), killed = 0, probes = 0;
+    const close = () => {
+      for (const [id, h] of start) {
+        const s = state.structures.get(id), lost = (h - (s ? s.hp : 0)) / (s ? s.maxHp : h);
+        assert.ok(lost < 0.25, `seed ${seed}, probe ${probes}: ${id} lost ${(lost * 100).toFixed(0)}%`);
+      }
+      assert.ok(seen.size >= 2, `seed ${seed}, probe ${probes}: ${seen.size} raiders`);
+      assert.equal(killed, seen.size, `seed ${seed}, probe ${probes}: the guns killed every raider`);
+      start = null;
+    };
+    let was = false;
+    for (let i = 0; i < Math.round(600 / FIXED_DT); i++) {
+      const evs = stepSim(state, FIXED_DT) || [];
+      for (const e of evs) if (start && e.type === 'kill' && e.side === 'attacker') killed++;
+      const started = raids.step();
+      if (started) { probes++; start = snap(); seen = new Set(); killed = 0; }
+      if (start) for (const u of state.units.values()) if (u.side === 'attacker') seen.add(u.id);
+      if (was && !state.waves.active && start) close();
+      was = state.waves.active;
+    }
+    assert.ok(probes >= 3, `seed ${seed}: ${probes} probes in 10 minutes`);
+    for (const s of state.structures.values()) assert.ok(s.hp > 0, `seed ${seed}: ${s.id} still stands after 10 minutes`);
+    assert.equal(state.base.hp, hp0, `seed ${seed}: no probe reached the hub`);
+  }
 });
 
 test('a battle (no endless flag) still wins when its last wave clears', () => {

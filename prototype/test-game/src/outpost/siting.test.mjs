@@ -62,7 +62,8 @@ test('the reference kit stands by the shared rules on every shipped map: rig on 
     }
     for (const d of o.defenses) assert.ok(gap({ x: d.cell[0], y: d.cell[1], w: 1, h: 1 }, m.hub) >= HUB_CLEARANCE, `${m.id}: kit ${d.kind}`);
     assert.deepEqual(onlineProblems(o, m), [], `${m.id}: the kit can go online`);
-    assert.equal(powerGrids(o, m).grids[0].draw, 9, `${m.id}: the kit draws 9 of its station's 10, guns included`);
+    // 9 with the guns until defenses stopped drawing power (owner 2026-11-11 [MM-task_mwcutmnk_3h])
+    assert.equal(powerGrids(o, m).grids[0].draw, 7, `${m.id}: the kit draws 7 of its station's 10, its guns nothing`);
   }
   // the ground map's kit, as the owner will see it: rig south of the landing pad, station beside it, storage east
   const k = referenceKit(map);

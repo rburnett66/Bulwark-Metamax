@@ -12,11 +12,12 @@ import { createStructureFx } from '../render3d/fx/structureFx.js';
 import { K } from '../render3d/fx/impacts.js';
 import { SPARK_TINT } from '../render3d/fx/repairFx.js';
 
-/** A visit raid against an online outpost whose guns are down to a few HP: runs until the first defense dies. */
+/** A visit raid against an online outpost whose guns are down to a few HP: runs until the first defense dies. The walls
+ *  are wrecks already, so the mild probe (Probe_Strength [MM-task_mwcutmnk_3h]) reaches a gun instead of chipping a wall. */
 function raidKillsADefense(seed = 7) {
   const o = referenceOutpost('ground', { seed, map, now: T0 });
   o.online = true;
-  for (const d of o.defenses) if (d.kind !== 'wall') d.hp = 3;
+  for (const d of o.defenses) d.hp = d.kind === 'wall' ? 0 : 3;
   const { state, link } = toLiveSim(o, { map, now: T0, gold: 1000 });
   const raids = createVisitRaids(state, { planet: 'ground', seed: o.seed });
   let dead = null;

@@ -98,7 +98,9 @@ test('a raid is identical run once, run twice, or stepped live and finished head
   assert.notEqual(raidSeed(o.seed, r), raidSeed(o.seed, { ...r, window: 42 }));
 });
 
-test('defenses start from their saved HP; a wreck is not placed; an unpowered gun stays inert', () => {
+// was '... an unpowered gun stays inert' (a gun not in raid.powered never fired); defenses need no power since owner
+// 2026-11-11 ("Defense towers do not need power") [MM-task_mwcutmnk_3h], so every standing gun fights, grid or not
+test('defenses start from their saved HP; a wreck is not placed; a gun fires with no power at all', () => {
   const o = kit();
   o.defenses[0].hp = 123;                     // the cannon, worn
   o.defenses[2].hp = 0;                       // a wall, wrecked
@@ -106,8 +108,10 @@ test('defenses start from their saved HP; a wreck is not placed; an unpowered gu
   const byDef = new Map([...raid.defenseIds].map(([sid, did]) => [did, raid.state.structures.get(sid)]));
   assert.equal(byDef.get(o.defenses[0].id).hp, 123);
   assert.equal(byDef.has(o.defenses[2].id), false, 'the wreck is not on the board');
-  assert.equal(byDef.get(o.defenses[0].id).unpowered, true, 'no power: the cannon is inert');
-  assert.equal(byDef.get(o.defenses[3].id).unpowered, undefined, 'walls need no power');
+  for (const s of byDef.values()) {
+    assert.equal(s.unpowered, undefined, 'no defense is inert for power');
+    assert.ok(!(s.stunnedUntil > 0), 'nor stunned');
+  }
   const res = raid.finish();
   assert.equal(res.defenses.find((d) => d.id === o.defenses[2].id).hp, 0, 'a wreck stays a wreck');
 });

@@ -12,7 +12,8 @@
  * The timing and the raiders (probeDelay: the first at 45–75 s, then 100–180 s after the last one clears; probeUnits:
  * the planet's light tank and a trooper, a second tank every other probe) are the old view's probes' (visitProbe.js,
  * moved here in S6 when that view was deleted [MM-story_mwc9q1y6_2n]).
- * The raiders follow the outpost's raid rules (raid.js raiderRules: raid-only strength, range cap, fire while advancing;
+ * The raiders follow the outpost's raid rules (raid.js raiderRules: raid-only strength — probeRules below, the step-1
+ * raid's multipliers × Outpost_Params Probe_Strength, so a probe stays mild [MM-task_mwcutmnk_3h] — range cap, fire while advancing;
  * siegeRoutes: walls may seal the ramps, so an idle raider marches on the first defense in its way) and pull back after
  * PROBE_MAX_S, held or not — the same rules a raid runs, shared, not copied.
  * Deterministic: probe times come from the outpost seed and run on SIM time, never the wall clock.
@@ -23,7 +24,7 @@
  */
 import { startNextWave } from '../sim/waves.js';
 import { buildNavGrid } from '../sim/pathfinding.js';
-import { raidFor } from '../data/outpost.js';
+import { raidFor, OUTPOST } from '../data/outpost.js';
 import { raiderRules, siegeRoutes } from './raid.js';
 
 /** When probes come, in seconds of visit time: the first, then the gap after each one ends. */
@@ -54,6 +55,18 @@ export function probeUnits(planet, n = 0) {
   return n % 2 ? [tank, troop, tank] : [tank, troop];
 }
 
+/**
+ * A probe's raid-only strength (owner 2026-11-11: "the attacks on the outpost are supposed to be mild but they are
+ * crushing my base") [MM-task_mwcutmnk_3h]: the planet's step-1 raid multipliers (Outpost_Raids Raider_HP_Mult,
+ * Raider_Damage_Mult) × Outpost_Params Probe_Strength. At the raid's full strength the starter kit lost a wall per
+ * probe on the ground outpost (measured in PR #296); the dial lives in the workbook. → { hpMult, dmgMult }.
+ */
+export function probeRules(planet) {
+  const r = raidFor(planet, 1) || {};
+  const k = OUTPOST.Probe_Strength ?? 1;
+  return { hpMult: (r.hpMult ?? 1) * k, dmgMult: (r.dmgMult ?? 1) * k };
+}
+
 export function createVisitRaids(state, { planet, seed, probes = 0, nextIn = null }) {
   // an endless schedule: probes are queued one at a time and clearing one is never the battle's last wave
   state.waveTable = state.waveTable || [];
@@ -66,8 +79,7 @@ export function createVisitRaids(state, { planet, seed, probes = 0, nextIn = nul
   // once when it clears — the same report a raid's sim gives (raid.js cells)
   const walked = new Set();
   let cleared = null;
-  const strength = raidFor(planet, 1) || {};
-  const rules = { hpMult: strength.hpMult ?? 1, dmgMult: strength.dmgMult ?? 1 };
+  const rules = probeRules(planet);
   const openGrid = buildNavGrid(state.map, []);
   const base = { x: state.map.base.x, y: state.map.base.y };
   const api = {

@@ -130,7 +130,10 @@ test('no Resource Bay, no harvesters, or no power: nothing is gathered (no elect
   assert.deepEqual(advance(withBay({ harvesters: 0 }), T0 + HOUR, ctx()).outpost.hopper, {});
   const noBay = withBay(); delete noBay.pads.b1;
   assert.deepEqual(advance(noBay, T0 + HOUR, ctx()).outpost.hopper, {});
-  const dark = withBay({ power2: false });   // Power Station I: 10 supply, the reference set + bay draws 11
+  // Power Station I: 10 supply. The reference set + bay drew 11 while the guns drew 1 each; defenses need no power since
+  // owner 2026-11-11 [MM-task_mwcutmnk_3h] (7 + 2 = 9 fits), so the hub's 2 and a Rig Mk II's 8 fill the station here
+  const dark = withBay({ power2: false });
+  delete dark.pads.s1; dark.pads.r1 = { ...dark.pads.r1, tier: 2 };
   assert.equal(powerGrids(dark, map).off.b1, 'supply');
   assert.deepEqual(advance(dark, T0 + HOUR, ctx()).outpost.hopper, {});
   assert.ok(hopperCap(dark, map, QUIET) > 0, 'the hopper keeps its size; only the gathering stops');
