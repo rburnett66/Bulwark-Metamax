@@ -14,7 +14,9 @@ import { panelModel, noPowerStatus } from './view/hudModel.js';
 import { outpostSelectionExtras } from './view/sessionView.js';
 import { outpostResourceCard, harvesterHoldText, depositCardId } from './view/resourceCard.js';
 import { resourceInfoModel, resourceInfoRows, resourceInfoHtml } from '../render/resourceInfo.js';
-import { farmGate } from '../farm/contract.js';
+import { farmGate, farmingOpen, hasFarm } from '../farm/contract.js';
+import { factorDesk } from '../farm/factor.js';
+import { planetFinished, planetMapsBeaten } from '../save/reveals.js';
 import { farmGateReason } from '../farm/farmRail.js';
 
 const QUIET = { map, params: { ...OUTPOST, Raid_Mean_Hours: 1e12 } };
@@ -181,25 +183,49 @@ test('an unbuilt deposit opens the same card with its ore; the battle card is un
 });
 
 // ── farming ──────────────────────────────────────────────────────────────────────────────────────────────────────
-test('the outpost says what opens farming, step by step, in ONE wording the FARM tab\'s padlocks share', () => {
+// owner 2026-11-12: "Farming should unlock when the player finishes the planet" (supersedes the Rig Mk II gate)
+const beatMaps = (n) => Object.fromEntries(Array.from({ length: n }, (_, i) => [i + 1, { beaten: true, bestAvg: 3, runs: 1 }]));
+test('farming opens when the planet is finished: shut at 8/9 maps, open at 9/9, keyed by the planet NAME', () => {
   const o = referenceOutpost('ground', { seed: 7, map, now: T0 });
-  const s = { outposts: { ground: o }, capitalShips: {}, tech: { owned: {} }, questSteps: {} };
+  const s = { outposts: { ground: o }, capitalShips: {}, planetMaps: { Verdance: beatMaps(8) } };
+  assert.deepEqual(planetMapsBeaten(s, 'ground'), { beaten: 8, total: 9 });
+  assert.equal(planetFinished(s, 'ground'), false);
+  assert.equal(farmingOpen(s, 'ground'), false);
+  s.planetMaps.Verdance[5].beaten = false; s.planetMaps.Verdance[9] = { beaten: true };   // which maps does not matter, only all
+  assert.equal(farmingOpen(s, 'ground'), false, 'still 8 of 9');
+  s.planetMaps.Verdance[5].beaten = true;
+  assert.equal(planetFinished(s, 'ground'), true);
+  assert.equal(farmingOpen(s, 'ground'), true);
+  assert.equal(farmingOpen({ ...s, planetMaps: { Florael: beatMaps(9) } }, 'ground'), false, 'another planet finished: not this one');
+  assert.equal(farmingOpen({ ...s, outposts: {} }, 'ground'), false, 'the farm stands beside the outpost: none, no farm yet');
+});
+
+test('an old save with a Rig Mk II: an accepted farm is kept; an unaccepted one waits on the new gate', () => {
+  const o = referenceOutpost('ground', { seed: 7, map, now: T0 });
+  o.pads.r1.tier = 2;
+  const s = { outposts: { ground: o }, capitalShips: { Verdance: { arrived: true } }, planetMaps: { Verdance: beatMaps(4) } };
+  assert.equal(farmingOpen(s, 'ground'), false, 'the rig no longer opens farming');
+  assert.equal(farmGate(s, 'ground').step, 'finish');
+  s.farmContracts = { ground: { step: 1, state: 'active' } };
+  assert.equal(hasFarm(s, 'ground'), true);
+  assert.equal(farmingOpen(s, 'ground'), true, 'never take a farm away');
+  assert.equal(farmGate(s, 'ground'), null);
+  assert.equal(farmGateReason(s, 'ground'), null);
+});
+
+test('the gate in ONE wording: the FARM tab\'s padlocks, the OUTPOST panel line and the Factor\'s desk agree', () => {
+  const o = referenceOutpost('ground', { seed: 7, map, now: T0 });
+  const s = { outposts: { ground: o }, capitalShips: {}, planetMaps: { Verdance: beatMaps(6) } };
   const ship = 'The Iron Harvest', at = (step) => { const g = farmGate(s, 'ground', { ship }); assert.equal(g.step, step); assert.equal(farmGateReason(s, 'ground', ship), g.text, 'rail lock == panel line'); return g.text; };
-  assert.equal(at('tech'), 'Farming opens with a Mining Rig Mk II (its tech comes with outpost contract 2) — then see the Factor at the Trade Station aboard The Iron Harvest');
-  s.questSteps['QL-VER-O'] = 2;
-  assert.match(at('buy'), /\(buy Rig Mk II in the Tech Tree\)/);
-  s.tech.owned.rig_mk2 = true;
-  assert.match(at('upgrade'), /\(upgrade your Mining Station\)/);
-  o.building.push({ pad: 'r1', kind: 'rig', tier: 2, done: T0 + 1 });
-  assert.match(at('upgrading'), /\(its upgrade is under way\)/);
-  o.building = []; o.pads.r1.tier = 2;
+  assert.equal(at('finish'), 'Farming opens when you finish Verdance (6/9 maps) — then see the Factor at the Trade Station aboard The Iron Harvest');
+  assert.equal(factorDesk(s, 'ground'), 'gate');
+  s.planetMaps.Verdance = beatMaps(9);
   assert.match(at('ship'), /^Farming is open — accept the farming contract from the Factor at the Trade Station aboard The Iron Harvest once it is in orbit$/);
   s.capitalShips.Verdance = { arrived: true };
   assert.match(at('factor'), /aboard The Iron Harvest$/);
+  assert.equal(factorDesk(s, 'ground'), 'offer');
   assert.match(farmGate(s, 'ground', { ship, factor: 'Quartermaster Ines Roth' }).text, /from Quartermaster Ines Roth at the Trade Station/);
-  s.farmContracts = { ground: { state: 'active' } };
-  assert.equal(farmGate(s, 'ground'), null);
-  assert.equal(farmGateReason(s, 'ground'), null);
+  assert.match(at('factor') && farmGate({ ...s, outposts: {} }, 'ground').text, /accept the outpost contract first/);
   const SV = readFileSync(new URL('./view/sessionView.js', import.meta.url), 'utf8');
   assert.match(SV, /const gate = farmed \? null : farmGateReason\(/, 'the OUTPOST panel line is the rail\'s reason');
   assert.match(SV, /if \(gate !== gateText\) \{ gateText = gate; lockFarmGate\(gate\); \}/, 'the padlocks follow the live line');

@@ -24,13 +24,15 @@ const FARM_LINES = REVEALS.factionShip.farm;
 const REG = globalThis.BulwarkFactions;
 const T0 = Date.UTC(2026, 10, 11, 9, 0, 0);
 
-/** A save with the Verdance outpost (reference kit), its ship in orbit, and the rig at `rigTier`. */
-function verdance(rigTier = 2) {
+/** A save with the Verdance outpost (reference kit), its ship in orbit; stage 2: Verdance finished (9/9 maps beaten,
+ *  farming open, owner 2026-11-12), stage 1: 8/9 beaten (shut) — with a Rig Mk II either way: the rig no longer gates. */
+function verdance(stage = 2) {
   const s = defaultSave();
   s.carry = { gold: 50_000, structures: [] }; s.goldBank = 50_000;
   s.capitalShips = { Verdance: { arrived: true } };
+  s.planetMaps = { Verdance: Object.fromEntries(Array.from({ length: stage >= 2 ? 9 : 8 }, (_, i) => [i + 1, { beaten: true }])) };
   const o = referenceOutpost('ground', { seed: 5, map, now: T0 });
-  for (const b of Object.values(o.pads)) if (b.kind === 'rig') b.tier = rigTier;
+  for (const b of Object.values(o.pads)) if (b.kind === 'rig') b.tier = 2;
   s.outposts = { ground: o };
   s.outpostContracts = { ground: { step: 3, state: 'complete', since: T0 } };
   return s;
@@ -61,14 +63,14 @@ test('F1 is given by the planet\'s Factor (the catalog giver), and every farming
     for (const after of ['accept', 'later']) assert.ok(factorLines(FARM_LINES, c.planetKey, 'offer', after).length, `${c.planetKey} ${after} reply`);
   }
   // the gate is discoverable: before the rig is Mk II the Factor says what to bring
-  assert.match(factorLines(FARM_LINES, 'ground', 'gate').map((l) => l.line).join(' '), /Mining Rig Mk II/);
+  assert.match(factorLines(FARM_LINES, 'ground', 'gate').map((l) => l.line).join(' '), /Finish the fight for Verdance/);
   assert.deepEqual(factorLines(FARM_LINES, 'air', 'offer'), [], 'no farming contract on Florael yet: nothing to say');
 });
 
 test('the Trade Station\'s offer flag: gate → offer (flagged) → farm', () => {
   assert.equal(factorDesk(defaultSave(), 'ground'), 'gate', 'no outpost: the Factor says what is needed');
   assert.equal(factorDesk(verdance(1), 'ground'), 'gate');
-  assert.equal(factorFlag(verdance(1), 'ground'), false, 'no flag before the Rig Mk II');
+  assert.equal(factorFlag(verdance(1), 'ground'), false, 'no flag before Verdance is finished');
   const s = verdance(2);
   assert.equal(factorDesk(s, 'ground'), 'offer');
   assert.equal(factorFlag(s, 'ground'), true, 'F1 on offer: the room flags the Factor');
@@ -98,7 +100,7 @@ test('the dialog path: the Factor hands over farmCard\'s terms; ACCEPT makes the
   assert.deepEqual(s.rapport[fac.name], { score: 2, kept: 0, broken: 0, faction: 'ground', greets: 1, greetDay: '2026-11-11', contracts: 1 });
   // a refused accept (gate shut) strikes no deal
   const shut = verdance(1);
-  assert.match(acceptViaFactor(shut, 'ground', fac, { map, now: T0 }).error, /Rig Mk II/);
+  assert.match(acceptViaFactor(shut, 'ground', fac, { map, now: T0 }).error, /finish Verdance/);
   assert.equal(shut.rapport && shut.rapport[fac.name], undefined);
 });
 

@@ -68,7 +68,7 @@ export function farmGateReason(save, planet, ship = null) {
   if (!farmContractOf(planet, 'F1')) return `Farming is not open on ${(PLANETS[planet] || {}).name || planet} yet`;
   // the one wording of the gate, step by step (farm/contract.js farmGate): the OUTPOST panel's line reads it too
   const g = farmGate(save, planet, { ship });
-  return g ? g.text : `Farming opens with a Mining Rig Mk II — then see the Factor at the Trade Station aboard ${ship || `the ${(PLANETS[planet] || {}).name || planet} capital ship`}`;
+  return g ? g.text : null;
 }
 
 /**

@@ -1,4 +1,4 @@
-// [MM-story_mwabgpsa_e] The farming gate (Rig Mk II) and Verdance F1, run through the Mission Log like the outpost contracts.
+// [MM-story_mwabgpsa_e] The farming gate (the planet finished, owner 2026-11-12) and Verdance F1, run through the Mission Log like the outpost contracts.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -18,13 +18,15 @@ import { farmButtonModel } from '../menu/farmButton.js';
 
 const CATALOG = JSON.parse(readFileSync(new URL('../../content/missions/missions.json', import.meta.url), 'utf8'));
 const T0 = Date.UTC(2026, 10, 10, 9, 0, 0), MIN = 60_000;
-/** A save with the Verdance outpost (reference kit), its ship in orbit, and the rig at `rigTier`. */
-function verdance(rigTier = 2) {
+/** A save with the Verdance outpost (reference kit), its ship in orbit; stage 2: Verdance finished (9/9 maps beaten,
+ *  farming open, owner 2026-11-12), stage 1: 8/9 beaten (shut) — with a Rig Mk II either way: the rig no longer gates. */
+function verdance(stage = 2) {
   const s = defaultSave();
   s.carry = { gold: 50_000, structures: [] }; s.goldBank = 50_000;
   s.capitalShips = { Verdance: { arrived: true } };
+  s.planetMaps = { Verdance: Object.fromEntries(Array.from({ length: stage >= 2 ? 9 : 8 }, (_, i) => [i + 1, { beaten: true }])) };
   const o = referenceOutpost('ground', { seed: 5, map, now: T0 });
-  for (const b of Object.values(o.pads)) if (b.kind === 'rig') b.tier = rigTier;
+  for (const b of Object.values(o.pads)) if (b.kind === 'rig') b.tier = 2;
   s.outposts = { ground: o };
   s.outpostContracts = { ground: { step: 3, state: 'complete', since: T0 } };
   return s;
@@ -39,7 +41,7 @@ const free = (o, n) => {
   return out;
 };
 
-test('the gate: farming opens on a planet when its outpost has a finished Rig Mk II (owner, D41)', () => {
+test('the gate: farming opens on a planet when it is finished, every campaign map beaten (owner 2026-11-12)', () => {
   assert.equal(farmingOpen(verdance(1), 'ground'), false);
   assert.equal(farmingOpen(verdance(2), 'ground'), true);
   assert.equal(farmingOpen(defaultSave(), 'ground'), false, 'no outpost, no farming');
@@ -56,7 +58,7 @@ test('F1 is a Mission Log mission like the outpost contracts: logged aboard Verd
   assert.equal(def.collectAt, CATALOG.capitalShips.Verdance.ship);
   assert.deepEqual(def.complete.map((c) => c.cond), ['farm_plots_planted', 'crop_delivered', 'farm_methods_growing']);
   const shut = verdance(1);
-  assert.ok(!syncMissions(shut, CATALOG, ctx(shut)).some((m) => m.id === 'FC-VER-1'), 'no Rig Mk II: not logged');
+  assert.ok(!syncMissions(shut, CATALOG, ctx(shut)).some((m) => m.id === 'FC-VER-1'), 'planet not finished: not logged');
   const s = verdance(2);
   assert.ok(syncMissions(s, CATALOG, ctx(s)).some((m) => m.id === 'FC-VER-1'));
 });
@@ -75,7 +77,7 @@ test('ACCEPT grants the Farmhouse beside the hub and the Pod Crate; twice change
   assert.equal(farmOffer(s, 'ground'), null);
   assert.match(acceptFarmContract(s, 'ground', { map, now: T0 }).error, /already/);
   assert.equal(podCount(s, 'loam-grain', 1), FARM.Pod_Crate, 'no second crate');
-  assert.match(acceptFarmContract(verdance(1), 'ground', { map, now: T0 }).error, /Rig Mk II/);
+  assert.match(acceptFarmContract(verdance(1), 'ground', { map, now: T0 }).error, /finish Verdance \(8\/9 maps\)/);
 });
 
 test('F1\'s unlocks apply on ACCEPT: Irrigated (its step 3 needs two methods), SEED PODS, Sprinklers', () => {

@@ -9,7 +9,7 @@
  * (GDD §11: Quartermaster Ines Roth "counts the powder while they wave flags"). No character is invented.
  *
  * The Factor's desk on a planet (factorDesk):
- *   'gate'  — the planet has a farming contract but farming is shut: the Factor says what is needed (a Mining Rig Mk II)
+ *   'gate'  — the planet has a farming contract but farming is shut: the Factor says what is needed (finish the planet)
  *   'offer' — F1 is on offer (contract.js farmOffer): the room marks the Factor; talking opens the scene and the card
  *   'farm'  — the contract is the player's: the Factor talks about the harvest
  *   null    — nothing to say about farming on this planet
