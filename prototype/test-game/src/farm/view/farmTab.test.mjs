@@ -12,7 +12,7 @@ import { podCount } from '../pods.js';
 import { acceptFarmContract, measureCropDelivered } from '../contract.js';
 import { cellRule } from '../cells.js';
 import { farmPanelModel, plantChoices, sellable, farmRailGlyph } from './farmUi.js';
-import { farmRailIds, farmRailLocks, farmRefusal, farmThingAt } from '../farmRail.js';
+import { farmRailIds, farmRailLocks, farmRefusal, farmThingAt, farmRailLabel } from '../farmRail.js';
 import { getStructureDef } from '../../data/tables.js';
 
 const CATALOG = JSON.parse(readFileSync(new URL('../../../content/missions/missions.json', import.meta.url), 'utf8'));
@@ -191,4 +191,35 @@ test('PLANT on a Traditional plot shows the level-5 cap and why', () => {
   assert.equal(panel.note, 'Level 4 — level 5 needs irrigation.');
   const r = ses.act({ type: 'plant', plot: id, pick: 'loam-grain' }, t1);
   assert.deepEqual([r.farm.level, r.farm.capped], [4, 'level 5 needs irrigation']);
+});
+
+
+// [MM-task_mwcztxf9_2] owner 2026-11-11: "on the rail for seed pods you should show the quantity"
+test('a FARM-tab crop button shows the seed pods held (never chest progress); planting takes them off at once', () => {
+  assert.deepEqual(farmRailLabel('FARM-crop-loam-grain', { 'loam-grain': 8 }), { text: '8 pods', title: 'Loam Grain: 8 seed pods held · a plot plants 4' });
+  assert.equal(farmRailLabel('FARM-crop-loam-grain', { 'loam-grain': 1 }).text, '1 pod');
+  assert.equal(farmRailLabel('FARM-crop-loam-grain', {}).text, '0 pods');
+  assert.equal(farmRailLabel('FARM-traditional', { 'loam-grain': 8 }), null, 'plots and buildings keep their gold price');
+  assert.equal(farmRailLabel('OUT-power', {}), null);
+  assert.doesNotMatch(farmRailLabel('FARM-crop-loam-grain', { 'loam-grain': 8 }).title, /chest|next|reward/i, 'no chest progress');
+  // the label reads the save context's pods, which a planting changes (the session re-reads it after each action)
+  const s0 = farmSave(), store = memStore(s0);
+  const ses = createSession({ store, planet: 'ground', map, catalog: CATALOG, raidHook: noRaid });
+  const before = farmRailLabel('FARM-crop-loam-grain', ses.ctx(T0).pods).text;
+  const spot = farmSpots(ses.outpost(), ses.ctx(T0))[0];
+  assert.ok(ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: spot.cell }, T0).ok);
+  const ready = T0 + (FARM.Prep_Sec + 1) * 1000;
+  const id = Object.keys(ses.outpost().farm.plots).pop();
+  assert.ok(ses.act({ type: 'plant', plot: id, pick: 'loam-grain' }, ready).ok);
+  const after = farmRailLabel('FARM-crop-loam-grain', ses.ctx(ready).pods).text;
+  assert.equal(+before.split(' ')[0] - 4, +after.split(' ')[0], `${before} → ${after}`);
+});
+
+test('the shared rail count hook is generic and optional: battles set none, so their price labels are untouched', () => {
+  const hud = readFileSync(new URL('../../render/hud.js', import.meta.url), 'utf8');
+  assert.match(hud, /const railLabel = hud\.callbacks && typeof hud\.callbacks\.railLabel === 'function' \? hud\.callbacks\.railLabel : null;/);
+  assert.match(hud, /if \(railLabel\) \{/);
+  const main = readFileSync(new URL('../../main.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(main, /railLabel/, 'the battle never sets it');
+  assert.match(readFileSync(new URL('../../outpost/view/sessionView.js', import.meta.url), 'utf8'), /railLabel: \(id\) => \(farmed \? farmRailLabel\(id, ctxNow\(\)\.pods\) : null\)/);
 });
