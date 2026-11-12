@@ -75,6 +75,7 @@ STRUCT_COLS = ["Kind", "Tier", "Cost", "Value", "Build_Sec", "Power_Draw", "Powe
 # Power_Priority (owner 2026-11-11): who a short grid serves first, lower first; blank = last. Same values as
 # patch_power_priority.py PRIORITY (that script adds the column without LibreOffice).
 from patch_power_priority import PRIORITY as POWER_PRIORITY  # noqa: E402
+from patch_outpost_params import ROWS as PROBE_ROWS  # noqa: E402
 # Owner 2026-11-07: the contract grants only the hub; the player buys power, the mining station, storage, the Resource
 # Bay, harvesters and the defenses. The first setup (Power I + Rig I + Storage I, 1,500) is sized to the gold a player
 # banks by map 3 at 3 stars and pays back from iron (720 gold an hour) in about two hours (design §6.1).
@@ -82,8 +83,10 @@ from patch_power_priority import PRIORITY as POWER_PRIORITY  # noqa: E402
 # harvester is the battle harvester's 500 × 4 (the same ×4 as the defenses).
 STRUCTS = [
     # Power_Draw rises with tier (owner 2026-11-11: "upgraded buildings can use more power requiring upgraded power
-    # stations"; tiers do not count toward raid size): tier N draws N x the tier-I draw for rig, storage, mg and cannon
-    # (starting numbers, owner tunes) [MM-story_mwcp7u7b_3a]. Without LibreOffice: tools/economy/patch_tier_power_draw.py.
+    # stations"; tiers do not count toward raid size): tier N draws N x the tier-I draw for rig and storage
+    # (starting numbers, owner tunes) [MM-story_mwcp7u7b_3a]. Defenses (mg, cannon, wall) draw 0 at every tier — owner
+    # 2026-11-11 "Defense towers do not need power" [MM-task_mwcutmnk_3h]. Without LibreOffice:
+    # tools/economy/patch_tier_power_draw.py.
     ["hub", 1, 0, 0, 0, 2, 0, 0, "", "", "", "", "hub", "granted"],
     ["power", 1, 600, 600, 120, 0, 10, 10, "", "", "", "", "power", "contract:1"],
     ["power", 2, 6000, 6000, 900, 0, 20, 14, "", "", "", "", "power_ii", "tech:power_grid_2"],
@@ -98,12 +101,12 @@ STRUCTS = [
     # upgrade of the one Habitat. It draws no power, so the gun cap never moves with the grid (design 6, 11).
     ["habitat", 1, 3000, 3000, 600, 0, 0, 0, "", "", "", "", "habitat", "contract:1"],
     ["habitat", 2, 5000, 5000, 900, 0, 0, 0, "", "", "", "", "habitat", "contract:1"],
-    ["mg", 1, 600, 600, 120, 1, 0, 0, "", "", "", "STR-MG", "", "contract:1"],
-    ["mg", 2, 1500, 1500, 120, 2, 0, 0, "", "", "", "STR-MG", "", "techtree+upgradeBay"],
-    ["mg", 3, 3000, 3000, 120, 3, 0, 0, "", "", "", "STR-MG", "", "techtree+upgradeBay"],
-    ["cannon", 1, 1200, 1200, 120, 1, 0, 0, "", "", "", "STR-Cannon", "", "contract:1"],
-    ["cannon", 2, 3000, 3000, 120, 2, 0, 0, "", "", "", "STR-Cannon", "", "techtree+upgradeBay"],
-    ["cannon", 3, 6000, 6000, 120, 3, 0, 0, "", "", "", "STR-Cannon", "", "techtree+upgradeBay"],
+    ["mg", 1, 600, 600, 120, 0, 0, 0, "", "", "", "STR-MG", "", "contract:1"],
+    ["mg", 2, 1500, 1500, 120, 0, 0, 0, "", "", "", "STR-MG", "", "techtree+upgradeBay"],
+    ["mg", 3, 3000, 3000, 120, 0, 0, 0, "", "", "", "STR-MG", "", "techtree+upgradeBay"],
+    ["cannon", 1, 1200, 1200, 120, 0, 0, 0, "", "", "", "STR-Cannon", "", "contract:1"],
+    ["cannon", 2, 3000, 3000, 120, 0, 0, 0, "", "", "", "STR-Cannon", "", "techtree+upgradeBay"],
+    ["cannon", 3, 6000, 6000, 120, 0, 0, 0, "", "", "", "STR-Cannon", "", "techtree+upgradeBay"],
     ["wall", 1, 400, 400, 120, 0, 0, 0, "", "", "", "STR-Wall", "", "contract:1"],
     ["wall", 2, 1000, 1000, 120, 0, 0, 0, "", "", "", "STR-Wall", "", "tech:reinforced_walls"],
     # Pylon (One Battle UX S2b, owner 2026-11-11 "keep it very simple"): a 1x1 grid node with reach only — one tier,
@@ -161,6 +164,8 @@ PARAMS = [
     ["Habitat_Guns_Per_Tier", 4, "count", "guns each Habitat tier adds: Habitat I +4, Habitat II +8 (owner 2026-11-09: 4 more per habitat)"],
     ["Raid_Chance_Per_Size", 0.05, "x", "owner 2026-11-11: the bigger the base the more frequent attacks; a window's raid chance = (Raid_Min_Gap_Hours / Raid_Mean_Hours) x (1 + this x size), size = finished buildings + defenses, hub not counted"],
     ["Raid_Chance_Max", 0.9, "share", "the raid chance per window never goes above this, however big the base (at most 1: one raid per window)"],
+    # visit probes (owner 2026-11-11 "supposed to be mild") [MM-task_mwcutmnk_3h]; same row as patch_outpost_params.py
+    ["Probe_Strength", *PROBE_ROWS["Probe_Strength"]],
 ]
 
 TECH_COLS = ["Node", "Name", "Price", "Effect", "Unlocked_By", "Requires", "Applies"]

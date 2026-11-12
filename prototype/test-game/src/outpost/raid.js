@@ -50,8 +50,8 @@
  *    idle (no open route) marches on the hub as if the defenses were not there, up to the first one in its way, and
  *    shoots it until it falls (siege, below).
  *  - The defenders: the outpost's defenses, each its Battle_Struct (STR-MG, STR-Cannon, STR-Wall) at its tier,
- *    starting from its SAVED HP. A destroyed defense (HP 0) is a wreck and is not placed. A defense that draws power
- *    and is not in raid.powered stays inert: it is placed (it blocks and can be shot) but never fires.
+ *    starting from its SAVED HP. A destroyed defense (HP 0) is a wreck and is not placed. Defenses need no power
+ *    (owner 2026-11-11 [MM-task_mwcutmnk_3h]): every standing gun fires, whatever the grid.
  *  - The raiders: one wave of the planet faction's tier I lightGround units (troops and assault tanks), the measured
  *    number for the contract step, cycling Units in order and alternating the raid lanes (the first lane drawn from
  *    the raid's seed), plus the planet's Breacher when it has one (owner 2026-11-07: Xenthe and Vexmire, whose Toxic
@@ -63,7 +63,7 @@
  *    dissidents trying to reach the buildings, and the wear they leave is what carries over between raids. Water's
  *    swimmers walk on an outpost's dry ground (domain Walker), since an outpost map has no water lane.
  *  - The scripted first raid (raid.first; contract 1's "hold the first raid") is a probe: FIRST_RAID_SIZE raiders, no
- *    breacher, down the lane that passes closest to an armed, powered defense; the probe marches on the nearest gun
+ *    breacher, down the lane that passes closest to an armed defense; the probe marches on the nearest gun
  *    and fights it where it stands. So a player who bought the setup, one Machine Gun and a couple of walls holds it
  *    while watching (owner 2026-11-07); with no gun it walks in.
  *  - The result: a breach the moment any raider standing on the mesa top comes within BREACH_REACH of a mesa
@@ -142,9 +142,9 @@ export function firstRaidUnits(planet) {
   const r = raidFor(planet, 1);
   return r && r.units.length ? composeRaid(r.units, FIRST_RAID_SIZE) : [];
 }
-/** The lane (index) whose open way to the hub passes closest to an armed, powered defense; ties go to the seed. */
-function probeLane(outpost, simMap, lanes, powered, seed) {
-  const guns = outpost.defenses.filter((d) => d.hp > 0 && d.kind !== 'wall' && powered.has(d.id));
+/** The lane (index) whose open way to the hub passes closest to an armed defense; ties go to the seed. */
+function probeLane(outpost, simMap, lanes, seed) {
+  const guns = outpost.defenses.filter((d) => d.hp > 0 && d.kind !== 'wall');
   if (!guns.length) return seed % lanes.length;
   const grid = buildNavGrid(simMap, []);
   const base = { x: simMap.base.x, y: simMap.base.y };
@@ -366,13 +366,12 @@ export function createRaid(outpost, raid = {}, opts = {}) {
   const breacherReach = breacherId ? getUnitDef(breacherId.replace(/-[^-]+$/, '-Troops')).range : null;
   const breacherHp = opts.breacherHpMult ?? ((data.breacherHpMult ?? 1) * (data.strength ?? 1));
   const seed = opts.seed != null ? opts.seed : raidSeed(outpost.seed, raid);
-  const powered = raid.powered instanceof Set ? raid.powered : new Set(raid.powered || []);
   const simMap = raidSimMap(outpost, map, opts);
   // which lane the first raider takes is drawn from the raid's seed; the raiders then alternate the lanes. The scripted
-  // first raid instead comes down the lane whose way to the hub passes closest to an armed, powered defense: the probe
+  // first raid instead comes down the lane whose way to the hub passes closest to an armed defense: the probe
   // comes where the player is watching
   const lanes = simMap.rings[0].spawnList.ground;
-  const k = raid.first && !opts.units ? probeLane(outpost, simMap, lanes, powered, seed) : seed % lanes.length;
+  const k = raid.first && !opts.units ? probeLane(outpost, simMap, lanes, seed) : seed % lanes.length;
   simMap.rings[0].spawnList.ground = [...lanes.slice(k), ...lanes.slice(0, k)];
   const waves = [{ faction: outpost.planet, spawns: units.map((unitId) => ({ unitId, lane: 'ground', count: 1, delay: 0, interval: 0 })) }];
   const state = createSim(seed, { map: simMap, waves });
@@ -392,7 +391,6 @@ export function createRaid(outpost, raid = {}, opts = {}) {
     s.dps = def.dps[d.tier - 1];
     s.lifecycle = s.hp < s.maxHp ? 'Damaged' : 'Complete';
     s.progress = 0;
-    if (od.draw > 0 && !powered.has(d.id)) { s.stunnedUntil = Infinity; s.unpowered = true; }   // inert
     state.structures.set(s.id, s);
     defenseIds.set(s.id, d.id);
     placed.push([d.id, s]);
@@ -432,7 +430,7 @@ export function createRaid(outpost, raid = {}, opts = {}) {
   const probing = !!raid.first && !opts.units;
   const probe = () => {
     const g = state.navGrid;
-    const guns = [...state.structures.values()].filter((s) => s.hp > 0 && s.lifecycle !== 'Destroyed' && (s.dps || 0) > 0 && !s.unpowered);
+    const guns = [...state.structures.values()].filter((s) => s.hp > 0 && s.lifecycle !== 'Destroyed' && (s.dps || 0) > 0);
     for (const u of state.units.values()) {
       if (!u._probe || u.hp <= 0) continue;
       let gun = null, gd = Infinity;

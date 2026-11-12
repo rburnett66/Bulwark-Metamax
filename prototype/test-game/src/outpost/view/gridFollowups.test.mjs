@@ -34,13 +34,15 @@ test('a station-less pylon chain is listed by unlitChains and drawn as unlit lin
 });
 
 // ── 1. power icons, and the building an armed placement would cut ─────────────────────────────────────────────────
-test('power icons: on / off per building and powered defense; none on nodes, walls, the Habitat or a build site', () => {
+// a gun had an icon too (g1 on, g2 off out of reach) until defenses stopped needing power (owner 2026-11-11
+// [MM-task_mwcutmnk_3h]): no defense carries a power icon now, in reach or not
+test('power icons: on / off per building; none on defenses, nodes, the Habitat or a build site', () => {
   const o = { t: 0, online: true, building: [{ pad: 'job', kind: 'storage', tier: 1, at: { x: 0, y: -3, w: 2, h: 2 }, done: 1e12 }],
     pads: { s: at('power', 0, 0), y: at('pylon', 4, 0, 1, 1), r: at('rig', 3, 3), far: at('rig', 200, 200), hab: at('habitat', 0, 6) },
     defenses: [{ id: 'g1', kind: 'mg', tier: 1, cell: [2, 2], hp: 1 }, { id: 'w1', kind: 'wall', tier: 1, cell: [5, 5], hp: 1 },
       { id: 'g2', kind: 'mg', tier: 1, cell: [300, 0], hp: 1 }] };
   const icons = planPowerIcons(o, free);
-  assert.deepEqual(icons.map((i) => [i.id, i.state, i.defense]), [['far', 'off', false], ['r', 'on', false], ['g1', 'on', true], ['g2', 'off', true]]);
+  assert.deepEqual(icons.map((i) => [i.id, i.state, i.defense]), [['far', 'off', false], ['r', 'on', false]]);
   assert.deepEqual(icons.find((i) => i.id === 'r').at, [4, 4], 'over the building\'s centre');
   assert.deepEqual(planPowerIcons(o, free, { grids: powerGrids(o, free) }), icons, 'a grid answer to hand gives the same');
 });

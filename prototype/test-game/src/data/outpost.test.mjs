@@ -19,9 +19,11 @@ test("the owner's fixed numbers (design §4.1)", () => {
   assert.equal(OUTPOST.Far_Buyer_Mult, 2);
 });
 
-test('the reference set draws 9 of the first station\'s 10 power (design §4.5)', () => {
+// was 9 of 10 (the Machine Gun and the Cannon drew 1 each); defenses need no power since owner 2026-11-11 ("Defense
+// towers do not need power") [MM-task_mwcutmnk_3h], so the kit's buildings alone draw 7 (hub 2, rig 4, storage 1)
+test('the reference set draws 7 of the first station\'s 10 power: its guns draw nothing (design §4.5)', () => {
   const kit = REFERENCE_SET.map((kind) => ({ kind, tier: 1 }));
-  assert.deepEqual(powerBudget(kit), { supply: 10, draw: 9, spare: 1 });
+  assert.deepEqual(powerBudget(kit), { supply: 10, draw: 7, spare: 3 });
   assert.equal(structureDef('power', 2).supply, 20);
   assert.equal(structureDef('power', 1).reach, 10);
   assert.equal(structureDef('power', 2).reach, 14);
