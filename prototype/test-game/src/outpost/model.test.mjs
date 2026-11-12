@@ -15,6 +15,7 @@ import { defaultSave, migrate } from '../save/save.js';
 const MIN = 60_000, HOUR = 3_600_000, DAY = 24 * HOUR;
 const T0 = Date.UTC(2026, 10, 7, 12, 0, 0);
 const held = () => ({ result: 'held', defenses: [] });
+const UNCOMMON = map.deposits.find((d) => d.tier === 'uncommon');   // S2c.2: a rig stands on its deposit
 const ctx = (extra = {}) => ({ map, raid: held, ...extra });
 
 /** A Verdance outpost (the reference set), online at T0, with no raids unless asked. */
@@ -169,7 +170,7 @@ test('power: supply, reach, pooling, and a remote rig with its own station (desi
   const unlocks = ['power_grid_2'];
   let o = online();
   // a second rig on the uncommon deposit: 13 draw on a 10 supply grid, so it stays off for supply
-  o = place(o, { pad: 'r2', kind: 'rig' }, { map, now: T0, unlockedTiers: ['common', 'uncommon'] }).outpost;
+  o = place(o, { pad: 'r2', kind: 'rig', at: UNCOMMON }, { map, now: T0, unlockedTiers: ['common', 'uncommon'] }).outpost;
   o = quiet(o, T0 + 10 * MIN).outpost;
   let g = powerGrids(o, map);
   assert.equal(g.off.r2, 'supply');
@@ -196,9 +197,9 @@ test('power: supply, reach, pooling, and a remote rig with its own station (desi
 test('building refuses what cannot be paid, the wrong pad, a taken pad and a locked ore', () => {
   const o = online();
   const c = { map, now: T0, unlockedTiers: ['common'] };
-  assert.match(place(o, { pad: 'r2', kind: 'rig' }, { ...c, gold: 599 }).error, /costs 600/);
-  assert.match(place(o, { pad: 'r2', kind: 'rig' }, c).error, /not unlocked/);
-  assert.match(place(o, { pad: 'b1', kind: 'rig' }, c).error, /cannot go on a bay pad/);
+  assert.match(place(o, { pad: 'r2', kind: 'rig', at: UNCOMMON }, { ...c, gold: 599 }).error, /costs 600/);
+  assert.match(place(o, { pad: 'r2', kind: 'rig', at: UNCOMMON }, c).error, /not unlocked/);
+  assert.match(place(o, { pad: 'b1', kind: 'rig' }, c).error, /a rig goes on a deposit/, 'a rig stands only on a deposit (S2c.2: no pad roles)');
   assert.match(place(o, { pad: 'p1', kind: 'power' }, c).error, /taken/);
   assert.match(upgrade(o, 'r1', { now: T0 }).error, /not unlocked/);
   const ok = place(o, { pad: 'b1', kind: 'resourceBay' }, { ...c, gold: 2500 });
@@ -303,8 +304,8 @@ test('owner 2026-11-07: no electricity, no operation; stored ore is kept; an unp
   });
   assert.equal(sell(d, ctx()).gold, 720, 'stored ore still sells: 12 loads');
   // only the tower loses power (the rig on a station of its own): its door closes, the rig falls back to its own bay
-  const map2 = { ...map, pads: [...map.pads, { id: 'p9', x: 8, y: 18, w: 2, h: 2, role: 'power' }] };
-  const towerOff = { ...o, pads: { ...o.pads, p9: { kind: 'power', tier: 1 } } };
+  const map2 = map;   // a second station of its own spot (S2c.2: no map pads)
+  const towerOff = { ...o, pads: { ...o.pads, p9: { kind: 'power', tier: 1, at: { x: 8, y: 18, w: 2, h: 2 } } } };
   delete towerOff.pads.p1;
   const g = powerGrids(towerOff, map2);
   assert.ok(g.powered.has('r1') && !g.powered.has('s1'), JSON.stringify(g.off));
@@ -329,7 +330,7 @@ test('Rig Mk II doubles extraction and its bay; one full bay stops only its own 
   const after = quiet(o, o.t + HOUR).outpost.storage.r1.iron;
   assert.ok(Math.abs(after - before - 360) < 1e-9, 'Mk II mines 6 iron a minute');
   // two rigs: fill the iron bay; the aluminum rig keeps going
-  let two = place(online(), { pad: 'r2', kind: 'rig' }, { map, now: T0, unlockedTiers: ['common', 'uncommon'] }).outpost;
+  let two = place(online(), { pad: 'r2', kind: 'rig', at: UNCOMMON }, { map, now: T0, unlockedTiers: ['common', 'uncommon'] }).outpost;
   two = upgrade(two, 'p1', { now: T0, unlocks: ['power_grid_2'] }).outpost;
   two = quiet(two, T0 + 6 * HOUR).outpost;
   assert.ok(Math.abs(two.storage.r1.iron - 720) < 1e-9);

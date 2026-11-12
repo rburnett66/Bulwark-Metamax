@@ -80,7 +80,9 @@ import { createStructure } from '../sim/entities.js';
 import { buildNavGrid, findWalkerPath } from '../sim/pathfinding.js';
 import { getStructureDef, getUnitDef } from '../data/tables.js';
 import { referenceOutpost, powerGrids, windowMs, buildingRect } from './model.js';
-import { structureDef, raidFor } from '../data/outpost.js';
+import { structureDef, raidFor, HUB_CLEARANCE } from '../data/outpost.js';
+import { outpostStructId } from '../data/outpostStructures.js';
+import { positionCheck, nearestLegal } from './siting.js';
 import { TERRAIN } from '../terrain/terrainGen.js';
 import { buildTerrainMap } from '../sim/mapgen.js';
 import { inBaseReach } from '../sim/combat.js';
@@ -174,12 +176,23 @@ export const RAID_RANGE_CAP = Math.max(getStructureDef('STR-MG').range, getStruc
 // ── the board ────────────────────────────────────────────────────────────────────────────────────────────────────
 const dims = (map) => ({ cols: map.width ?? map.cols, rows: map.height ?? map.rows });
 
-/** The finished buildings that count for a breach (not remote), as rectangles — pad or free spot (model.buildingRect). */
+/** Is a building's rectangle off the mesa top (a remote site: raiders breach the base, not a far rig)? */
+export function remoteRect(map, r) {
+  const H = map.heights, { cols } = dims(map);
+  if (!H || !r) return false;
+  for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (H[y * cols + x] !== MESA_TOP) return true;
+  return false;
+}
+/**
+ * The finished buildings that count for a breach, as rectangles (model.buildingRect): the hub on the landing pad first
+ * (role 'hub': a raider within the base's reach of it breaches), then every other finished building not at a remote
+ * site, by id.
+ */
 function buildingPadsOf(outpost, map) {
-  // map-pad order first (as before — raids stay identical on pad-built outposts), then free-placed buildings by id
-  const onPads = map.pads.filter((p) => !p.remote && outpost.pads[p.id] && !outpost.pads[p.id].at);
-  const free = Object.keys(outpost.pads).filter((id) => outpost.pads[id].at).sort().map((id) => buildingRect(outpost, map, id));
-  return [...onPads, ...free];
+  const ids = Object.keys(outpost.pads).sort();
+  const hubs = ids.filter((id) => outpost.pads[id].kind === 'hub').map((id) => buildingRect(outpost, map, id)).filter(Boolean).map((r) => ({ ...r, role: 'hub' }));
+  const rest = ids.filter((id) => outpost.pads[id].kind !== 'hub').map((id) => buildingRect(outpost, map, id)).filter((r) => r && !remoteRect(map, r));
+  return [...hubs, ...rest];
 }
 
 /**
@@ -191,7 +204,7 @@ function buildingPadsOf(outpost, map) {
  * gets an open board of its size. opts.bakeTune: the render's tf.bake.v1 tune, when the live view has one.
  */
 export function raidSimMap(outpost, map, opts = {}) {
-  const hub = map.pads.find((p) => p.role === 'hub');
+  const hub = map.hub;
   const bx = Math.floor(hub.x + hub.w / 2), by = Math.floor(hub.y + hub.h / 2);
   const cells = [];
   for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) cells.push({ x: bx + dx, y: by + dy });
@@ -239,12 +252,16 @@ export function raidSimMap(outpost, map, opts = {}) {
 }
 
 /** The starter kit plus one more Machine Gun (design §5.2 "well defended"), on the free, buildable, powered mesa-top
- *  cell (off the pads) nearest the kit's Machine Gun (WELL_DEFENDED_NEAR). → a new outpost (the one passed in is unchanged). */
+ *  cell (off the buildings and the landing pad, by the hub clearance) nearest the kit's Machine Gun (WELL_DEFENDED_NEAR).
+ *  → a new outpost (the one passed in is unchanged). */
 export function wellDefended(outpost, map, { near = WELL_DEFENDED_NEAR } = {}) {
   const o = JSON.parse(JSON.stringify(outpost));
   const anchor = o.defenses.find((d) => d.kind === near) || o.defenses[0];
   const { cols, rows } = dims(map);
-  const station = map.pads.find((p) => p.role === 'power' && !p.remote);
+  const stationId = Object.keys(o.pads).sort().find((id) => o.pads[id].kind === 'power' && !remoteRect(map, buildingRect(o, map, id)));
+  const station = buildingRect(o, map, stationId);
+  const rects = [map.hub, ...Object.keys(o.pads).map((id) => buildingRect(o, map, id)).filter(Boolean)];
+  const clear = HUB_CLEARANCE, hub = map.hub;
   const reach = (structureDef('power', 1) || {}).reach || 10;
   const sc = [station.x + station.w / 2, station.y + station.h / 2];
   const taken = new Set(o.defenses.map((d) => `${d.cell[0]},${d.cell[1]}`));
@@ -252,7 +269,8 @@ export function wellDefended(outpost, map, { near = WELL_DEFENDED_NEAR } = {}) {
   for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
     const i = y * cols + x;
     if (taken.has(`${x},${y}`)) continue;
-    if (map.pads.some((p) => x >= p.x && x < p.x + p.w && y >= p.y && y < p.y + p.h)) continue;   // off the pads
+    if (rects.some((p) => x >= p.x && x < p.x + p.w && y >= p.y && y < p.y + p.h)) continue;   // off the buildings
+    if (x >= hub.x - clear && x < hub.x + hub.w + clear && y >= hub.y - clear && y < hub.y + hub.h + clear) continue;   // the hub clearance
     if (map.blocking && map.blocking[i]) continue;
     if (map.terrain && map.terrain[i] === TERRAIN.WATER) continue;
     if (map.heights && map.heights[i] !== 2) continue;                       // on the mesa top
@@ -538,18 +556,28 @@ export function makeRaidHook({ map, step = 1, units } = {}) {
  */
 export function stepOutpost(planet, step, { map, seed = 1 }) {
   const o = referenceOutpost(planet, { seed, map, now: 0 });
-  const padFor = (tier) => (map.deposits.find((d) => d.tier === tier) || {}).pad;
+  const depositOfTier = (tier) => (map.deposits || []).find((d) => d.tier === tier) || null;
+  const rigAt = (id, d) => {
+    const fp = getStructureDef(outpostStructId('rig')).footprint;
+    o.pads[id] = { kind: 'rig', tier: 1, deposit: d.tier, deep: false, at: { x: d.x, y: d.y, w: fp.w, h: fp.h } };
+    o.storage[id] = {};
+  };
   if (step >= 2) {
-    const first = map.pads.find((p) => p.role === 'power' && !p.remote);
-    o.pads[first.id] = { kind: 'power', tier: 2 };
-    const r2 = padFor('uncommon');
-    if (r2) { o.pads[r2] = { kind: 'rig', tier: 1, deposit: 'uncommon', deep: false }; o.storage[r2] = {}; }
+    o.pads.p1 = { ...o.pads.p1, kind: 'power', tier: 2 };
+    const d = depositOfTier('uncommon');
+    if (d) rigAt('r2', d);
   }
   if (step >= 3) {
-    const r3 = padFor('rare');
-    const p2 = map.pads.find((p) => p.role === 'power' && p.remote);
-    if (r3) { o.pads[r3] = { kind: 'rig', tier: 1, deposit: 'rare', deep: false }; o.storage[r3] = {}; }
-    if (p2) o.pads[p2.id] = { kind: 'power', tier: 1 };
+    const d = depositOfTier('rare');
+    if (d) {
+      rigAt('r3', d);
+      // its own station: the legal spot nearest the rare rig with the rig in its reach (siting.js, the shared rules)
+      const reach = (structureDef('power', 1) || {}).reach || 10, fp = getStructureDef(outpostStructId('power')).footprint;
+      const rc = [d.x + 1, d.y + 1];
+      const c = nearestLegal(positionCheck(o, map), map, 'power', { x: d.x, y: d.y },
+        { accept: (q) => Math.hypot(q.x + fp.w / 2 - rc[0], q.y + fp.h / 2 - rc[1]) <= reach });
+      if (c) o.pads.p2 = { kind: 'power', tier: 1, at: { x: c.x, y: c.y, w: fp.w, h: fp.h } };
+    }
   }
   return o;
 }

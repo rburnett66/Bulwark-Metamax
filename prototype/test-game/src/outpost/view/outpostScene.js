@@ -31,7 +31,8 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
   root.name = 'outpost';
   scene.add(root);
   const debris = createOreDebris(THREE, root, { cap: tier === 'low' ? 160 : 500 });
-  const pads = new Map(map.pads.map((p) => [p.id, p]));
+  // the landing pad is the only fixed spot on an outpost map (S2c.2 [MM-story_mwc9pmbn_2i]: no build pads)
+  const pads = new Map(map.hub ? [[map.hub.id, { ...map.hub, role: 'hub' }]] : []);
   // where a building stands: a freely placed one's own rectangle (from planBuildings), else its map pad
   const rects = new Map();
   const rectOf = (id) => rects.get(id) || pads.get(id);
@@ -44,7 +45,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
   function buildPlates() {
     const g = new THREE.Group();
     const slab = [], trim = [];
-    for (const p of map.pads) {
+    for (const p of pads.values()) {
       const [cx, cz] = centre(p);
       const w = p.w - 0.24, d = p.h - 0.24;
       // a chamfered slab: a 4-sided frustum turned 45° is a square with sloped sides
@@ -68,7 +69,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
   const frameMat = new THREE.MeshBasicMaterial({ color: C.cyan, transparent: true, opacity: 0.55, toneMapped: false, depthWrite: false });
   let frames = null, framesSig = '';
   function syncFrames(o) {
-    const empty = map.pads.filter((p) => !o.pads[p.id] && !o.building.some((b) => b.pad === p.id));
+    const empty = [...pads.values()].filter((p) => !o.pads[p.id] && !o.building.some((b) => b.pad === p.id));
     const sig = empty.map((p) => p.id).join(',');
     if (sig === framesSig) return;
     framesSig = sig;
@@ -161,11 +162,11 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     const g = new THREE.Group(); g.name = 'outpost-deposits';
     const rocks = [], crystals = [], locks = [];
     for (const d of plan) {
-      let h = hash(d.pad);
+      let h = hash('dep-' + d.tier);
       const rnd = () => { h = (Math.imul(h ^ (h >>> 15), 2246822519) + 0x9e3779b9) >>> 0; return h / 4294967296; };
       const dim = d.locked ? 0.62 : 1, oc = new THREE.Color(d.colour);
       // a rig stands on it: a low cut face at the pad's front edge, where the rig works; else the whole outcrop
-      const ps = padModelScale(pads.get(d.pad));   // the outcrop at its pad's scale (half scale, owner 2026-11-08)
+      const ps = padModelScale(d.rect);   // the outcrop at the deposit's (2 × 2) scale (half scale, owner 2026-11-08)
       const cx = d.x, cz = d.mined ? d.z + 1.62 * ps : d.z, spread = (d.mined ? 1.3 : 1.35) * ps, k = (d.mined ? 0.55 : 1) * ps;
       const nRock = d.mined ? 5 : 8, nCrys = d.mined ? 4 : 6;
       for (let i = 0; i < nRock; i++) {
@@ -481,7 +482,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     if (sig === warnSig) return;
     warnSig = sig;
     const want = new Map();
-    for (const [pad, list] of Object.entries(w || {})) { const k = markerOf(list); if (k && pads.has(pad)) want.set(pad, k); }
+    for (const [pad, list] of Object.entries(w || {})) { const k = markerOf(list); if (k && rectOf(pad)) want.set(pad, k); }
     for (const [pad, m] of markers) if (want.get(pad) !== m.kind) { root.remove(m.sprite); m.sprite.material.dispose(); markers.delete(pad); }
     for (const [pad, kind] of want) {
       if (markers.has(pad)) continue;
@@ -497,7 +498,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     const shut = new Set(Object.entries(w || {}).filter(([, l]) => l.includes('door_closed')).map(([p]) => p));
     for (const [pad, m] of doors) if (!shut.has(pad)) { root.remove(m); m.geometry.dispose(); doors.delete(pad); }
     for (const pad of shut) {
-      if (doors.has(pad) || !pads.has(pad)) continue;
+      if (doors.has(pad) || !rectOf(pad)) continue;
       const own = built.get(pad);
       if (own && own.inst && setDoor(own.inst, true)) continue;   // the GLB's own door closes; no shutter
       const [cx, cz] = centre(rectOf(pad));

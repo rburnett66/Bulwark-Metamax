@@ -8,7 +8,8 @@ import { lifecycleLook } from '../../render3d/structures/models.js';
 
 const T = 1_000_000;
 const map = { pads: [{ id: 'p7', x: 10, y: 4, w: 4, h: 4 }] };
-const outpost = (upgrading) => ({ pads: { p7: { kind: 'upgradeBay', tier: 1 } }, building: [],
+// the bay stands at its own spot (S2c.2: model.buildingRect reads `at`); constructionFx.js still reads map.pads (lane K moves it)
+const outpost = (upgrading) => ({ pads: { p7: { kind: 'upgradeBay', tier: 1, at: { x: 10, y: 4, w: 4, h: 4 } } }, building: [],
   defenses: [{ id: 'd1', kind: 'cannon', tier: 1, cell: [5, 5], hp: 400 }], upgrading });
 
 test('the defense on the bay is the battle\'s Upgrading tower (the warm tint)', () => {

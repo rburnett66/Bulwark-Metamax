@@ -23,8 +23,8 @@
  * they land in the hopper; the save then marks the visit's stretch (o.liveHarvest) so the away closed form does not
  * count it again.
  *
- * Positions (S2c [MM-story_mwc9pmbn_2i]): a building on a map pad keeps that pad's id; one placed anywhere else is saved
- * under a new id ('f1', 'f2', …) carrying its own `at` rectangle, and model.buildingRect answers for both. Pure: no DOM,
+ * Positions (S2c [MM-story_mwc9pmbn_2i]): a building keeps its id; one placed during the visit is saved
+ * under a new id ('f1', 'f2', …) carrying its own `at` rectangle (no map pads since S2c.2), read by model.buildingRect. Pure: no DOM,
  * no clock (the caller passes `now`).
  */
 import { createSim } from '../sim/core.js';
@@ -242,8 +242,8 @@ export function syncHarvestPower(state, link) {
 }
 
 /**
- * The live SimState back into the save at `now`. → { outpost, gold }. Throws (loudly) for a building that stands on no
- * map pad — the pad-based save cannot hold it until S2c.
+ * The live SimState back into the save at `now`. → { outpost, gold }. A building placed during the visit gets a new
+ * free id and its own `at` rectangle.
  */
 export function fromLiveSim(state, link, now) {
   const { outpost: before, map, ids } = link;
@@ -252,12 +252,10 @@ export function fromLiveSim(state, link, now) {
   for (const [pad, b] of Object.entries(before.pads)) if (b.kind === 'hub') o.pads[pad] = clone(b);
   const padJobs = [], defenses = new Map(), newDefenses = [];
   let upgrading = null;
-  // a building placed during the visit: on a free map pad it takes that pad's id; anywhere else a new free id + its rect
+  // a building placed during the visit: a new free id + its own rectangle (S2c.2: the maps have no pads)
   const taken = new Set([...Object.keys(before.pads), ...(before.building || []).map((j) => j.pad)]);
   let nextFree = 1 + Math.max(0, ...[...taken].filter((id) => /^f\d+$/.test(id)).map((id) => +id.slice(1)));
   const placeOf = (s, def) => {
-    const p = map.pads.find((q) => q.x === s.pos.x && q.y === s.pos.y && q.w === def.footprint.w && q.h === def.footprint.h && !taken.has(q.id));
-    if (p) { taken.add(p.id); return { pad: p.id, extra: {} }; }
     const id = `f${nextFree++}`;
     taken.add(id);
     const extra = { at: { x: s.pos.x, y: s.pos.y, w: def.footprint.w, h: def.footprint.h } };

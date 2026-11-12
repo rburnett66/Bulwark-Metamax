@@ -3,14 +3,14 @@
 // battle board the renderer draws.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hudModel, sellButton, panelModel, defenseOptions, emptyPads, fmtGold, fmtUnits, fmtRate, fmtClock } from './hudModel.js';
+import { hudModel, sellButton, panelModel, defenseOptions, fmtGold, fmtUnits, fmtRate, fmtClock } from './hudModel.js';
 import { layoutFor, framedCamera, frameRect, padsRect, focusCamera, VIEW_YAW } from './layout.js';
 import { sellTimeline, SELL, MAX_POPS, popColour } from './sellTimeline.js';
 import { conduitRoute, planConduits, planBuildings, planDeposits, defenseStructures, TINT } from './conduits.js';
 import { outpostBattleMap, bakedSlugOf, lowlandResources } from './outpostBoard.js';
 import { referenceOutpost, confirmOnline, advance, sell, place } from '../model.js';
 import { groundToNdc, clearBox } from '../../render3d/camera.js';
-import { map, T0, MIN, HOUR } from './fixtures.mjs';
+import { map, T0, MIN, HOUR, freeSpot } from './fixtures.mjs';
 
 const kit = () => referenceOutpost('ground', { seed: 7, map, now: T0 });
 const online = () => confirmOnline(kit(), map, T0).outpost;
@@ -68,21 +68,12 @@ test('the rig panel: ore, rate, bay; the deep switch locked until Deep Drilling 
   assert.match(q.upgrade.label, /UPGRADE TO II · 8,000/);
 });
 
-test('an empty pad lists what it can take; a locked deposit says so; defenses and empty pads for BUILD', () => {
+test('S2c.2: no empty pads to build on — a panel is for a building or a defense; the defense prices for BUILD', () => {
   const o = online();
-  const rare = map.deposits.find((d) => d.tier === 'rare').pad;
-  const p = panelModel(o, map, { pad: rare }, { gold: 10_000, unlockedTiers: ['common'] });
-  assert.equal(p.empty, true);
-  assert.match(p.status, /Locked/);
-  assert.equal(p.build[0].kind, 'rig');
-  assert.equal(p.build[0].enabled, false);
-  const bay = map.pads.find((x) => x.role === 'bay');
-  const b = panelModel(o, map, { pad: bay.id }, { gold: 3000, unlockedTiers: ['common'] });
-  assert.deepEqual(b.build.map((x) => [x.kind, x.enabled]), [['resourceBay', true], ['upgradeBay', false], ['habitat', true]]);   // the Harvester Bay is the Resource Bay (O16)
+  assert.equal(panelModel(o, map, { pad: 'nothing-here' }, { gold: 10_000 }), null, 'no building there: no panel');
+  const r = panelModel(o, map, { pad: rigPad(o) }, { gold: 10_000, unlockedTiers: ['common'] });
+  assert.ok(r && !r.empty && r.kind === 'rig');
   assert.deepEqual(defenseOptions({ gold: 1000 }).map((d) => [d.kind, d.enabled]), [['mg', true], ['cannon', false], ['wall', true]]);
-  const empty = emptyPads(o, map);
-  assert.equal(empty.length, map.pads.length - 4);
-  assert.ok(empty.every((x, i) => i === 0 || !empty[i - 1].remote || x.remote), 'mesa pads first');
   const d = panelModel(o, map, { defense: o.defenses[0].id }, { gold: 0 });
   assert.equal(d.status, 'Ready');
   assert.equal(d.repair, null);
@@ -112,7 +103,7 @@ test('the mesa frames inside the clear part of the screen in every layout (tech 
   const cam = framedCamera(map, 390, 844), R = cam.rect;
   const a = groundToNdc(cam, 390 / 844, R.x0, (R.z0 + R.z1) / 2), b = groundToNdc(cam, 390 / 844, R.x1, (R.z0 + R.z1) / 2);
   assert.ok(b.x - a.x > 1.3, 'the buildings span most of a portrait phone\'s width');
-  const hub = map.pads.find((p) => p.role === 'hub');
+  const hub = map.hub;
   const f = focusCamera(hub, VIEW_YAW, layoutFor(390, 844));
   assert.ok(f.dist < cam.dist, 'tapping a building moves in');
 });
@@ -181,14 +172,13 @@ test('conduits: only to built pads, from a station, lit only when the outpost ru
   assert.ok(off.every((c) => !c.powered), 'dark until online');
   const on = planConduits(online(), map);
   assert.ok(on.every((c) => c.powered));
-  const rare = map.deposits.find((d) => d.tier === 'rare').pad;
-  assert.ok(!on.some((c) => c.to === rare), 'no conduit to an empty pad');
+  assert.ok(on.every((c) => c.to && (online().pads[c.to] || online().building.some((j) => j.pad === c.to))), 'conduits only to buildings');
 });
 
 test('building states: a build rises in four steps with a cool tint; rigs work only when running and not full', () => {
   let o = online();
-  const bay = map.pads.find((p) => p.role === 'bay').id;
-  o = place(o, { pad: bay, kind: 'harvesterBay' }, { map, now: T0, gold: 1e9, unlockedTiers: ['common'] }).outpost;
+  const bay = 'f1';
+  o = place(o, { pad: bay, kind: 'harvesterBay', at: freeSpot(o, 'resourceBay') }, { map, now: T0, gold: 1e9, unlockedTiers: ['common'] }).outpost;
   const b0 = planBuildings(o, map, T0).find((b) => b.pad === bay);
   assert.equal(b0.building, true);
   assert.deepEqual(b0.tint, TINT.building);
@@ -231,7 +221,7 @@ test('the outpost map becomes a battle board (no waves, no fog) with its base on
   assert.equal(b.rows, map.height);
   assert.deepEqual(b.waveWindows, []);
   assert.equal(b.openPlay, false);
-  const hub = map.pads.find((p) => p.role === 'hub');
+  const hub = map.hub;
   assert.ok(b.base.x >= hub.x && b.base.x < hub.x + hub.w && b.base.y >= hub.y && b.base.y < hub.y + hub.h);
   assert.equal(bakedSlugOf(map), 'ground-outpost');
   const res = lowlandResources(map);

@@ -8,6 +8,7 @@ import {
   referenceOutpost, confirmOnline, advance, place, upgrade, powerGrids, harvestPlan, hopperCap, hopperUnits, emptyHopper,
   surfaceFields, gunCount, gunCap, habitatTier, defenseUpgradeRefusal, upgradeDefense, harvesterCap, buyHarvester,
   raidWarning, nextRaidAt, migrateOutpost, createOutpost, setDeep, surfaceFieldGroups, fieldStock, steadyHarvest, upgradeBayShows,
+  takenRects,
 } from './model.js';
 import { wellDefended } from './raid.js';
 import { OUTPOST, structureDef, harvestRates, harvesterRate, surfaceStock, OUTPOST_TECH_IDS } from '../data/outpost.js';
@@ -17,7 +18,6 @@ import { bankOutpostHarvest } from '../save/inventory.js';
 import { defaultSave } from '../save/save.js';
 import { acceptOutpostContract } from './contract.js';
 import { createSession } from './view/session.js';
-import { buildMenu } from './view/buildMenu.js';
 import { panelModel, hudModel } from './view/hudModel.js';
 import { awayReportModel } from './view/awayReport.js';
 import { map, memoryStore, T0, MIN, HOUR } from './view/fixtures.mjs';
@@ -317,7 +317,6 @@ test('Habitat I / II raise the gun cap by 4 / 8 (owner 2026-11-09): one Habitat,
   const h1 = structureDef('habitat', 1), h2 = structureDef('habitat', 2);
   assert.deepEqual([h1.cost, h1.buildSec, h2.cost, h2.buildSec, h1.draw], [3000, 600, 5000, 900, 0]);
   assert.equal(OUTPOST.Habitat_Guns_Per_Tier, 4);
-  assert.match(place(o, { pad: 'r2', kind: 'habitat' }, { map, gold: 1e9, now: T0 }).error, /cannot go on a rig pad/);
   const r = place(o, { pad: 'x1', kind: 'habitat' }, { map, gold: 1e9, now: T0 });
   assert.equal(r.cost, 3000);
   o = r.outpost;
@@ -345,23 +344,6 @@ test('the raid measurement\'s "well defended" set (starter + 1 Machine Gun) fits
   assert.ok(gunCount(o) <= gunCap(o));
 });
 
-test('the build list: the Habitat, and the guns\' count n / cap, greyed with the reason at the cap', () => {
-  const o = withBay();
-  let m = buildMenu(o, map, { gold: 1e9, unlockedTiers: ['common'], unlocks: new Set(), now: T0 });
-  const hab = m.find((x) => x.id === 'habitat');
-  assert.ok(hab && !hab.locked && hab.cost === 3000 && hab.targets.some((t) => t.pad === 'x1'));
-  assert.deepEqual(['mg', 'cannon'].map((id) => { const x = m.find((i) => i.id === id); return [x.count, x.max, x.locked]; }), [[2, 4, false], [2, 4, false]]);
-  let full = o;
-  for (const c of freeCells(o, 2)) full = place(full, { cell: c, kind: 'mg' }, { map, gold: 1e9, now: T0 }).outpost;
-  m = buildMenu(full, map, { gold: 1e9, unlockedTiers: ['common'], unlocks: new Set(), now: T0 });
-  for (const id of ['mg', 'cannon']) {
-    const x = m.find((i) => i.id === id);
-    assert.deepEqual([x.count, x.max, x.locked, x.enabled], [4, 4, true, false], id);
-    assert.equal(x.why, 'The hub crews 4 guns: build a Habitat for more');
-  }
-  assert.equal(m.find((i) => i.id === 'wall').locked, false);
-});
-
 test('the Tech Tree on the real save: an Outpost node is locked until a contract step unlocks it, then bought for its price', async () => {
   const { techCtxFromSave, outpostTechUnlocked, createGameTechAdapter } = await import('../menu/techSave.js');
   const { TECH_BY_ID, techStatus } = await import('../data/techtree.js');
@@ -387,7 +369,7 @@ function freeCells(o, n) {
   const out = [];
   for (let y = 0; y < map.height && out.length < n; y++) {
     for (let x = 0; x < map.width && out.length < n; x++) {
-      const onPad = map.pads.some((p) => x >= p.x && x < p.x + p.w && y >= p.y && y < p.y + p.h);
+      const onPad = takenRects(o, map).some((p) => x >= p.x && x < p.x + p.w && y >= p.y && y < p.y + p.h);
       if (!onPad && !used.has(`${x},${y}`) && map.heights[y * map.width + x] > 0) { out.push([x, y]); used.add(`${x},${y}`); }
     }
   }

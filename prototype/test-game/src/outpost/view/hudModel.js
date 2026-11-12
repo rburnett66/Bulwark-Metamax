@@ -6,12 +6,11 @@
  * tier, rate, the deep / shallow switch on a rig, upgrade). Pure: reads the outpost through src/outpost/model.js; the
  * DOM lives in hud.js.
  */
-import { harvesterRefusal, powerGrids, loadsReady, bayCapacity, rigRatePerMin, repairCost, depositOf, onlineProblems, harvestPlan, hopperCap, hopperUnits,
+import { harvesterRefusal, powerGrids, loadsReady, bayCapacity, rigRatePerMin, repairCost, depositAt, buildingRect, onlineProblems, harvestPlan, hopperCap, hopperUnits,
   gunCount, gunCap, defenseUpgradeRefusal, harvesterCap, raidWarning, upgradeBayReady, steadyHarvest, fieldStock, surfaceFieldGroups , sellStructureQuote,
   outpostSize, raidChance } from '../model.js';
 import { structureDef, maxTier, DEFENSE_KINDS, OUTPOST, OUTPOST_TECH, harvesterDef } from '../../data/outpost.js';
 import { oresOf, oreById } from '../../data/ores.js';
-import { bayKind } from './buildMenu.js';
 import { buildingWarnings, warningLines } from './warnings.js';
 
 // the outpost's kind names live in one table, data/outpostStructures.js (shared with the battle rail and the away report)
@@ -19,8 +18,6 @@ export { OUTPOST_KIND_NAME as KIND_NAME } from '../../data/outpostStructures.js'
 import { OUTPOST_KIND_NAME as KIND_NAME } from '../../data/outpostStructures.js';
 const RIG_NAME = { auger: 'Auger Drill', laser: 'Laser Cutter', brine: 'Brine Pump', crystal: 'Crystal Harvester', bore: 'Deep Bore', shielded: 'Shielded Extractor' };
 export const ROMAN = Object.freeze(['', 'I', 'II', 'III']);
-/** What a pad role can take (model.js ROLE_FITS, read the other way round) — the BUILD menu's choices. */
-const buildsOn = (role) => ({ power: ['power'], spare: ['power', bayKind(), 'upgradeBay', 'habitat'], bay: [bayKind(), 'upgradeBay', 'habitat'], rig: ['rig'], storage: ['storage'], hub: ['hub'] })[role];
 
 // ── formatting ───────────────────────────────────────────────────────────────────────────────────────────────────
 /** 950 → "950", 12_400 → "12,400", 1_250_000 → "1.25M". */
@@ -62,7 +59,7 @@ const bayUnits = (o, pad) => Object.values(o.storage[pad] || {}).reduce((a, b) =
 
 /** The rig model slug for a rig pad: its deposit's ore's head (rig_auger / rig_laser / rig_brine …). */
 export function rigHeadOf(o, map, pad) {
-  const tier = (o.pads[pad] && o.pads[pad].deposit) || depositOf(map, pad);
+  const tier = (o.pads[pad] && o.pads[pad].deposit) || depositAt(map, buildingRect(o, map, pad));
   const ore = oresOf(o.planet).find((x) => x.tier === tier);
   return ore ? ore.rig : 'auger';
 }
@@ -171,10 +168,11 @@ export function panelModel(o, map, sel, ctx = {}) {
       sell: sellOf(o, { defense: d.id }),
     };
   }
-  const pad = map.pads.find((p) => p.id === sel.pad);
+  // a building where it stands (S2c.2: no empty map pads to build on — the battle rail places)
+  const pad = buildingRect(o, map, sel.pad);
   if (!pad) return null;
   const b = o.pads[pad.id], job = o.building.find((x) => x.pad === pad.id);
-  if (!b && !job) return { ...buildPanel(o, map, pad, ctx), empty: true };
+  if (!b && !job) return null;
   const kind = (b || job).kind, tier = b ? b.tier : 0;
   const head = kind === 'rig' ? rigHeadOf(o, map, pad.id) : null;
   const title = kind === 'rig' ? `${RIG_NAME[head] || 'Mining Station'} ${ROMAN[Math.max(1, tier)]}${tier >= 2 ? ' (Mk II)' : ''}` : `${KIND_NAME[kind] || kind} ${ROMAN[Math.max(1, tier)]}`;
@@ -184,7 +182,7 @@ export function panelModel(o, map, sel, ctx = {}) {
   else if (job) { status = `Upgrading to ${ROMAN[job.tier]} · ${fmtClock((job.done - now) / 1000)}`; tone = 'busy'; }
   else if (off[pad.id]) { status = off[pad.id] === 'reach' ? 'No power: out of reach' : 'No power: grid short'; tone = 'off'; }
   else if (!o.online) { status = 'Waiting to go online'; tone = 'warn'; }
-  const out = { title, sub: `pad ${pad.id}${pad.remote ? ' · remote site' : ''}`, status, tone, stats, kind, tier };
+  const out = { title, sub: pad.id, status, tone, stats, kind, tier };
   // the building's warnings (owner 2026-11-07 07:33): no power, storage full, the storage tower's door shut
   const warn = b ? (buildingWarnings(o, map)[pad.id] || []) : [];
   if (warn.length) out.warnings = warningLines(warn).map((text) => ({ text, icon: /full/.test(text) ? 'crate' : /door/.test(text) ? 'door' : 'bolt' }));
@@ -273,33 +271,6 @@ function powerGridOf(o, map, stationPad) {
   return powerGrids(o, map).grids.find((g) => g.stations.includes(stationPad)) || null;
 }
 
-/** An empty pad's panel: what can be built on it, with price and why not. */
-function buildPanel(o, map, pad, ctx) {
-  const kinds = buildsOn(pad.role) || [];
-  const tiers = ctx.unlockedTiers || ['common'];
-  const options = kinds.map((kind) => {
-    const def = structureDef(kind, 1);
-    let why = null;
-    if (!def) why = 'not available';
-    else if (kind === 'rig') {
-      const dep = depositOf(map, pad.id);
-      if (!dep) why = 'no deposit';
-      else if (!tiers.includes(dep)) why = `${(oresOf(o.planet).find((x) => x.tier === dep) || {}).name || dep} not unlocked`;
-    }
-    if (!why && def.cost > (ctx.gold ?? Infinity)) why = `costs ${fmtGold(def.cost)}`;
-    const name = kind === 'rig' ? `${RIG_NAME[rigHeadOf(o, map, pad.id)] || 'Mining Station'}` : KIND_NAME[kind];
-    return { kind, name, cost: def ? def.cost : 0, buildSec: def ? def.buildSec : 0, enabled: !why, why };
-  });
-  const dep = depositOf(map, pad.id), ore = dep && oresOf(o.planet).find((x) => x.tier === dep);
-  return {
-    title: pad.role === 'rig' && ore ? `${ore.name} deposit` : `Empty ${pad.role === 'spare' ? '' : pad.role + ' '}pad`.replace('  ', ' '),
-    sub: `pad ${pad.id}${pad.remote ? ' · remote site' : ''}`,
-    status: ore && !tiers.includes(dep) ? 'Locked: a later contract unlocks it' : 'Ready to build', tone: ore && !tiers.includes(dep) ? 'off' : 'ok',
-    stats: ore ? [['Ore', `${ore.name} (${ore.tier})`], ['Price', `${ore.price} gold / unit`]] : [],
-    build: options,
-  };
-}
-
 /** The defenses that can be placed now (BUILD → defense), with price. */
 export function defenseOptions(ctx = {}) {
   return DEFENSE_KINDS.map((kind) => {
@@ -308,7 +279,3 @@ export function defenseOptions(ctx = {}) {
   });
 }
 
-/** The pads the BUILD sheet lists: every empty pad, mesa first. */
-export function emptyPads(o, map) {
-  return map.pads.filter((p) => !o.pads[p.id] && !o.building.some((b) => b.pad === p.id)).sort((a, b) => (a.remote ? 1 : 0) - (b.remote ? 1 : 0));
-}

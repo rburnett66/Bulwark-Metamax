@@ -44,7 +44,7 @@ import { layoutFor, framedCamera, focusCamera, VIEW_YAW } from './layout.js';
 import { mountHud } from './hud.js';
 import { loadSave, updateSave } from '../../save/save.js';
 import { loadMissionCatalog } from '../../save/missionCatalog.js';
-import { padAt } from '../../terrain/outpostPads.js';
+import { buildingRect } from '../model.js';
 import { structureDef } from '../../data/outpost.js';
 import { oresOf } from '../../data/ores.js';
 import { PLANETS } from '../../data/planets.js';
@@ -315,7 +315,7 @@ async function openOutpostViewInner(opts, stage) {
     onRepair: (id) => act({ type: 'repair', id }, (res) => `Repair drone launched · −${fmtGold(res.cost)} gold`, () => select({ defense: id })),
     onSellStructure: (target) => {
       // where it stood, for the green "$N" the battle's sale pops (goldPopups.js)
-      const pad = target.pad && map.pads.find((p) => p.id === target.pad), d = target.defense != null && o.defenses.find((x) => x.id === target.defense);
+      const pad = target.pad && buildingRect(o, map, target.pad), d = target.defense != null && o.defenses.find((x) => x.id === target.defense);
       const pos = pad ? { x: pad.x + (pad.w - 1) / 2, y: pad.y + (pad.h - 1) / 2 } : d ? { x: d.cell[0], y: d.cell[1] } : null;
       act({ type: 'sellStructure', target }, (res) => {
         if (pos && r.gold) r.gold.feed([{ type: 'build', phase: 'sold', refund: res.earned, pos }], board);
@@ -516,7 +516,7 @@ async function openOutpostViewInner(opts, stage) {
     if (!it) return null;
     const cell = screenToCell(r, px, py);
     if (!cell) return null;
-    if (it.place === 'pad') { const p = padAt(map, cell.x, cell.y); return p ? { pad: p.id } : null; }
+    if (it.place === 'pad') return null;   // no map pads (S2c.2): the outpost builds on the session view
     if (it.what) {   // a farm piece: the valid top-left whose rect holds the pointed cell, nearest first, else the cell
       const T = it.targets || [];
       for (let dy = 0; dy < it.size.h; dy++) for (let dx = 0; dx < it.size.w; dx++) {
@@ -567,7 +567,7 @@ async function openOutpostViewInner(opts, stage) {
     } else scene.showReach(null);
     if (focus || next.pad || next.defense) {
       const L = layoutFor(r._w || win.innerWidth, r._h || win.innerHeight);
-      const target = next.pad ? map.pads.find((p) => p.id === next.pad) : (() => { const d = o.defenses.find((x) => x.id === next.defense); return d ? { x: d.cell[0] - 1, y: d.cell[1] - 1, w: 3, h: 3 } : null; })();
+      const target = next.pad ? buildingRect(o, map, next.pad) : (() => { const d = o.defenses.find((x) => x.id === next.defense); return d ? { x: d.cell[0] - 1, y: d.cell[1] - 1, w: 3, h: 3 } : null; })();
       if (target) glideTo(focusCamera(target, r.cam.yaw, L));
     }
   }
@@ -663,8 +663,8 @@ async function openOutpostViewInner(opts, stage) {
     if (cell) {
       const d = o.defenses.find((x) => x.cell[0] === cell.x && x.cell[1] === cell.y);
       if (d) return select({ defense: d.id }, true);
-      const p = padAt(map, cell.x, cell.y);
-      if (p) return select({ pad: p.id }, true);
+      const id = Object.keys(o.pads).sort().find((k) => { const p = buildingRect(o, map, k); return p && cell.x >= p.x && cell.x < p.x + p.w && cell.y >= p.y && cell.y < p.y + p.h; });
+      if (id) return select({ pad: id }, true);
     }
     if (sel) select(null);
   }

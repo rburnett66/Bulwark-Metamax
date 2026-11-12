@@ -10,6 +10,7 @@ import { FARM_CELL, FARM_CELL_NAME } from '../terrain/farmCells.js';
 import { BLOCKING } from '../terrain/terrainGen.js';
 import { HEIGHT } from '../terrain/outpostPads.js';
 import { FARM } from '../data/farm.js';
+import { takenRects } from '../outpost/model.js';
 
 export { FARM_CELL, FARM_CELL_NAME };
 
@@ -30,7 +31,7 @@ const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h
 
 /**
  * May a farm thing of w × h cells stand with its top-left at (x, y)? → true, or the first refusal:
- *   'no farm layer' · 'off the map' · 'on the mesa' · 'on a pad' (a pad or its 1-cell yard, as surfaceFields keeps) ·
+ *   'no farm layer' · 'off the map' · 'on the mesa' · 'on a building' (the landing pad, a deposit or an outpost building, or its 1-cell yard) ·
  *   'on a raid lane' · 'on blocking terrain' · 'on a defense' · 'overlaps another farm thing' · 'not soil'.
  * outpost: the outpost save (its defenses' cells are refused), or null. occupied: the farm's own rects
  * [{ x, y, w, h }] (plots, the Farmhouse, the Silo; the farm model passes them).
@@ -43,7 +44,8 @@ export function canPlacePlot(map, outpost, x, y, w = PLOT_SIZE.w, h = PLOT_SIZE.
   for (let dy = 0; dy < h; dy++) for (let dx = 0; dx < w; dx++) cells.push([x + dx, y + dy, (y + dy) * cols + x + dx]);
   const H = map.heights, T = map.terrain, B = map.blocking, F = map.farmCells;
   if (H && cells.some(([, , i]) => H[i] === HEIGHT.TOP || H[i] === HEIGHT.RAMP)) return 'on the mesa';
-  if ((map.pads || []).some((p) => cells.some(([cx, cy]) => cx >= p.x - 1 && cx < p.x + p.w + 1 && cy >= p.y - 1 && cy < p.y + p.h + 1))) return 'on a pad';
+  // off the landing pad, the deposits and the outpost's buildings, and their 1-cell yard (S2c.2: no map pads)
+  if (takenRects(outpost || {}, map).some((p) => cells.some(([cx, cy]) => cx >= p.x - 1 && cx < p.x + p.w + 1 && cy >= p.y - 1 && cy < p.y + p.h + 1))) return 'on a building';
   if (cells.some(([, , i]) => F[i] === FARM_CELL.LANE)) return 'on a raid lane';
   if (cells.some(([, , i]) => (T && BLOCKING.has(T[i])) || (B && B[i]))) return 'on blocking terrain';
   const defenses = (outpost && outpost.defenses) || [];

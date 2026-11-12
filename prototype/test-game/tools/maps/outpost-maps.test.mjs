@@ -43,7 +43,8 @@ test('each outpost map is a large map on its planet recipe: 64 × 32, world mode
     const battle = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => read(path.join(FORGE, `${L.slug}-map-${n}.json`)).decor.length).sort((a, b) => a - b);
     assert.ok(m.decor.length >= Math.floor(battle[4] / 2), `${planet}: decor groves (${m.decor.length}; its battle maps' median ${battle[4]})`);
     // the authored outpost layer, unchanged by the Forge
-    for (const k of ['pads', 'deposits', 'conduits', 'kitDefenses', 'mesa']) assert.deepEqual(m[k], L[k], `${planet}: ${k}`);
+    for (const k of ['hub', 'deposits', 'clearings', 'kitDefenses', 'mesa']) assert.deepEqual(m[k], L[k], `${planet}: ${k}`);
+    for (const k of ['pads', 'conduits', 'autoConduits']) assert.equal(m[k], undefined, `${planet}: no ${k} (S2c.2)`);
     assert.deepEqual(m.spawns, L.lanes, 'the raid lanes are the spawns');
   }
 });

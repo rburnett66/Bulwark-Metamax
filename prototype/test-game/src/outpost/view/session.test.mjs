@@ -8,7 +8,7 @@ import { acceptOutpostContract } from '../contract.js';
 import { referenceOutpost } from '../model.js';
 import { defaultSave } from '../../save/save.js';
 import { missionStatus } from '../../save/missions.js';
-import { map, catalog, memoryStore, T0, MIN, HOUR } from './fixtures.mjs';
+import { map, catalog, memoryStore, T0, MIN, HOUR, freeSpot } from './fixtures.mjs';
 
 function fresh(gold = 10_000) {
   const s = defaultSave();
@@ -78,12 +78,12 @@ test('building costs gold through the model; a refusal changes nothing and says 
   const store = memoryStore(fresh(5000));
   const v = createSession({ store, planet: 'ground', map, catalog, raidHook: null, flowOpts });
   v.act({ type: 'online' }, T0);
-  const empty = map.pads.find((p) => p.role === 'spare' || p.role === 'bay');
-  const ok = v.act({ type: 'place', pad: empty.id, kind: 'harvesterBay' }, T0 + MIN);
+  const empty = { id: 'f1', at: freeSpot(store.load().outposts.ground, 'resourceBay') };   // S2c.2: a free spot, no map pads
+  const ok = v.act({ type: 'place', pad: empty.id, at: empty.at, kind: 'harvesterBay' }, T0 + MIN);
   assert.equal(ok.ok, true);
   assert.equal(store.load().carry.gold, 2500);
   assert.equal(store.load().outposts.ground.building.length, 1);
-  const no = v.act({ type: 'place', pad: empty.id, kind: 'harvesterBay' }, T0 + MIN);
+  const no = v.act({ type: 'place', pad: empty.id, at: empty.at, kind: 'harvesterBay' }, T0 + MIN);
   assert.equal(no.ok, false);
   assert.match(no.error, /taken|costs/);
   assert.equal(store.load().carry.gold, 2500);

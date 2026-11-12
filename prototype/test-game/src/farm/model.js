@@ -29,7 +29,7 @@
  * as ms; nothing here is random.
  */
 import { FARM, cropOf, methodOf, podLevel, farmBuildingOf, yieldOf, podsBack, prepCost, growLevel } from '../data/farm.js';
-import { powerGrids } from '../outpost/model.js';
+import { powerGrids, takenRects } from '../outpost/model.js';
 import { windowSec, finished, hasWater } from './grow.js';
 
 const clone = (o) => (typeof structuredClone === 'function' ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
@@ -42,9 +42,10 @@ export function ensureFarm(o) {
   return o.farm;
 }
 
-/** Everything that takes ground on the outpost map: pads, defenses, farm plots and farm buildings → [{ x, y, w, h, what }]. */
+/** Everything that takes ground on the outpost map: the landing pad, deposits and buildings (outpost model takenRects),
+ *  defenses, farm plots and farm buildings → [{ x, y, w, h, what }]. */
 export function occupied(o, map) {
-  const out = (map.pads || []).map((p) => ({ x: p.x, y: p.y, w: p.w, h: p.h, what: 'pad ' + p.id }));
+  const out = takenRects(o, map);
   for (const d of o.defenses || []) out.push({ x: d.cell[0], y: d.cell[1], w: 1, h: 1, what: 'defense ' + d.id });
   if (o.farm) {
     for (const p of Object.values(o.farm.plots)) out.push({ x: p.x, y: p.y, w: p.w, h: p.h, what: 'plot ' + p.id });
