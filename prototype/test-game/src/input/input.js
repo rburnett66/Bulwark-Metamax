@@ -15,6 +15,7 @@ export function createUiState() {
     selectedStructureId: null,
     selectedUnitId: null,      // s5: a selected unit (enemy/defender) whose attack range is shown
     selectedResourceId: null,  // a clicked resource node: its description card is open [MM-story_mw2xo93o_2]
+    selectedResourceRect: null,   // …and its cells { x, y, w, h }: the map draws the selection outline on it [MM-story_mwefez2t_h]
     showFieldRings: false,     // white rings on the harvester's assigned field — debug aid, off by default
     pendingHint: null,         // {text, atBase} — set by input, consumed + flashed by the main ticker
     placingPointer: null,      // touch placement: the finger steering the build slot (the camera won't pan with it)
@@ -222,6 +223,7 @@ function onPointerDown(handle, ev) {
     const node = state.resourceNodes.find((n) => n.x === cell.x && n.y === cell.y && (n.remaining > 0 || n.respawns || n.regrow > 0));   // a regrowing field (the outpost's) keeps its card
     if (node) {
       ui.selectedResourceId = node.id;   // open its description card — the harvest order below still goes out
+      ui.selectedResourceRect = { x: node.x, y: node.y, w: 1, h: 1 };
       ui.selectedStructureId = null;
       const sel = ui.selectedUnitId != null ? state.units.get(ui.selectedUnitId) : null;
       const harvesterId = (sel && sel.isHarvester && sel.hp > 0) ? sel.id : undefined;
