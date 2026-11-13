@@ -1545,8 +1545,8 @@ export function fmtWaveClock(sec) {
 }
 
 /**
- * The HUD's wave readout [MM-story_mwbd4114_28]: while attackers remain, how many and the wave's time left; once the
- * last is down with time still on the clock, that the wave is secured and how long the harvest runs on.
+ * The HUD's wave readout [MM-story_mwbd4114_28, MM-story_mwebtduu_1]: while attackers remain, how many (the wave has
+ * no clock until its last kill); once the last is down, that the wave is secured and how long the harvest runs on.
  */
 export function waveClockText(waves, left, now) {
   const timed = waves && waves.endsAt != null;

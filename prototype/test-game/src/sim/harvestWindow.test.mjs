@@ -7,35 +7,32 @@ import assert from 'node:assert/strict';
 import { buildCampaignMap, resolveResourceTypes } from './mapgen.js';
 import { createSim, stepSim, applyCommand } from './core.js';
 import { buildCampaignWaves } from './campaign.js';
-import { WAVE_WINDOW_SEC } from '../data/tables.js';
+import { WAVE_CLEAR_HARVEST_SEC } from '../data/tables.js';
 import { waveClockText, fmtWaveClock } from '../render/hud.js';
 
 const DT = 1 / 30;
 const board = () => { const map = resolveResourceTypes(buildCampaignMap(1, { seed: 2 }), 1); return createSim(3, { map, waves: buildCampaignWaves(map) }); };
 const killAttackers = (s) => { for (const u of s.units.values()) if (u.side === 'attacker') u.hp = 0; };
 
-test('every campaign wave lasts 3 minutes, whatever its par (Verdance 9 pars run 131-860 s)', () => {
-  assert.equal(WAVE_WINDOW_SEC, 180);
+// Then (owner 2026-11-12) [MM-story_mwebtduu_1]: "From the last kill player get 20 seconds of bonus time to gather
+// resources. The waves are finishing in 30 seconds and then testers sit for 2 and a half minutes."
+
+test('a campaign wave has no clock while it is fought; its 20 s of harvest bonus time is armed', () => {
+  assert.equal(WAVE_CLEAR_HARVEST_SEC, 20);
   const sim = board();
   assert.ok(applyCommand(sim, { type: 'startWave' }).ok);
-  assert.equal(sim.waves.endsAt, sim.time + 180);
-  const map9 = resolveResourceTypes(buildCampaignMap(9, { seed: 2 }), 9);
-  const s9 = createSim(3, { map: map9, waves: buildCampaignWaves(map9) });
-  assert.ok(map9.rings[7].parSec > 180, 'map 9 wave 8 has a long par (' + map9.rings[7].parSec + ' s)');
-  applyCommand(s9, { type: 'startWave' });
-  assert.equal(s9.waves.endsAt, s9.time + 180);
+  assert.equal(sim.waves.endsAt, null, 'no clock until the last kill');
+  assert.equal(sim.waves.harvestAfterClear, 20);
 });
 
-test('cleared early: a secured celebration, the wave stays open and the harvest runs on to the end of its time', () => {
+test('cleared early: secured, the harvest runs 20 s from the last kill, then the wave ends', () => {
   const sim = board();
   applyCommand(sim, { type: 'startWave' });
-  const endsAt = sim.waves.endsAt;
-  // let the whole wave spawn, then wipe it out at once
   let secured = null, cleared = null, stars = null;
   for (let i = 0; i < 30 * 600 && sim.waves.pendingSpawns.length; i++) stepSim(sim, DT);
   killAttackers(sim);
   const clearAt = sim.time;
-  assert.ok(clearAt < endsAt, 'the wipe lands with time on the clock');
+  assert.ok(clearAt - sim.waves.waveStart.time < 160, 'a quick wave (' + (clearAt - sim.waves.waveStart.time).toFixed(0) + ' s)');
   const takeAtClear = { ...sim.waveTake };
   for (let i = 0; i < 30 * 600 && !cleared; i++) {
     for (const e of stepSim(sim, DT)) {
@@ -43,36 +40,52 @@ test('cleared early: a secured celebration, the wave stays open and the harvest 
       if (e.type === 'wave' && e.phase === 'clear') cleared = { e, t: sim.time };
       if (e.type === 'waveStars') stars = e;
     }
-    if (secured && !cleared) assert.ok(sim.waves.active, 'the wave stays open while its time runs');
+    if (secured && !cleared) assert.ok(sim.waves.active, 'the wave stays open through its bonus time');
   }
   assert.ok(secured, 'a secured event');
   assert.equal(secured.e.wave, 1);
-  assert.ok(secured.e.left > 0 && Math.abs(secured.e.endsAt - endsAt) < 1e-9);
-  assert.ok(cleared && cleared.t >= endsAt - 1e-9 && cleared.t < endsAt + 2 * DT, 'the wave ends when its time is up');
+  assert.ok(Math.abs(secured.e.left - 20) < 0.11, 'the banner offers 20 s (' + secured.e.left + ')');
+  assert.ok(Math.abs(secured.e.endsAt - (secured.t + 20)) < 1e-9);
+  assert.ok(cleared && cleared.t >= secured.t + 20 - 1e-9 && cleared.t < secured.t + 20 + 2 * DT, 'the wave ends 20 s after the last kill');
+  assert.ok(cleared.t - clearAt < 21, 'no 3-minute wait: ' + (cleared.t - clearAt).toFixed(1) + ' s after the kill');
   assert.equal(sim.waves.active, false);
-  // harvesters kept working through the window
   const after = (sim.waveTake.common || 0) + (sim.waveTake.uncommon || 0);
   const before = (takeAtClear.common || 0) + (takeAtClear.uncommon || 0);
-  assert.ok(after > before, 'more was gathered after the clear (' + before + ' -> ' + after + ')');
-  // the par star times the fight, not the window
+  assert.ok(after > before, 'more was gathered in the bonus time (' + before + ' -> ' + after + ')');
+  // the par star times the fight, not the bonus time
   assert.ok(stars.detail.time.sec <= Math.round((secured.t - sim.waves.waveStart.time) * 10) / 10 + 0.1);
   assert.equal(stars.flags[4], stars.detail.time.sec <= sim.map.rings[0].parSec);
 });
 
-test('the time running out never ends a fight: attackers still alive keep the wave going', () => {
+test('a long fight still gets its 20 s after the last kill (past the old 3-minute mark)', () => {
   const sim = board();
   applyCommand(sim, { type: 'startWave' });
-  sim.waves.endsAt = sim.time + 1;   // a very short clock
-  for (let i = 0; i < 30 * 3; i++) stepSim(sim, DT);
-  assert.ok(sim.waves.active, 'the wave is still on with its attackers alive');
-  let secured = false, cleared = false;
+  for (let i = 0; i < 30 * 600 && sim.waves.pendingSpawns.length; i++) stepSim(sim, DT);
+  // the fight drags past the old 3-minute mark
+  sim.time = sim.waves.waveStart.time + 200;
+  stepSim(sim, DT);
+  assert.ok(sim.waves.active && sim.waves.endsAt == null, 'still fighting, no clock');
+  killAttackers(sim);
+  let secured = null, cleared = null;
+  for (let i = 0; i < 30 * 60 && !cleared; i++) for (const e of stepSim(sim, DT)) {
+    if (e.type === 'wave' && e.phase === 'secured') secured = sim.time;
+    if (e.type === 'wave' && e.phase === 'clear') cleared = sim.time;
+  }
+  assert.ok(secured != null && cleared != null && Math.abs(cleared - secured - 20) < 2 * DT, 'secured, then 20 s, then clear');
+});
+
+test('an outpost raid (no fields, no par) has no bonus time: it ends at its last kill', () => {
+  const sim = board();
+  applyCommand(sim, { type: 'startWave' });
+  sim.waves.harvestAfterClear = null;   // what startNextWave sets on a board without harvest rings
   for (let i = 0; i < 30 * 600 && sim.waves.pendingSpawns.length; i++) stepSim(sim, DT);
   killAttackers(sim);
+  let secured = false, cleared = false;
   for (let i = 0; i < 4; i++) for (const e of stepSim(sim, DT)) {
     if (e.type === 'wave' && e.phase === 'secured') secured = true;
     if (e.type === 'wave' && e.phase === 'clear') cleared = true;
   }
-  assert.ok(cleared && !secured, 'cleared after its time: it ends at once, no harvest window');
+  assert.ok(cleared && !secured, 'ends at once');
 });
 
 test('the HUD readout: enemies + time left, then secured + harvest time', () => {

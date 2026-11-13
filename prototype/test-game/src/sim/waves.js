@@ -1,4 +1,4 @@
-import { WAVES, MAP, getUnitDef, WAVE_SPEED_MULT, WAVE_WINDOW_SEC } from '../data/tables.js';
+import { WAVES, MAP, getUnitDef, WAVE_SPEED_MULT, WAVE_WINDOW_SEC, WAVE_CLEAR_HARVEST_SEC } from '../data/tables.js';
 import { raisesPending } from './abilities.js';
 import { MAX_LIVE_3D } from '../data/renderTiers.js';
 import { createUnit, unitRadius } from './entities.js';
@@ -160,9 +160,10 @@ export function startNextWave(state) {
     // the quota is sized to the time the wave actually has: its par, at most the window [MM-story_mwbkgcmu_2b]
     w.quota = state.resourceNodes && ring ? waveQuota(state, w.current, Math.min(ring.parSec, WAVE_WINDOW_SEC)) : null;
     state.waveTake = { common: 0, uncommon: 0, rare: 0, epic: 0 };
-    // HARVEST WINDOW [MM-story_mwbd4114_28, MM-story_mwbkgcmu_2b]: a harvest board's wave lasts WAVE_WINDOW_SEC (3 min);
-    // cleared sooner, the harvest runs on to endsAt (stepWaves). No par, or no fields to harvest (outpost raids): no window.
-    w.endsAt = state.resourceNodes && ring && ring.parSec > 0 ? state.time + WAVE_WINDOW_SEC : null;
+    // HARVEST BONUS TIME [MM-story_mwebtduu_1]: a harvest board's wave runs on WAVE_CLEAR_HARVEST_SEC (20 s) after its
+    // last kill (stepWaves sets endsAt then). No par, or no fields to harvest (outpost raids): no bonus time.
+    w.harvestAfterClear = state.resourceNodes && ring && ring.parSec > 0 ? WAVE_CLEAR_HARVEST_SEC : null;
+    w.endsAt = null;
     w.securedAt = null; }
   // STAR RUBRIC snapshot (Story 4): the five wave stars are judged against the state at wave start
   w.waveStart = {
@@ -387,11 +388,12 @@ export function stepWaves(state, dt) {
 
   // Wave clear detection: all spawns emitted and no live attackers remain.
   if (w.pendingSpawns.length === 0 && !anyAttackersAlive(state) && !raisesPending(state)) {
-    // HARVEST WINDOW [MM-story_mwbd4114_28]: the last attacker is down before the wave's time is up — celebrate
-    // ('secured') and keep the wave running, so the harvest goes on until endsAt. The timer never ends a fight early:
-    // a wave cleared after endsAt ends at once.
+    // HARVEST BONUS TIME [MM-story_mwbd4114_28, MM-story_mwebtduu_1]: the last attacker is down — celebrate ('secured')
+    // and keep the wave running WAVE_CLEAR_HARVEST_SEC more, so the harvesters gather until endsAt. No timer ever ends a
+    // fight: the clock starts at the last kill.
     if (w.securedAt == null) {
       w.securedAt = state.time;
+      if (w.harvestAfterClear != null) w.endsAt = state.time + w.harvestAfterClear;
       if (w.endsAt != null && state.time < w.endsAt) {
         emitEvent(state, { type: 'wave', tick: state.tick, phase: 'secured', wave: w.current, total: w.total,
           endsAt: w.endsAt, left: Math.round((w.endsAt - state.time) * 10) / 10 });
