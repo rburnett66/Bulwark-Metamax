@@ -13,7 +13,10 @@
  *     reach: select one and every live node shows its reach; arm one and the ghost's reach joins the map; arming any
  *     power-drawing building shows the map too, so the player sees where power reaches before paying;
  *   - while placing a MINE: every armed mine's trigger ring (the minefield's gaps);
- *   - a selected UNIT: a ring on it and a dashed ring at its attack reach.
+ *   - a selected UNIT: a ring on it and a dashed ring at its attack reach;
+ *   - a selected RESOURCE (a field, an outpost's ore deposit): the tower's white footprint outline on its cells
+ *     (owner 2026-11-12: "a selection ring like structure").
+ *   ui.selectedResourceRect: { x, y, w, h } in cells, read only while ui.selectedResourceId is set.
  * planCoverage is pure (state, ui, def lookup → ring list); createCoverageView draws it as ONE instanced draw.
  */
 import { cellToWorld } from '../camera.js';
@@ -84,6 +87,10 @@ export function planCoverage(state, ui, getDef) {
         out.push({ shape: 'circle', x: m.pos.x + 0.5, z: m.pos.y + 0.5, r: def.triggerRadius || 0.45, dash: 0, fill: 1, color: COVER_COLORS.mine, alpha: 0.45, primary: false });
       }
     }
+  }
+  if (ui.selectedResourceId != null && ui.selectedResourceRect) {
+    const q = ui.selectedResourceRect;
+    out.push({ shape: 'square', x: q.x + q.w / 2, z: q.y + q.h / 2, w: q.w, h: q.h, dash: 0, fill: 0, color: COVER_COLORS.select, alpha: 0.95, primary: true });
   }
   if (ui.selectedUnitId != null && state.units) {
     const u = state.units.get(ui.selectedUnitId);

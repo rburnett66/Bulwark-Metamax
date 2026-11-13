@@ -71,3 +71,16 @@ test('grid nodes are the `power` class: select one → every node\'s reach; arm 
   // selecting a gun still shows gun coverage only
   assert.ok(planCoverage(state, { selectedStructureId: 5 }, getStructureDef).every((p) => p.color !== COVER_COLORS.power));
 });
+
+// Owner 2026-11-12 [MM-story_mwefez2t_h]: "when I select a mining deposit it should indicate I select the map object with
+// a selection ring like structure" — the tower's white footprint outline, on the selected resource's cells.
+test('a selected resource (deposit or field) gets the structure selection outline; none once the card closes', () => {
+  const state = { structures: new Map(), units: new Map() };
+  const get = () => null;
+  const dep = planCoverage(state, { selectedResourceId: 'deposit:common', selectedResourceRect: { x: 10, y: 4, w: 2, h: 2 } }, get);
+  assert.deepEqual(dep, [{ shape: 'square', x: 11, z: 5, w: 2, h: 2, dash: 0, fill: 0, color: COVER_COLORS.select, alpha: 0.95, primary: true }]);
+  const field = planCoverage(state, { selectedResourceId: 7, selectedResourceRect: { x: 3, y: 8, w: 1, h: 1 } }, get);
+  assert.equal(field.length, 1);
+  assert.equal(field[0].x, 3.5); assert.equal(field[0].z, 8.5);
+  assert.deepEqual(planCoverage(state, { selectedResourceId: null, selectedResourceRect: { x: 3, y: 8, w: 1, h: 1 } }, get), []);
+});

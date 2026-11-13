@@ -5,5 +5,5 @@
  * "which build is this tab running?" never depends on the server: the /__version git stamp is appended
  * when available, but this constant alone answers it. Date-based so newest is obvious at a glance.
  */
-export const VERSION = 'v2026.11.12-n';
-export const VERSION_NOTE = 'Waves end 20 s after the last kill (harvest bonus time), not at a flat 3:00 (#309)';
+export const VERSION = 'v2026.11.12-q';
+export const VERSION_NOTE = 'Unlinked pylons say so (#312)';

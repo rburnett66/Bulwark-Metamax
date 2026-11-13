@@ -423,7 +423,7 @@ async function openSession(opts, opening) {
     // an unbuilt ore deposit opens the battle's resource card with its ore (resourceCard.js); the tap is not taken, so
     // the battle's own selection clears as for any open ground (input.js keeps the card it is handed)
     const dep = hit ? null : (map.deposits || []).find((d) => cell.x >= d.x && cell.x < d.x + 2 && cell.y >= d.y && cell.y < d.y + 2);
-    if (dep && tapUi) tapUi.selectedResourceId = depositCardId(dep.tier);
+    if (dep && tapUi) { tapUi.selectedResourceId = depositCardId(dep.tier); tapUi.selectedResourceRect = { x: dep.x, y: dep.y, w: 2, h: 2 }; }
     return !!hit;
   }
   function farmRect(sel) {
