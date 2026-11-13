@@ -1190,7 +1190,12 @@ export function updateHud(hud, state, ui) {
   } else if (hud.harvBtn) { hud.harvBtn.style.display = 'none'; }   // classic board: no harvesters
 
   // Money — the gold-gain "+N" now floats at the dying unit on the map (render/renderer.js coin FX), not the HUD.
-  const money = Math.floor((state.economy && state.economy.money) || 0);
+  // a mode may show a different number while the bank is already credited (opt-in: the outpost's SELL counts its gold up
+  // across the shuttle's arc, outpost/view/saleDriver.js [MM-story_mwefm2or_j]); a battle passes no goldShown
+  const bank = Math.floor((state.economy && state.economy.money) || 0);
+  const shownOf = hud.callbacks && hud.callbacks.goldShown;
+  const shown = shownOf ? shownOf(bank) : bank;
+  const money = Number.isFinite(shown) ? Math.floor(shown) : bank;
   hud.lastMoney = money;
   // update the text node without wiping delta spans
   if (hud.moneyEl.firstChild && hud.moneyEl.firstChild.nodeType === 3) {

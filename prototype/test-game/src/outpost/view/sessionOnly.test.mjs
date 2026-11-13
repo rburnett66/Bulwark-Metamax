@@ -18,7 +18,7 @@ test('the menu opens the session view directly: one OUTPOST entry, no FARM butto
 });
 
 test('the old farm view and the files only it used are deleted', () => {
-  for (const f of ['./outpostView.js', './hud.js', './layout.js', './buildMenu.js', './sellTimeline.js', './statusReport.js', './visitProbe.js', './harvestDrive.js']) {
+  for (const f of ['./outpostView.js', './hud.js', './layout.js', './buildMenu.js', './statusReport.js', './visitProbe.js', './harvestDrive.js']) {
     assert.ok(gone(f), `${f} is deleted`);
   }
 });

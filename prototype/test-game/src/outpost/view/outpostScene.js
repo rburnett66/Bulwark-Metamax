@@ -10,16 +10,21 @@
  *     merged mesh per state (2 draw calls);
  *   - ore deposits: a rocky outcrop with a crystalline core in the ore's colour; a cut face under a rig; a locked tier
  *     dim with a lock;
- *   - effects: mining debris at working rigs (3× and bigger on Mk II), the storage hologram's fill, the reactor pulse;
+ *   - effects: mining debris at working rigs (3× and bigger on Mk II), the storage hologram's fill, the reactor pulse,
+ *     the SELL sequence (sellTimeline.js: the storage drains, crates ride the conduit, the cargo shuttle lifts off the
+ *     landing pad with engine FX and a camera shake, ore splatter, "$N" pops on the battle's own gold popups)
+ *     [MM-story_mwefm2or_j];
  *   - the capacity gauge on the Storage Tower and the Resource Bay (the model kit's setGauge, from gaugeFill);
  *   - markers: warnings over buildings, no-power bolts over defenses, the power icons, the preview conduit.
  * Placement, its ghost and range rings, selection and picking are the battle session's own (S6 deleted the old farm
- * view's copies and its SELL sequence with it).
+ * view's copies; its SELL sequence lives on here, driven from the session view's sell action by saleDriver.js).
  * Browser-only. The plans it draws are pure (conduits.js).
  */
 import { planConduits, planBuildings, planDeposits } from './conduits.js';
 import { modelSlug, createOreDebris } from '../../render3d/outposts/outpostModels.js';
 import { K as FXK } from '../../render3d/fx/impacts.js';
+import { createEngineFx } from '../../render3d/ships/engineFx.js';
+import { popColour } from './sellTimeline.js';
 import { padModelScale } from '../../terrain/outpostPads.js';
 
 const PAD_Y = 0.05;
@@ -48,7 +53,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
   const rects = new Map();
   const rectOf = (id) => rects.get(id) || pads.get(id);
   const centre = (p) => [p.x + p.w / 2, p.y + p.h / 2];
-  let clock = 0;
+  let clock = 0, seq = 0;
 
   // ── pad plates (static): one merged mesh for the slabs, one for the trim, one for the empty-pad frames ────────────
   const plates = buildPlates();
@@ -298,13 +303,14 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       const gf = gaugeFill(item);
       if (gf != null && e.inst.setGauge) e.inst.setGauge(gf);
       if (item.kind === 'storage') {
-        setHologram(e.inst, item.fill);
+        setHologram(e.inst, sale && sale.fillFrom != null ? item.fill + (sale.fillFrom - item.fill) * sale.drain : item.fill);
         e.hasDoor = setDoor(e.inst, !!item.unpowered || !!item.building);
       }
     }
     for (const [pad, e] of built) if (!keep.has(pad)) { if (e.inst) { root.remove(e.holder || e.inst.object); e.inst.dispose(); } built.delete(pad); lastLook.delete(pad); r.lights.invalidateShadows(); }
     return plan;
   }
+  const hubEntry = () => { for (const e of built.values()) if (e.inst && e.slug === 'hub') return e; return null; };
   function setHologram(inst, fill) {
     for (const n of inst.nodesOf('hologram')) { n.scale.y = Math.max(0.04, fill); n.visible = fill > 0.01; }
   }
@@ -463,6 +469,168 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     }
   }
 
+  // ── the SELL sequence (sellTimeline.js drives it; saleDriver.js runs it from the session view) ──────────────────
+  // Restored after S6 [MM-story_mwefm2or_j] (owner 2026-11-12: "when I sell resources I dont see the dollar values or the
+  // deliver ship take off"). The "$N" pops are the battle's own gold popups (render3d/overlays/goldPopups.js, one engine).
+  let sale = null, shuttle = null, shuttleFx = null, shuttleLoad = null;
+  const crateMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.34, 0.26, 0.34), new THREE.MeshStandardMaterial({ roughness: 0.6, metalness: 0.2, emissive: 0x111111 }), 16);
+  crateMesh.count = 0; crateMesh.frustumCulled = false; crateMesh.name = 'outpost-sale-crates'; root.add(crateMesh);
+  /** The flying shuttle (the model kit's 'shuttle' GLB), loaded once on the first sale; null when the kit has none. */
+  function ensureShuttle() {
+    if (shuttle || !kit.manifest || !kit.manifest.shuttle) return Promise.resolve(shuttle);
+    if (!shuttleLoad) shuttleLoad = Promise.resolve(kit.make('shuttle')).then((sh) => {
+      if (!sh) { shuttleLoad = null; return null; }
+      sh.object.visible = false;
+      sh.object.name = 'outpost-sale-shuttle';
+      // the shadow map is static (re-rendered on change only): a flying shuttle must not bake a shadow onto the pad
+      sh.object.traverse((x) => { if (x.isMesh) x.castShadow = false; });
+      // engine markers on a holder turned so the plume (its −X) points down
+      const holder = new THREE.Group(); holder.rotation.z = Math.PI / 2;
+      for (const [i, k] of [[0, 'engine_l'], [1, 'engine_r']]) {
+        const a = (sh.def && sh.def.anchors && sh.def.anchors[k]) || [i ? 0.5 : -0.5, 0.3, -0.85];
+        const mk = new THREE.Object3D(); mk.name = `engine_${i}`;
+        mk.position.set(a[1] + 0.05, -a[0], a[2]);
+        mk.userData = { color: [0.35, 0.8, 1.0], radius: 0.22 };
+        holder.add(mk);
+      }
+      sh.object.add(holder);
+      shuttleFx = createEngineFx(THREE, holder, { pointLight: false });
+      holder.add(shuttleFx.group);
+      shuttleFx.setIntensity(0);
+      root.add(sh.object);
+      shuttle = sh;
+      return sh;
+    }, (e) => { shuttleLoad = null; throw e; });
+    return shuttleLoad;
+  }
+  const idOf = (o, kind) => Object.keys(o.pads || {}).find((id) => o.pads[id].kind === kind);
+  function crateRoute(o) {
+    const st = idOf(o, 'storage'), hub = idOf(o, 'hub');
+    if (!st || !hub) return null;
+    const plan = planConduits(o, map);
+    const a = plan.find((c) => c.to === st), b = plan.find((c) => c.to === hub && a && c.from === a.from);
+    if (a && b) return [...a.points.slice().reverse(), ...b.points].map(([x, z]) => [x, z]);
+    const ra = rectOf(st), rb = rectOf(hub);
+    return ra && rb ? [centre(ra), centre(rb)] : null;
+  }
+  const along = (pts, k) => {
+    let total = 0; const seg = [];
+    for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push(l); total += l; }
+    let d = Math.max(0, Math.min(1, k)) * total;
+    for (let i = 0; i < seg.length; i++) { if (d <= seg[i] || i === seg.length - 1) { const f = seg[i] ? d / seg[i] : 0; return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * f, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * f]; } d -= seg[i]; }
+    return pts[pts.length - 1];
+  };
+
+  /**
+   * Start the SELL sequence. tl: sellTimeline(); o: the outpost before the sale (its storage, the route, the hub).
+   * → a promise of the sale's id once the shuttle is ready; the sale itself starts at once (the pops and count-up never
+   * wait on the model, and a shuttle that fails to load leaves them playing — the caller logs the rejection).
+   */
+  function playSale(tl, o) {
+    endSale();
+    const hubId = idOf(o, 'hub') || (map.hub && map.hub.id);
+    const hubPad = (hubId && rectOf(hubId)) || map.hub || null;
+    const st = planBuildings(o, map, o.t).find((b) => b.kind === 'storage');
+    const s = sale = { tl, t: 0, fired: new Set(), drain: 1, route: crateRoute(o), hubPad, hub: hubEntry(), id: ++seq, fillFrom: st ? st.fill : null, pops: 0 };
+    if (tl.reduced) return Promise.resolve(s.id);
+    return ensureShuttle().then(() => s.id);
+  }
+  const crateCol = new THREE.Color(), dummy = new THREE.Object3D();
+  function stepSale(dt, out) {
+    if (!sale) return null;
+    const s = sale, tl = s.tl;
+    s.t += dt;
+    const t = s.t;
+    s.drain = tl.drainAt(t);
+    const [hx, hz] = s.hubPad ? centre(s.hubPad) : [map.width / 2, map.height / 2];
+    for (const b of tl.beats) {
+      if (b.t > t || s.fired.has(b)) continue;
+      s.fired.add(b);
+      if (b.type === 'shake') out.shake = { amp: b.amp, until: t + b.dur, t0: t };
+      if (b.type === 'lift') r.lights.invalidateShadows();
+      if (b.type === 'splatter') {
+        const cargo = new THREE.Vector3(hx, 1.0, hz);
+        if (shuttle && shuttle.object.visible && shuttle.anchors && shuttle.anchors.cargo) shuttle.anchors.cargo.getWorldPosition(cargo);
+        for (let i = 0; i < b.count; i++) debris.emit(cargo.x, cargo.y, cargo.z, b.colours[i % b.colours.length], { out: 2.6, size: 0.11, up: 3.2, life: 1.4, floor: 0.78 });
+        if (r.impacts) for (let i = 0; i < 8; i++) r.impacts.emit(FXK.DUST, hx, 0.8, hz, (debris.rnd() - 0.5) * 3, 0.6, (debris.rnd() - 0.5) * 3, 0.9, 0.08);
+      }
+      if (b.type === 'pop' && r.gold) {
+        // the pops fan along the landing pad's front edge, two to a spot at most, so a big sale stacks short (design
+        // §4.3) — in front of the pad, not over it, so the shuttle lifting off behind them stays in sight on the
+        // session's wider framing; the battle's own "$N" (a deposit event at that cell), big, in the ore's colour made bright
+        // spots 0, −2.2, +2.2, −4.4, +4.4 cells; consecutive pops share a spot and stack (goldPopups' near rule)
+        const k = s.pops = s.pops + 1, spot = Math.floor((k - 1) / 2) % 5, side = spot === 0 ? 0 : (spot % 2 ? -1 : 1) * 2.2 * Math.ceil(spot / 2);
+        const front = s.hubPad ? s.hubPad.h / 2 + 0.6 : 2.4;
+        r.gold.feed([{ type: 'deposit', gold: b.gold, pos: { x: hx - 0.5 + side, y: hz - 0.5 + front } }], r.map);
+        const p = r.gold.live[r.gold.live.length - 1];
+        if (p) { p.color = popColour(b.colour); p.y0 += 0.5; p.big = true; p.sale = s.id; }
+      }
+    }
+    // crates ride the conduit from the storage tower to the hub
+    const cb = tl.beats.find((b) => b.type === 'crates');
+    let n = 0;
+    if (cb && s.route && t < cb.t + cb.dur + 0.15) {
+      for (let i = 0; i < cb.count; i++) {
+        const k = (t - cb.t) / cb.dur - i * 0.07;
+        if (k < 0 || k > 1) continue;
+        const [x, z] = along(s.route, k);
+        dummy.position.set(x, 0.3 + Math.sin(k * Math.PI) * 0.25, z);
+        dummy.rotation.set(0, k * 4 + i, 0); dummy.scale.setScalar(1); dummy.updateMatrix();
+        crateMesh.setMatrixAt(n, dummy.matrix); crateMesh.setColorAt(n, crateCol.set(cb.colours[i % cb.colours.length]));
+        n++;
+      }
+    }
+    crateMesh.count = n; crateMesh.instanceMatrix.needsUpdate = true; if (crateMesh.instanceColor) crateMesh.instanceColor.needsUpdate = true;
+    // the shuttle: the hub's parked one hides, the flying one lifts off the landing pad, then arcs up and out of frame
+    const f = tl.shuttleAt(t);
+    if (shuttle) {
+      if (!s.hub) s.hub = hubEntry();
+      const parked = s.hub && s.hub.inst && s.hub.inst.nodesOf ? s.hub.inst.nodesOf('shuttle') : [];
+      if (f.on) {
+        if (!s.base) {   // the flying shuttle takes the parked one's place and size (else the pad's centre)
+          const box = new THREE.Box3();
+          parked.forEach((nd) => { nd.visible = true; nd.updateWorldMatrix(true, true); box.expandByObject(nd); });
+          const lvl = shuttle.lod && shuttle.lod.levels && shuttle.lod.levels[0] ? shuttle.lod.levels[0].object : shuttle.object;
+          const sz = box.getSize(new THREE.Vector3()), mine = new THREE.Box3().setFromObject(lvl).getSize(new THREE.Vector3());
+          const k = !box.isEmpty() && sz.x > 0 && mine.x > 0 ? Math.max(sz.x, sz.z) / Math.max(mine.x, mine.z) : (s.hubPad ? padModelScale(s.hubPad) : 1);
+          const c = box.isEmpty() ? new THREE.Vector3(hx, 0.8, hz) : box.getCenter(new THREE.Vector3());
+          s.base = { x: c.x, y: box.isEmpty() ? 0.8 : box.min.y, z: c.z, k: Math.min(1.6, Math.max(0.4, k)) };
+          if (shuttleFx) shuttleFx.setIntensity(1.2);
+        }
+        for (const nd of parked) nd.visible = false;
+        const B = s.base, up = f.lift * 2.4 + f.arc * 26, fwd = f.arc * f.arc * 22;
+        shuttle.object.visible = true;
+        shuttle.object.scale.setScalar(B.k);
+        shuttle.object.position.set(B.x + fwd * 0.35, B.y + up, B.z - fwd);
+        shuttle.object.rotation.set(-f.arc * 0.5, Math.PI, Math.sin(t * 7) * 0.02 * (1 - f.arc));
+        if (shuttleFx) shuttleFx.setIntensity(1 + f.arc * 0.8);
+      } else if (s.base) {
+        shuttle.object.visible = false;
+        for (const nd of parked) nd.visible = true;
+        if (shuttleFx) shuttleFx.setIntensity(0);
+      }
+    }
+    if (t >= tl.duration) {
+      endSale();
+      return { done: true, id: s.id, gold: tl.countAt(t), t };
+    }
+    return { done: false, id: s.id, gold: tl.countAt(t), t, shuttle: !!(shuttle && shuttle.object.visible) };
+  }
+  /** Put the scene back after a sale: the parked shuttle shows, the flying one and the crates go. Safe to call twice. */
+  function endSale() {
+    const s = sale;
+    sale = null;
+    if (!s) return;
+    try {
+      if (shuttle) shuttle.object.visible = false;
+      if (shuttleFx) shuttleFx.setIntensity(0);
+      const hub = s.hub || hubEntry();
+      if (hub && hub.inst && hub.inst.nodesOf) for (const nd of hub.inst.nodesOf('shuttle')) nd.visible = true;
+      crateMesh.count = 0;
+      r.lights.invalidateShadows();
+    } catch (e) { /* the scene tidy-up must never keep the sale open */ }
+  }
+
   return {
     root, debris,
     /** Bring the scene to the outpost's state (call each frame; cheap when nothing changed). */
@@ -472,17 +640,24 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       planDepositsCache = syncDeposits(o, unlockedTiers) || planDepositsCache;
       syncBuildings(o, now);
     },
-    /** Per frame: animation, debris, conduit pulse. → { debris } */
+    /** Per frame: animation, debris, conduit pulse, the sale. → { debris, sale?, shake? } */
     update(dt, o) {
       clock += dt;
       conduitOn.uniforms.uTime.value = clock;
       const out = {};
       for (const e of built.values()) if (e.inst) e.inst.update(dt, r.camera);
+      if (shuttle) shuttle.update(dt, r.camera);
+      if (shuttleFx && shuttle && shuttle.object.visible) shuttleFx.update(dt, r.camera);
+      // a frame of the sale animation that throws ends the sale (gold is already banked) instead of locking the HUD
+      try { out.sale = stepSale(dt, out); } catch (e) { const id = sale && sale.id; endSale(); out.sale = { done: true, id, failed: String(e && e.message || e) }; }
       out.debris = stepDebris(reduced ? dt * 0.5 : dt);
       stepMarkers();
       return out;
     },
     setWarnings, setPreview, setPowerIcons,
+    playSale, get saling() { return !!sale; },
+    /** End the sale now (the driver's watchdog: a sale must never leave the outpost locked). */
+    cancelSale: endSale,
     /** The preview conduit drawn now (tests / review): its point count, or 0. */
     get previewPoints() { return preview.line ? preview.line.geometry.getAttribute('position').count : 0; },
     get warningMarkers() { return [...markers].map(([pad, m]) => ({ pad, kind: m.kind })); },
@@ -493,6 +668,7 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     ready: () => [...built.values()].every((e) => !e.loading),
     dispose() {
       for (const e of built.values()) if (e.inst) e.inst.dispose();
+      if (shuttle) shuttle.dispose();
       debris.dispose();
       scene.remove(root);
       root.traverse((x) => { if (x.geometry) x.geometry.dispose(); });
