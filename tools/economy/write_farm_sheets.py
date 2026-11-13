@@ -174,7 +174,7 @@ CONTRACTS = [
 PARAMS = [
     ["Param", "Value", "Unit", "Notes"],
     ["Prep_Gold", 100, "gold", "prepping a Traditional plot (§5.1); a method's Prep_Mult scales it"],
-    ["Prep_Sec", 120, "s", "prep time of a Traditional plot (§5.1)"],
+    ["Prep_Sec", 2, "s", "prep time of a Traditional plot (§5.1); owner 2026-11-12: 'farm plot prepping should take 2 seconds'"],
     ["Sprout_At", 0.1, "share", "Planted becomes Sprout at this share of the grow time (§5.1)"],
     ["Plant_At", 0.3, "share", "Sprout becomes Plant at this share of the grow time (§5.1)"],
     ["Fruited_Window", 1, "x", "Fruited lasts this times the grow time, then the plant dies (D2)"],

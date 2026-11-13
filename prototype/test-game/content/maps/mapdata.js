@@ -6191,7 +6191,7 @@ export const MAPDATA = {
  ],
  "farmParams": {
   "Prep_Gold": 100,
-  "Prep_Sec": 120,
+  "Prep_Sec": 2,
   "Sprout_At": 0.1,
   "Plant_At": 0.3,
   "Fruited_Window": 1,
