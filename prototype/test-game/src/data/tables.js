@@ -1441,6 +1441,11 @@ export const WAVE_SPEED_MULT = Object.freeze({ 'Ground / Powder': Object.freeze(
 // 27") a campaign wave's window is a flat WAVE_WINDOW_SEC from its start [MM-story_mwbkgcmu_2b]. Cleared sooner, the
 // harvest runs on to the end of it; a fight still going at the end runs on until cleared. Par only scores the star.
 export const WAVE_WINDOW_SEC = 180;
+// HARVEST BONUS TIME (owner 2026-11-12: "From the last kill player get 20 seconds of bonus time to gather resources. The
+// waves are finishing in 30 seconds and then testers sit for 2 and a half minutes") [MM-story_mwebtduu_1]: a harvest
+// board's wave ends WAVE_CLEAR_HARVEST_SEC after its last kill, however early or late that is. WAVE_WINDOW_SEC no longer
+// times the wave; it only caps the time a wave's harvest quota is sized to.
+export const WAVE_CLEAR_HARVEST_SEC = 20;
 // RARE RESOURCES (owner 2026-11-07: "double the amount of rare resources on the map"): each rare (red) node on a
 // battle map gets RARE_NODE_MULT - 1 partners beside it, in the same wave ring (mapgen.buildTerrainMap).
 export const RARE_NODE_MULT = 2;
