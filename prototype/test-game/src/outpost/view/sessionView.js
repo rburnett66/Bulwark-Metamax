@@ -42,6 +42,10 @@
  *       are drawn inside the battle panel through its selectionExtras hook (outpostSelectionExtras below).
  *       A plot or farm building is not a sim structure: its tap (9) selects none, so the panel — with its farm section —
  *       stays in the corner; selecting a structure clears the farm selection (refreshPanel).
+ *  11. SELL plays the sale [MM-story_mwefm2or_j]: the sell action (the card's S SELL, a building's SELL RESOURCES) is
+ *       banked at once, then saleDriver.js plays sellTimeline.js on the scene — the cargo shuttle lifts off the landing
+ *       pad, the "$N" per load pops on the battle's own gold popups in the ore colour, and the top bar's gold counts up
+ *       across the shuttle's arc (the battle HUD's opt-in goldShown hook) instead of jumping.
  */
 import { createBattleSession, createModeHost } from '../../battle/session.js';
 import { createCatalogue, lockRule } from '../../battle/catalogue.js';
@@ -70,6 +74,7 @@ import { outpostMapFor } from '../outpostMap.js';
 import { outpostBattleMap, bakedSlugFor, baseFrameRect } from './outpostBoard.js';
 import { outpostCardModel, outpostReadouts, farmCardModel, threatInfo } from './outpostCard.js';
 import { createOutpostScene } from './outpostScene.js';
+import { createSaleDriver } from './saleDriver.js';
 import { planBuildings, planPowerIcons, withCuts } from './conduits.js';
 import { createOutpostKit, modelSlug } from '../../render3d/outposts/outpostModels.js';
 import { renderMenuIcons, OUTPOST_GLYPHS } from './menuIcons.js';
@@ -164,6 +169,8 @@ async function openSession(opts, opening) {
   const store = opts.store || { load: loadSave, update: updateSave };
   const reduced = opts.reduced ?? !!(win.matchMedia && win.matchMedia('(prefers-reduced-motion: reduce)').matches);
   crumb('outpost: session view');
+  // the SELL sequence's player (saleDriver.js): fed by actOnSave's sell, stepped in beforeHud, read by the HUD's gold
+  const saleRun = createSaleDriver({ reduced, crumb });
 
   // the full-screen host the battle session mounts in
   const host = createModeHost(mount, 'outpost-view outpost-session');   // styled by the battle HUD's sheet
@@ -254,6 +261,8 @@ async function openSession(opts, opening) {
   // refusals from the model, the purchase through the save session (act 'buyHarvester'), the live state rebuilt with the truck
   hud = session.createHud({
     onMainMenu: () => close(),
+    // the top bar's gold counts up across a sale's shuttle arc (the bank is already credited) — opt-in, battles pass none
+    goldShown: (bank) => saleRun.shown(bank),
     // the FARM tab's crops show the seed pods held in their price slot (the rail's railLabel hook); the save context is
     // re-read after every action (actOnSave), so a planting or a harvest updates the count at once
     railLabel: (id) => farmRailLabel(id, ctxNow().pods),
@@ -306,7 +315,7 @@ async function openSession(opts, opening) {
   }
 
   // the outpost's art follows the live state: re-read the save shape a few times a second (cheap), animate each frame
-  let since = 1, ctx = null, dt = 1 / 60;
+  let since = 1, ctx = null, dt = 1 / 60, shook = null;
   /** The armed build tool's power answer at the hover cell (placementRules.js ghostPowerOf, memoised), or null. */
   function ghostNow() {
     if (!ui.buildSelection || !ui.hoverCell || !ui.hoverValid) return null;
@@ -334,6 +343,7 @@ async function openSession(opts, opening) {
     const at = nowOf();
     const back = fromLiveSim(sim, live.link, at);
     bankVisit(store, planet, back.outpost, back.gold);
+    const goldFrom = saleRun.shown(sim.economy.money);   // a sale over a sale counts on from what the HUD shows
     const res = saveSession.act(action, at);
     if (!res.ok) {
       if (hud) flashMessage(hud, String(res.error || 'not now').replace(/^./, (c) => c.toUpperCase()));
@@ -344,6 +354,9 @@ async function openSession(opts, opening) {
     rebuild(s.outposts[planet], saveSession.gold());
     ui.selectedStructureId = null; ui.buildSelection = tool;   // a farm placement keeps its tool armed, as a battle build does
     ctx = null; view = null; since = 1; farmMemo = null; farmLocksOf = null;
+    // SELL: play the sale — the shuttle, the "$N" per load, the gold counting up (the outpost before the sale is the
+    // scene's storage, route and hub)
+    if (action.type === 'sell') saleRun.start(res, { goldFrom, before: back.outpost, scene });
     return res;
   }
   // ── the selected structure's outpost extras, drawn inside the BATTLE selection panel (render/hud.js) ──────────
@@ -537,11 +550,17 @@ async function openSession(opts, opening) {
       }
       if (sim.tick % 15 === 0) stepLiveOutpost(sim, live.link);   // the rigs mine on the sim clock; power parks or starts the trucks
     },
-    beforeFrame: (dtMs) => { dt = Math.min(dtMs / 1000, 0.25); },
+    beforeFrame: (dtMs) => {
+      dt = Math.min(dtMs / 1000, 0.25);
+      // the sale's lift shakes the camera for this frame's draw only (taken back in beforeHud)
+      const r3 = session.view3d, j = saleRun.offset();
+      if (r3 && r3.cam && (j.x || j.z) && !r3.camGlide) { r3.cam.tx += j.x; r3.cam.tz += j.z; shook = { r3, ...j }; }
+    },
     beforeHud: () => {
+      if (shook) { shook.r3.cam.tx -= shook.x; shook.r3.cam.tz -= shook.z; shook = null; }
       panelSince += dt;
       if (panelSince >= 0.5) { panelSince = 0; try { refreshPanel(); } catch (e) { console.warn('[outpost] panel', e); } }
-      if (!scene) return;
+      if (!scene) { saleRun.step(dt, null); return; }
       since += dt;
       if (since >= 0.25 || !view) {
         since = 0;
@@ -556,7 +575,10 @@ async function openSession(opts, opening) {
         if (view && repairDue(view, nowOf())) { const keep = ui.selectedStructureId; actOnSave({ type: 'settle' }); ui.selectedStructureId = keep; }
       }
       try { const gp = ghostNow(); scene.setPreview(previewPlan(gp)); scene.setPowerIcons(powerIconsNow(gp)); } catch (e) { console.warn('[outpost] preview conduit', e); }
-      try { scene.update(dt, view); } catch (e) { console.warn('[outpost] scene update', e); }
+      let sceneOut = null;
+      try { sceneOut = scene.update(dt, view); } catch (e) { console.warn('[outpost] scene update', e); }
+      // the sale's clock: the gold count-up, the shake, the watchdog (a sale never outlives its timeline)
+      try { saleRun.step(dt, sceneOut); } catch (e) { saleRun.cancel(); console.warn('[outpost] sale', e); }
       if (farmLayer) {
         try {
           farmLayer.update(dt);
@@ -590,7 +612,9 @@ async function openSession(opts, opening) {
   const handle = { session, get sim() { return sim; }, get live() { return live; }, get ui() { return ui; }, get raids() { return raids; }, get scene() { return scene; }, panel: card.root, card, away, actOnSave,
     // the farm (S6; review pages and the headless check): its tab, the picture's counts, the crew, a farm action, a tap
     catalogue, get farm() { return farmLayer; }, get crew() { return crew ? crew.info() : null; }, farmAct, tapFarm, farmNow,
-    get farmSel() { return farmSel; } };
+    get farmSel() { return farmSel; },
+    // the SELL sequence playing now (review pages and the headless check)
+    get sale() { return { active: saleRun.active, t: saleRun.t, shown: saleRun.shown(sim.economy.money), pops: saleRun.timeline ? saleRun.timeline.pops.length : 0, saling: !!(scene && scene.saling) }; } };
   // the open outpost for the review pages and the headless check (window.Bulwark is the game's diagnostics namespace)
   try { win.Bulwark = win.Bulwark || {}; win.Bulwark.outpost = handle; } catch (e) { /* no window */ }
   return { closed: closedP, close, handle };
