@@ -56,7 +56,7 @@ import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../../data/outpostStruc
 import { DEFENSE_KINDS } from '../../data/outpost.js';
 import { getStructureDef } from '../../data/tables.js';
 import { PLANETS } from '../../data/planets.js';
-import { toLiveSim, fromLiveSim, stepLiveOutpost } from '../liveSim.js';
+import { toLiveSim, fromLiveSim, stepLiveOutpost, repairPriceOf } from '../liveSim.js';
 import { ghostPowerOf, powerWarning } from '../placementRules.js';
 import { createVisitRaids } from '../visitRaids.js';
 import { validatePlacement } from '../../sim/structures.js';
@@ -506,10 +506,26 @@ async function openSession(opts, opening) {
   function okToast(action, r) {
     if (action.type === 'sell') flashMessage(hud, 'Sold · +' + fmtGold(r.earned != null ? r.earned : 0) + ' gold', 'ok');
     else if (action.type === 'online') flashMessage(hud, 'OUTPOST ONLINE · mining has begun. Raiders will come: hold the first one.', 'ok');
-    else if (action.type === 'repairAll') flashMessage(hud, 'Repair drones launched · −' + fmtGold(r.cost || 0) + ' gold', 'ok');
     else if (action.type === 'deep') flashMessage(hud, action.on ? 'Deep seam: ¼ the speed, 5× the price' : 'Shallow seam', 'info');
   }
-  const cardAct = (action) => { const r = actOnSave(action); if (r.ok) okToast(action, r); };
+  const cardAct = (action) => { if (action.type === 'repairAll') return repairAllLive(); const r = actOnSave(action); if (r.ok) okToast(action, r); };
+  /**
+   * REPAIR ALL (owner 2026-11-13 [MM-story_mwf7z51a_3]: "Repairs on the outpost should work like they do in tower defense,
+   * small bot roams form base to toweer to do repairs"): the battle's repair command on every worn defense and wreck — a bot
+   * walks from the base to each (sim/structures.js requestRepair), the outpost's price paid as it leaves (liveSim.js).
+   */
+  function repairAllLive() {
+    const before = sim.economy.money;
+    let sent = 0, short = false;
+    for (const s of [...sim.structures.values()].sort((a, b) => a.id - b.id)) {
+      if (!(s.hp < s.maxHp) || s.repairPending || repairPriceOf(s) == null) continue;
+      const r = applyCommand(sim, { type: 'repair', id: s.id });
+      if (r.ok) sent++; else if (r.reason === 'cost') short = true;
+    }
+    if (sent) flashMessage(hud, `Repair bot${sent === 1 ? '' : 's'} on the way · −${fmtGold(before - sim.economy.money)} gold`, 'ok');
+    else flashMessage(hud, short ? 'Not enough gold to repair' : 'Nothing needs repair');
+    panelSince = 1;
+  }
   const closeFarm = () => { farmSel = null; if (farmLayer) farmLayer.select(null); panelSince = 1; };
   // the away report (what happened while the player was gone): a report card on arrival, once, only when something happened (D5)
   const away = awayReportModel(opened.report, planet, map, catalog);
