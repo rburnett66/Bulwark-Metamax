@@ -7,7 +7,7 @@ import { defaultSave } from '../../save/save.js';
 import { referenceOutpost, confirmOnline } from '../../outpost/model.js';
 import { outpostMapFromForge } from '../../outpost/outpostMap.js';
 import { createSession } from '../../outpost/view/session.js';
-import { FARM, growSec } from '../../data/farm.js';
+import { FARM, growSec, yieldOf } from '../../data/farm.js';
 import { podCount } from '../pods.js';
 import { acceptFarmContract, measureCropDelivered } from '../contract.js';
 import { cellRule } from '../cells.js';
@@ -86,7 +86,8 @@ test('the loop through the outpost session: place, prep, plant from the Pod Crat
   const t1 = T0 + FARM.Prep_Sec * 1000;
   r = ses.act({ type: 'plant', plot: plotId, pick: 'loam-grain' }, t1);
   assert.ok(r.ok, r.error);
-  assert.equal(podCount(store.load(), 'loam-grain'), FARM.Pod_Crate - 4, 'four pods spent');
+  const planted = Math.min(FARM.Pod_Crate, FARM.Pods_Per_Plot), units = Math.floor(yieldOf('loam-grain', 'traditional', 1) * planted / FARM.Pods_Per_Plot);
+  assert.equal(podCount(store.load(), 'loam-grain'), FARM.Pod_Crate - planted, 'one pod per plant spent (owner 2026-11-12)');
   assert.equal(r.farm.level, 1, 'no crop level bought yet: level 1');
   const t2 = t1 + growSec('loam-grain') * 1000 + MIN;
   const panel = farmPanelModel(ses.outpost(), map, { plot: plotId }, ses.ctx(t2));
@@ -95,12 +96,12 @@ test('the loop through the outpost session: place, prep, plant from the Pod Crat
   // which plot was harvested, how, at what level and cycle (the ember effect, farm/view/embers.js) [MM-story_mwabh2oc_j]
   assert.deepEqual(r.farm.plots, [{ plot: plotId, kind: 'crop', level: 1, cycle: 1 }]);
   const sv = store.load();
-  assert.equal(sv.stores.farm.ground['loam-grain'], 16, 'the crop is in the OUTPOST & FARM store');
+  assert.equal(sv.stores.farm.ground['loam-grain'], units, 'the crop is in the OUTPOST & FARM store (a plot as full as its pods)');
   assert.equal(sv.inventory['loam-grain'] || 0, 0, 'never in the battle inventory');
-  assert.ok(podCount(sv, 'loam-grain') >= FARM.Pod_Crate - 4 + 1, 'grain gives a pod back');
+  assert.ok(podCount(sv, 'loam-grain') >= FARM.Pod_Crate - planted + 1, 'grain gives a pod back');
   r = ses.act({ type: 'deliver', crop: 'loam-grain' }, t2 + MIN);
   assert.ok(r.ok, r.error);
-  assert.equal(measureCropDelivered(store.load(), 'loam-grain'), 16);
+  assert.equal(measureCropDelivered(store.load(), 'loam-grain'), units);
   assert.equal(store.load().stores.farm.ground['loam-grain'] || 0, 0);
   assert.match(ses.act({ type: 'farmSell' }, t2 + 2 * MIN).error, /nothing to sell/);
   assert.ok(panel);
@@ -111,7 +112,9 @@ test('the panels: a prepped plot offers the pods held; a Fruited plot HARVEST; t
   const plot = { x: 0, y: 0, w: 2, h: 2, method: 'traditional' };
   const choices = plantChoices(o, map, plot, s.pods);
   assert.deepEqual(choices.map((c) => [c.crop, c.level, c.n]), [['loam-grain', 1, FARM.Pod_Crate]]);
-  assert.deepEqual(plantChoices(o, map, plot, { 'loam-grain': 3 }), [], 'one pod per row: four needed');
+  assert.deepEqual(plantChoices(o, map, plot, {}), [], 'no pods: nothing to plant');
+  assert.deepEqual(plantChoices(o, map, plot, { 'loam-grain': 3 }).map((c) => c.n), [3], '1 pod = 1 plant: 3 pods plant 3');
+  assert.deepEqual(plantChoices(o, map, plot, { 'loam-grain': 40 }).map((c) => c.n), [16], 'a plot takes 16 at most');
   const fhId = Object.keys(o.farm.buildings)[0];
   const fh = farmPanelModel(o, map, { farm: fhId }, { now: T0, held: { 'loam-grain': 30 }, heldTotal: 30, f1: { crop: 'loam-grain', deliver: 40 }, delivered: 16 });
   assert.equal(fh.title, 'Farmhouse');
@@ -143,6 +146,7 @@ test('a full store blocks HARVEST in the panel and the session; plants keep grow
 // ── owner rule 9 (2026-11-10) [MM-story_mwai5f8t_1g]: crop levels from the tech tree; pods have no level ─────────────
 test('PLANT grows at the crop\'s tech level; a plot keeps its level when the tree is upgraded later', () => {
   const s0 = farmSave();
+  s0.pods = { ...s0.pods, 'loam-grain': 40 };   // two plots' worth (1 pod = 1 plant, 16 a plot)
   s0.tech.owned.crop_loam_grain_2 = true;
   const store = memStore(s0), ses = createSession({ store, planet: 'ground', map, catalog: CATALOG, raidHook: noRaid });
   assert.equal(ses.ctx(T0).levels['loam-grain'], 2, 'the session hands the FARM tab every crop\'s level');
@@ -169,7 +173,7 @@ test('PLANT grows at the crop\'s tech level; a plot keeps its level when the tre
   assert.equal(o.farm.plots[a].level, 2, 'the plot already growing keeps level 2');
   const shown = farmPanelModel(o, map, { plot: a }, ses.ctx(t2));
   assert.deepEqual(shown.stats.find((x) => x[0] === 'Level'), ['Level', '2 · Uncommon']);
-  assert.equal(store.load().pods['loam-grain'], FARM.Pod_Crate - 8, 'a plain count, four per plot');
+  assert.equal(store.load().pods['loam-grain'], 40 - 2 * FARM.Pods_Per_Plot, 'a plain count, one per plant, 16 a full plot');
 });
 
 test('PLANT on a Traditional plot shows the level-5 cap and why', () => {
@@ -197,7 +201,7 @@ test('PLANT on a Traditional plot shows the level-5 cap and why', () => {
 
 // [MM-task_mwcztxf9_2] owner 2026-11-11: "on the rail for seed pods you should show the quantity"
 test('a FARM-tab crop button shows the seed pods held (never chest progress); planting takes them off at once', () => {
-  assert.deepEqual(farmRailLabel('FARM-crop-loam-grain', { 'loam-grain': 8 }), { text: '8 pods', title: 'Loam Grain: 8 seed pods held · a plot plants 4' });
+  assert.deepEqual(farmRailLabel('FARM-crop-loam-grain', { 'loam-grain': 8 }), { text: '8 pods', title: 'Loam Grain: 8 seed pods held · a plot plants up to 16, one per pod' });
   assert.equal(farmRailLabel('FARM-crop-loam-grain', { 'loam-grain': 1 }).text, '1 pod');
   assert.equal(farmRailLabel('FARM-crop-loam-grain', {}).text, '0 pods');
   assert.equal(farmRailLabel('FARM-traditional', { 'loam-grain': 8 }), null, 'plots and buildings keep their gold price');
@@ -213,7 +217,7 @@ test('a FARM-tab crop button shows the seed pods held (never chest progress); pl
   const id = Object.keys(ses.outpost().farm.plots).pop();
   assert.ok(ses.act({ type: 'plant', plot: id, pick: 'loam-grain' }, ready).ok);
   const after = farmRailLabel('FARM-crop-loam-grain', ses.ctx(ready).pods).text;
-  assert.equal(+before.split(' ')[0] - 4, +after.split(' ')[0], `${before} → ${after}`);
+  assert.equal(+before.split(' ')[0] - Math.min(+before.split(' ')[0], FARM.Pods_Per_Plot), +after.split(' ')[0], `${before} → ${after}`);
 });
 
 test('the shared rail count hook is generic and optional: battles set none, so their price labels are untouched', () => {

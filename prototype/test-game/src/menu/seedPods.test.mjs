@@ -95,7 +95,8 @@ test('the detail panel: pods held, the crop level and the next node, yield and w
   assert.ok(det.includes('Pod Reward Chests: win a map on Verdance') && det.includes('one pod per 100 Loam Grain delivered'));
   assert.ok(det.includes('Verdance F1 contract: a Pod Crate of 12 pods.') && !det.includes('pod bench'));
   assert.ok(det.includes(`<b class="num">${FARM.Pod_Price}</b> gold a pod, every crop alike`));
-  assert.ok(det.includes(`data-pod-buy="loam-grain" data-buy-n="${BUY_PODS}">Buy 4 · 100g`));
+  assert.ok(det.includes(`data-pod-buy="loam-grain" data-buy-n="${BUY_PODS}">Buy 16 · 400g`));
+  assert.equal(BUY_PODS, 16, 'the default buy is one full plot (1 pod = 1 plant)');
   assert.ok(!det.includes('data-pod-up'), 'no UPGRADE: the tech tree buys levels');
   assert.ok(!det.includes('data-pod-plant'), 'PLANT hidden when nothing is wired');
   assert.ok(det.includes('All crops'), 'the phone back link');
@@ -134,12 +135,12 @@ test('BUY through the screen\'s handler: 4 pods at the fixed price, saved, the m
 
 test('BUY with too little gold: said clearly, nothing changes; the button is disabled', () => {
   const s = withGold(99), before = JSON.stringify(s), v = seedPodsView(), api = fakeApi(s);
-  assert.ok(v.detail(storeBands(s, 'farm', all), 'loam-grain', s).includes('data-buy-n="4" disabled'));
-  assert.equal(v.click(btn({ podBuy: 'loam-grain', buyN: '4' }), api), true);
+  assert.ok(v.detail(storeBands(s, 'farm', all), 'loam-grain', s).includes('data-buy-n="16" disabled'));
+  assert.equal(v.click(btn({ podBuy: 'loam-grain', buyN: '16' }), api), true);
   assert.equal(JSON.stringify(s), before, 'a refusal changes nothing');
   assert.equal(api.calls.changed, 0);
   const det = v.detail(storeBands(s, 'farm', all), 'loam-grain', s);
-  assert.match(det, /class="pbmsg no"[^>]*>Too little gold: 4 pods cost 100 gold and the bank holds 99\./);
+  assert.match(det, /class="pbmsg no"[^>]*>Too little gold: 16 pods cost 400 gold and the bank holds 99\./);
 });
 
 test('PLANT: shown only when the menu wires onPlant, and hands it the crop', () => {
