@@ -106,7 +106,7 @@ test('Phase A buildings and Verdance F1', () => {
   assert.ok(f1.deliver <= 3 * yieldOf(f1.crop, 'traditional', 1), 'F1\'s delivery fits three Common plots (Farming-Design §5.4)');
   assert.deepEqual(f1.grants, ['farmhouse']);
   assert.ok(f1.unlocks.includes('method:irrigated') && f1.unlocks.includes('tab:seedpods'));
-  assert.deepEqual(prepCost('traditional'), { gold: 100, sec: 120 });
+  assert.deepEqual(prepCost('traditional'), { gold: 100, sec: 2 });   // owner 2026-11-12: prepping takes 2 s
 });
 
 test('the tuning is all there and numeric', () => {
