@@ -6,7 +6,12 @@
  *   0.6 s       the shuttle's engines light; it lifts with a camera shake
  *   0.8 s       ore splatter: a burst of ore chunks from the cargo bay, bouncing on the pad
  *   0.9 s       "$N" pops, one per load, staggered 0.12 s, stacking upward in the ore colour
- *   1.4–3.0 s   the shuttle arcs up and out of frame; the HUD gold counts up
+ *   0.6–1.2 s   the shuttle lifts off the pad FACING THE PLAYER (owner 2026-11-13 [MM-story_mwf8j7jg_6]: "the transport
+ *               ship on the outpost should face towards the player when it takes off, then spin in the air and ascend")
+ *   1.2–2.6 s   it spins in the air, rising, banked into the turn ("if it turns left it should lean left")
+ *   2.6–4.0 s   it climbs away out of frame; the HUD gold counts up (1.4–3.0 s)
+ *   4.8–8.2 s   it comes back down the exact same path, the film run backwards ("Then the transport should return on the
+ *               exact same path moments later"), and lands
  *
  * Reduced motion: the pops and the count-up stay; the drain, crates, shuttle, shake and splatter are skipped.
  * A sale of many loads keeps one pop per load up to MAX_POPS; past that, consecutive loads share a pop (their gold
@@ -16,8 +21,38 @@ import { oreById } from '../../data/ores.js';
 
 export const SELL = Object.freeze({
   drain: 0, crates: 0, engines: 0.6, lift: 0.6, shake: 0.6, splatter: 0.8, pops: 0.9, stagger: 0.12,
-  arc: [1.4, 3.0], count: [1.4, 3.0], drainFor: 0.9, cratesFor: 0.7, shakeFor: 0.45,
+  arc: [2.6, 4.0], count: [1.4, 3.0], drainFor: 0.9, cratesFor: 0.7, shakeFor: 0.45,
 });
+/**
+ * The shuttle's flight (owner 2026-11-13 [MM-story_mwf8j7jg_6]): lift [SELL.lift, spin0] to `hover` cells facing the
+ * player; spin [spin0, spin1], rising `spinRise` more, banked into the turn by up to `bank` rad at the fastest turn; climb
+ * away over SELL.arc; out of sight for `away` s; then the same path backwards.
+ */
+export const FLIGHT = Object.freeze({ spin: [1.2, 2.6], hover: 2.4, spinRise: 1.6, bank: 0.42, away: 0.8, climb: 26, out: 22 });
+/** When the shuttle is back on the pad: the return is the outbound flight (SELL.lift → SELL.arc[1]) run backwards. */
+export const RETURN = Object.freeze([SELL.arc[1] + FLIGHT.away, SELL.arc[1] + FLIGHT.away + (SELL.arc[1] - SELL.lift)]);
+const smooth = (k) => k * k * (3 - 2 * k);
+/**
+ * Where the outbound flight is at time u (SELL.lift ≤ u ≤ SELL.arc[1]), before the scene places it:
+ * → { y (cells above the pad), fwd (cells along the departure), face (0 parked heading → 1 facing the player, turned
+ *     smoothly as it lifts — no snap off the pad), faceTurn (0..1, how fast that turn is now), spin (0 facing the player →
+ *     1 the departure heading), turn (0..1, how fast it is spinning now, 1 at the fastest), pitch (rad, nose up as it climbs) }
+ */
+export function flightPath(u) {
+  const c01 = (v) => Math.max(0, Math.min(1, v));
+  const kl = c01((u - SELL.lift) / (FLIGHT.spin[0] - SELL.lift));
+  const ks = c01((u - FLIGHT.spin[0]) / (FLIGHT.spin[1] - FLIGHT.spin[0]));
+  const ka = c01((u - SELL.arc[0]) / (SELL.arc[1] - SELL.arc[0])), a = ka * ka;
+  return {
+    y: FLIGHT.hover * easeOut(kl) + FLIGHT.spinRise * smooth(ks) + a * FLIGHT.climb,
+    fwd: a * a * FLIGHT.out,
+    face: smooth(kl),
+    faceTurn: kl > 0 && kl < 1 ? (6 * kl * (1 - kl)) / 1.5 : 0,
+    spin: smooth(ks),
+    turn: ks > 0 && ks < 1 ? (6 * ks * (1 - ks)) / 1.5 : 0,   // smoothstep's slope over its peak (1.5)
+    pitch: a * 0.5,
+  };
+}
 export const MAX_POPS = 10;
 
 const easeOut = (k) => 1 - (1 - k) ** 3;
@@ -49,8 +84,9 @@ export function sellTimeline(loads, { reduced = false, goldFrom = 0 } = {}) {
   for (const p of pops) beats.push({ t: p.t, type: 'pop', gold: p.gold, colour: p.colour });
   const c0 = SELL.count[0], c1 = Math.max(SELL.count[1], pops.length ? pops[pops.length - 1].t + 0.4 : 0);
   beats.push({ t: c0, type: 'count', dur: c1 - c0 });
+  if (!reduced) beats.push({ t: RETURN[0], type: 'return' }, { t: RETURN[1], type: 'land' });
   beats.sort((a, b) => a.t - b.t);
-  const duration = Math.max(c1, reduced ? 0 : SELL.arc[1]) + 0.2;
+  const duration = Math.max(c1, reduced ? 0 : RETURN[1]) + 0.2;
   return {
     duration, beats, pops, total, goldFrom, goldTo: goldFrom + total, reduced,
     /** The gold the HUD shows at time t (counts up over the count window, eased). */
@@ -61,12 +97,20 @@ export function sellTimeline(loads, { reduced = false, goldFrom = 0 } = {}) {
     },
     /** The storage hologram's drain at t: 1 = as it was, 0 = drained (the share sold). */
     drainAt(t) { return reduced ? 0 : t <= 0 ? 1 : t >= SELL.drainFor ? 0 : 1 - easeOut(t / SELL.drainFor); },
-    /** The shuttle's flight at t: { on, lift (0..1 up off the pad), arc (0..1 along the spline) }. */
+    /**
+     * The shuttle's flight at t: flightPath's pose plus { on, dir, back }. dir: +1 the outbound turn, −1 the return's (the
+     * same spin run backwards turns the other way); bank = −dir × FLIGHT.bank × turn leans INTO the turn. back: returning.
+     */
     shuttleAt(t) {
-      if (reduced || t < SELL.lift) return { on: false, lift: 0, arc: 0 };
-      const lift = Math.min(1, (t - SELL.lift) / (SELL.arc[0] - SELL.lift));
-      const arc = t <= SELL.arc[0] ? 0 : Math.min(1, (t - SELL.arc[0]) / (SELL.arc[1] - SELL.arc[0]));
-      return { on: t < SELL.arc[1] + 0.1, lift: easeOut(lift), arc: arc * arc };
+      const off = { on: false, y: 0, fwd: 0, spin: 0, turn: 0, pitch: 0, dir: 1, bank: 0, back: false };
+      if (reduced || t < SELL.lift) return off;
+      let u = t, dir = 1, back = false;
+      if (t > SELL.arc[1]) {
+        if (t < RETURN[0] || t >= RETURN[1]) return off;
+        u = SELL.arc[1] - (t - RETURN[0]); dir = -1; back = true;
+      }
+      const p = flightPath(u);
+      return { on: true, ...p, dir, bank: p.turn ? -dir * FLIGHT.bank * p.turn : 0, back };
     },
   };
 }

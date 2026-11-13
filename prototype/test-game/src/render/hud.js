@@ -250,6 +250,11 @@ export function createHud(mountEl, callbacks) {
   const cbs = callbacks || {};
   const doc = mountEl.ownerDocument || (typeof document !== 'undefined' ? document : null);
   if (!doc) throw new Error('createHud: no document available');
+  // the listeners this HUD puts on the window / document, taken off by hud.destroy() (owner 2026-11-13
+  // [MM-story_mwf9ecau_8]: "my PC chrome browser is warning of very high memory usage 1.8 gb" — they were never removed,
+  // so every battle and outpost visit stayed alive through them: its HUD, its session, its 3D scene's images)
+  const globalListeners = [];
+  const listenGlobal = (target, type, fn, opts) => { target.addEventListener(type, fn, opts); globalListeners.push([target, type, fn, opts]); };
 
   // NOTE: do NOT use getComputedStyle here (may not exist in headless boot).
   // Just ensure the mount element is a positioning context for the overlay.
@@ -567,9 +572,9 @@ export function createHud(mountEl, callbacks) {
     const view = doc.defaultView;
     if (view) {
       const relayout = () => view.requestAnimationFrame(layoutLeftRail);
-      view.addEventListener('resize', relayout);
-      view.addEventListener('orientationchange', relayout);
-      if (view.visualViewport) view.visualViewport.addEventListener('resize', relayout);
+      listenGlobal(view, 'resize', relayout);
+      listenGlobal(view, 'orientationchange', relayout);
+      if (view.visualViewport) listenGlobal(view.visualViewport, 'resize', relayout);
       relayout();
     }
   }
@@ -787,7 +792,7 @@ export function createHud(mountEl, callbacks) {
       if (fsNow) { (doc.exitFullscreen || doc.webkitExitFullscreen).call(doc); }
       else { (fsEl.requestFullscreen || fsEl.webkitRequestFullscreen).call(fsEl); }
     });
-    doc.addEventListener('fullscreenchange', () => {
+    listenGlobal(doc, 'fullscreenchange', () => {
       fsBtn.textContent = (doc.fullscreenElement) ? '🗗' : '⛶';
     });
     root.appendChild(fsBtn);
@@ -1066,6 +1071,11 @@ export function createHud(mountEl, callbacks) {
   };
 
   setFps(loadFpsChoice(storage));   // the saved choice (off unless the player turned it on)
+  /** Take the HUD's window / document listeners off (battle/session.js destroy). Safe to call twice. */
+  hud.destroy = () => {
+    for (const [target, type, fn, opts] of globalListeners.splice(0)) { try { target.removeEventListener(type, fn, opts); } catch (e) { /* gone */ } }
+    if (hud._results) { try { hud._results.dispose(); } catch (e) { /* gone */ } hud._results = null; }
+  };
   return hud;
 }
 
