@@ -9,7 +9,7 @@ import { TERRAIN } from '../terrain/terrainGen.js';
 import { getStructureDef } from '../data/tables.js';
 import {
   ensureFarm, occupied, plotState, placePlot, prep, plant, harvest, harvestAll, placeFarmBuilding, storeCapacity,
-  outputPerHour, farmStatus, farmReportLines, walkwayHit, plantLevel,
+  outputPerHour, farmStatus, farmReportLines, walkwayHit, plantLevel, plotPlants, plotYield,
 } from './model.js';
 import * as MODEL from './model.js';
 
@@ -62,7 +62,7 @@ function prepped(method = 'traditional') {
 /** A plot placed, prepped and planted with Loam Grain at tech level `level`, the outpost advanced to planting time. */
 function planted(level = 1, method = 'traditional') {
   const { o } = prepped(method);
-  const r = plant(o, Object.keys(o.farm.plots)[0], { crop: 'loam-grain', level }, { now: o.t, podsHeld: 4, map });
+  const r = plant(o, Object.keys(o.farm.plots)[0], { crop: 'loam-grain', level }, { now: o.t, podsHeld: 16, map });
   return { o: r.outpost, id: Object.keys(r.outpost.farm.plots)[0], t: o.t, r };
 }
 
@@ -116,7 +116,7 @@ test('Dead gives the same pods back (crop, count) and needs no Silo room', () =>
   assert.equal(plotState(dead, dead.farm.plots[id]), 'dead');
   const r = harvest(dead, id, { map, held: 1e9 });
   assert.equal(r.kind, 'pods');
-  assert.deepEqual(r.pods, [{ crop: 'loam-grain', n: 4 }]);
+  assert.deepEqual(r.pods, [{ crop: 'loam-grain', n: 16 }], 'every pod planted comes back');
   assert.equal(r.level, 4);
   assert.equal(r.units, 0);
 });
@@ -190,14 +190,20 @@ test('placing: refusals for taken ground, locked methods, gold, and the map rule
   assert.match(placeFarmBuilding(fh.outpost, { kind: 'farmhouse', ...s2 }, { map, now: T0, grant: true }).error, /has its Farmhouse/);
 });
 
-test('plant needs a prepped plot and the pods: one per row', () => {
+test('plant needs a prepped plot and a pod: one pod per plant, up to 16 (owner 2026-11-12: 7 pods → 7 plants)', () => {
   let o = base();
   const [s] = freeSpots(o, 1);
   const r = placePlot(o, s, { map, now: T0 });
-  assert.match(plant(r.outpost, r.plot, { crop: 'loam-grain', level: 1 }, { now: T0, podsHeld: 4 }).error, /not prepped/);
+  assert.match(plant(r.outpost, r.plot, { crop: 'loam-grain', level: 1 }, { now: T0, podsHeld: 16 }).error, /not prepped/);
   o = go(r.outpost, T0 + FARM.Prep_Sec * 1000);
-  assert.match(plant(o, r.plot, { crop: 'loam-grain', level: 1 }, { now: o.t, podsHeld: 3 }).error, /needs 4 pods/);
-  assert.deepEqual(plant(o, r.plot, { crop: 'loam-grain', level: 1 }, { now: o.t, podsHeld: 4 }).spend, { crop: 'loam-grain', n: 4 });
+  assert.match(plant(o, r.plot, { crop: 'loam-grain', level: 1 }, { now: o.t, podsHeld: 0 }).error, /needs a seed pod/);
+  const seven = plant(o, r.plot, { crop: 'loam-grain', level: 1 }, { now: o.t, podsHeld: 7 });
+  assert.deepEqual(seven.spend, { crop: 'loam-grain', n: 7 }, 'only the 7 held are spent');
+  const q = seven.outpost.farm.plots[r.plot];
+  assert.equal(plotPlants(q), 7, '7 plants');
+  assert.equal(plotYield(q), yieldOf('loam-grain', 'traditional', q.level) * 7 / 16, 'a 7/16-full plot yields 7/16');
+  assert.deepEqual(plant(o, r.plot, { crop: 'loam-grain', level: 1 }, { now: o.t, podsHeld: 40 }).spend, { crop: 'loam-grain', n: 16 }, 'a full plot takes 16');
+  assert.equal(plotPlants({ method: 'traditional' }), 16, 'a plot planted before this (no plants count) is full');
 });
 
 test('HARVEST ALL takes every Fruited and Dead plot and lists what the Silo had no room for', () => {
@@ -205,7 +211,7 @@ test('HARVEST ALL takes every Fruited and Dead plot and lists what the Silo had 
   const spots = freeSpots(o, 3);
   for (const s of spots) o = placePlot(o, s, { map, now: T0 }).outpost;
   o = go(o, T0 + FARM.Prep_Sec * 1000);
-  for (const id of Object.keys(o.farm.plots)) o = plant(o, id, { crop: 'loam-grain', level: 1 }, { now: o.t, podsHeld: 4 }).outpost;
+  for (const id of Object.keys(o.farm.plots)) o = plant(o, id, { crop: 'loam-grain', level: 1 }, { now: o.t, podsHeld: 16 }).outpost;
   o = go(o, o.t + growSec('loam-grain') * 1000 + MIN);
   const cap = storeCapacity(o, map);
   const r = harvestAll(o, { map, held: cap - 20 });
@@ -231,9 +237,9 @@ test('a plot stores the level it was planted at; the next planting reads the lev
   const h = harvest(later, id, { map, held: 0 });
   assert.equal(h.outpost.farm.plots[id].level, null, 'harvested: the plot holds no crop and no level');
   const again = go(prep(h.outpost, id, { now: h.outpost.t, gold: 1e9 }).outpost, h.outpost.t + FARM.Prep_Sec * 1000 + MIN);
-  assert.equal(plant(again, id, { crop: 'loam-grain', level: 4 }, { now: again.t, podsHeld: 4, map }).outpost.farm.plots[id].level, 4,
+  assert.equal(plant(again, id, { crop: 'loam-grain', level: 4 }, { now: again.t, podsHeld: 16, map }).outpost.farm.plots[id].level, 4,
     'upgraded since: the new planting grows at 4');
-  assert.match(plant(again, id, { crop: 'loam-grain', level: 6 }, { now: again.t, podsHeld: 4, map }).error, /crop level/);
+  assert.match(plant(again, id, { crop: 'loam-grain', level: 6 }, { now: again.t, podsHeld: 16, map }).error, /crop level/);
 });
 
 test('level 5 needs a trick: a Traditional plot grows a level-5 crop at 4; an Irrigated plot reaches 5 only with water', () => {
@@ -253,7 +259,7 @@ test('level 5 needs a trick: a Traditional plot grows a level-5 crop at 4; an Ir
   terrain[(plot.y + 2) * map.width + plot.x] = TERRAIN.WATER;
   const lake = { ...map, terrain };
   assert.deepEqual(plantLevel(o, lake, plot, 5), { level: 5, capped: false, why: null });
-  const wet = plant(o, id, { crop: 'loam-grain', level: 5 }, { now: o.t, podsHeld: 4, map: lake });
+  const wet = plant(o, id, { crop: 'loam-grain', level: 5 }, { now: o.t, podsHeld: 16, map: lake });
   assert.deepEqual([wet.level, wet.capped], [5, false]);
   assert.equal(wet.outpost.farm.plots[id].level, 5);
   assert.equal(plantLevel(o, map, plot, 5).level, 4, 'the same plot on the dry map');

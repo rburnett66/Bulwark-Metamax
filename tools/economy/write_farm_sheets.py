@@ -112,9 +112,9 @@ def crop_rows():
 METHOD_COLS = ["Method", "Name", "Family", "Foot_W", "Foot_H", "Where", "Speed_Mult", "Yield_Mult", "Power",
                "Prep_Mult", "Pods_Per", "Water_Reach", "Taught_By", "Level5_Needs"]
 METHODS = [
-    ["traditional", "Traditional plot", "open", 2, 2, "soil", 1, 1, 0, 1, 4, 0, "every F1", "never"],
+    ["traditional", "Traditional plot", "open", 2, 2, "soil", 1, 1, 0, 1, 16, 0, "every F1", "never"],
     # within Water_Reach cells of water or a Pump; the Pump draws the power (Farm_Buildings)
-    ["irrigated", "Irrigated plot", "open", 2, 2, "soil", 1.5, 1, 0, 1, 4, 4, "the first F1", "water"],
+    ["irrigated", "Irrigated plot", "open", 2, 2, "soil", 1.5, 1, 0, 1, 16, 4, "the first F1", "water"],
 ]
 
 # The five CROP levels (owner rule 9, 2026-11-10: a crop's level comes from the tech tree and a plot keeps the level it
@@ -178,7 +178,7 @@ PARAMS = [
     ["Sprout_At", 0.1, "share", "Planted becomes Sprout at this share of the grow time (§5.1)"],
     ["Plant_At", 0.3, "share", "Sprout becomes Plant at this share of the grow time (§5.1)"],
     ["Fruited_Window", 1, "x", "Fruited lasts this times the grow time, then the plant dies (D2)"],
-    ["Pods_Per_Plot", 4, "count", "one pod per row of a 4-row plot (D36)"],
+    ["Pods_Per_Plot", 16, "count", "one pod per plant, 16 plants a full plot (owner 2026-11-12, was 4: one per row, D36)"],
     ["Pod_Price", 25, "gold", "one seed pod, any crop, bought on the SEED PODS tab (pods have no level; owner rule 9). Proposed"],
     ["Pod_Unlock_Units", 500, "units", "a crop's seed pods unlock once this many of it are delivered: every unit at a map's end plus farm sales and deliveries (owner rule 10, 2026-11-10)"],
     ["Chest_Units_Per_Pod", 100, "units", "the Pod Reward Chest of a won map holds one pod per this many units of an unlocked crop delivered, carried between maps; every tier alike (owner rule 11, 2026-11-10)"],

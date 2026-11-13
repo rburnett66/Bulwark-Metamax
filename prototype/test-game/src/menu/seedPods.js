@@ -114,9 +114,9 @@ function buyHtml(s, c, msg, canPlant) {
    ${msg ? `<p class="pbmsg ${msg.ok ? 'ok' : 'no'}" role="status">${msg.html}</p>` : ''}</div>`;
   }
   return `<div class="pbench pbuy"><div class="pbh">Seed pods · ${esc(c.name)}</div>
-   <div class="pbp"><b class="num">${num(podPrice(1))}</b> gold a pod, any crop · one plot takes ${num(FARM.Pods_Per_Plot)}</div>
+   <div class="pbp"><b class="num">${num(podPrice(1))}</b> gold a pod, any crop · one pod per plant, a full plot takes ${num(FARM.Pods_Per_Plot)}</div>
    <div class="pbhave">You hold <b class="num">${num(have)}</b> · bank <b class="num">${num(bankOf(s))}</b> gold</div>
-   <div class="pbb"><button class="btn primary" data-pod-buy="${esc(c.id)}" data-buy-n="${BUY_PODS}"${bankOf(s) < gold ? ' disabled' : ''}>Buy ${BUY_PODS} · ${num(gold)}g</button>${canPlant ? `<button class="btn" data-pod-plant="${esc(c.id)}"${have >= FARM.Pods_Per_Plot ? '' : ' disabled'}>Plant</button>` : ''}</div>
+   <div class="pbb"><button class="btn primary" data-pod-buy="${esc(c.id)}" data-buy-n="${BUY_PODS}"${bankOf(s) < gold ? ' disabled' : ''}>Buy ${BUY_PODS} · ${num(gold)}g</button>${canPlant ? `<button class="btn" data-pod-plant="${esc(c.id)}"${have >= 1 ? '' : ' disabled'}>Plant</button>` : ''}</div>
    ${msg ? `<p class="pbmsg ${msg.ok ? 'ok' : 'no'}" role="status">${msg.html}</p>` : ''}</div>`;
 }
 
