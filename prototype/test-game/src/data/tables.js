@@ -1432,6 +1432,10 @@ export const BONUS_NERFS = Object.freeze({
 // the load comes off; gold is credited (the 'deposit' event) only when the timer completes. Seconds,
 // converted to whole sim ticks in harvest.js (deterministic — no wall clock).
 export const HARVESTER_UNLOAD_TIME = 3.0;
+// DOCK REPAIR (owner 2026-11-12: "when harvesters return to base to offload resources they get some repairs")
+// [MM-story_mwel9hhv_b]: each completed unload heals the truck this fraction of its max HP (never past max). Battle docks
+// and an outpost's Resource Bay alike (both run harvest.js).
+export const HARVESTER_DOCK_REPAIR_FRAC = 0.25;
 // WAVE SPEED (owner 2026-11-07: "we need to reduce the speed of the wave one verdance units by 20%"): a speed multiplier
 // for a faction's attackers in given waves, applied as each one spawns (waves.js). Verdance is the Ground / Powder world.
 export const WAVE_SPEED_MULT = Object.freeze({ 'Ground / Powder': Object.freeze({ 1: 0.8 }) });
