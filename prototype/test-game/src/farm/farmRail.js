@@ -30,8 +30,9 @@ import { farmGate, hasFarm } from './contract.js';
 import { PLANETS } from '../data/planets.js';
 
 const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-/** Pods one planting takes (the fewest any method needs: a crop with fewer can plant nothing). */
-const podsToPlant = () => Math.min(...METHODS.map((m) => m.pods || 4));
+/** Pods one planting needs at least (1 pod = 1 plant, owner 2026-11-12 [MM-story_mwelnbfc_1]), and the most a plot takes. */
+const podsToPlant = () => 1;
+const plotHolds = () => Math.max(...METHODS.map((m) => m.pods || 16));
 
 /**
  * The FARM tab, top to bottom: the plot methods, the farm buildings the player buys (the Farmhouse is the contract's
@@ -84,7 +85,7 @@ export function farmRailLocks(save, ctx, ids) {
     const c = cropOf(id.slice(10));
     if (!c) continue;
     if (!podsUnlocked(save, c.id)) out[id] = `${c.name} seed pods are locked: deliver ${unlockUnits()} ${c.name} to unlock them`;
-    else if (podCount(save, c.id) < need) out[id] = `Needs ${need} ${c.name} seed pods: buy them at STORES › Seed pods`;
+    else if (podCount(save, c.id) < need) out[id] = `Needs a ${c.name} seed pod: buy them at STORES › Seed pods`;
   }
   return out;
 }
@@ -99,8 +100,8 @@ export function farmRailLabel(structId, pods = {}) {
   if (typeof structId !== 'string' || !structId.startsWith('FARM-crop-')) return null;
   const c = cropOf(structId.slice(10));
   if (!c) return null;
-  const n = podCount({ pods }, c.id), need = podsToPlant();
-  return { text: `${n} pod${n === 1 ? '' : 's'}`, title: `${c.name}: ${n} seed pod${n === 1 ? '' : 's'} held · a plot plants ${need}` };
+  const n = podCount({ pods }, c.id);
+  return { text: `${n} pod${n === 1 ? '' : 's'}`, title: `${c.name}: ${n} seed pod${n === 1 ? '' : 's'} held · a plot plants up to ${plotHolds()}, one per pod` };
 }
 
 /** What farm thing covers a cell: { plot: id } | { farm: id } | null. */

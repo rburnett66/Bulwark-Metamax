@@ -134,7 +134,17 @@ export function plantLevel(o, map, plot, techLevel, t = o.t) {
 }
 
 /**
- * Plant a prepped plot with one crop, one pod per row (the method's Pods_Per). Pods have no level: `level` is the
+ * 1 POD = 1 PLANT (owner 2026-11-12: "when I plant a plot with seed pods but I only have 7 pods I should only see 7
+ * plants") [MM-story_mwelnbfc_1]. A plot holds up to its method's Pods_Per plants (16: its 4 × 4 spots); `plants` is
+ * how many were planted. A plot planted before this has no `plants` and counts as full.
+ */
+export const plotFull = (p) => methodOf(p.method).pods;
+export const plotPlants = (p) => Math.max(0, Math.min(plotFull(p), p.plants ?? plotFull(p)));
+/** What a planted plot yields: the method's full-plot yield × how full it is × any trampling share. */
+export const plotYield = (p) => yieldOf(p.crop, p.method, p.level) * (plotPlants(p) / plotFull(p)) * (p.yieldShare ?? 1);
+
+/**
+ * Plant a prepped plot with one crop, one pod per plant: as many pods as the player holds, up to the method's Pods_Per. Pods have no level: `level` is the
  * crop's tech-tree level (src/farm/levels.js cropLevel), and the plot stores the level it actually grows at
  * (plantLevel) until it is harvested. The caller spends the pods (story A4): ctx.podsHeld is how many of that crop the
  * player holds. ctx: { now, map, podsHeld }.
@@ -146,11 +156,11 @@ export function plant(outpost, plotId, { crop, level = 1 }, ctx) {
   if (plotState(outpost, p, ctx.now) !== 'prepped') return { error: 'the plot is not prepped' };
   if (!cropOf(crop)) return { error: `unknown crop ${crop}` };
   if (!podLevel(level)) return { error: `no crop level ${level}` };
-  const n = methodOf(p.method).pods;
-  if ((ctx.podsHeld ?? 0) < n) return { error: `needs ${n} pods` };
+  const n = Math.min(plotFull(p), Math.floor(ctx.podsHeld ?? 0));
+  if (n < 1) return { error: 'needs a seed pod' };
   const grow = plantLevel(outpost, ctx.map, p, level, ctx.now);
   const o = clone(outpost), q = o.farm.plots[plotId];
-  Object.assign(q, { crop, level: grow.level, plantedAt: ctx.now, progress: 0, ripeAt: null, cycle: q.cycle + 1, yieldShare: 1 });
+  Object.assign(q, { crop, level: grow.level, plantedAt: ctx.now, progress: 0, ripeAt: null, cycle: q.cycle + 1, yieldShare: 1, plants: n });
   return { outpost: o, level: grow.level, capped: grow.capped, why: grow.why, spend: { crop, n } };
 }
 
@@ -161,7 +171,7 @@ export function outputPerHour(o) {
   for (const p of Object.values((o.farm && o.farm.plots) || {})) {
     if (!p.crop) continue;
     const m = methodOf(p.method);
-    u += yieldOf(p.crop, p.method, p.level) * m.speed / cropOf(p.crop).growHours;
+    u += plotYield(p) * m.speed / cropOf(p.crop).growHours;
   }
   return u;
 }
@@ -182,7 +192,7 @@ export function siloReady(o, map) {
 export function storeCapacity(o, map) {
   const hours = siloReady(o, map) ? FARM.Silo_Hours : FARM.Farmhouse_Store_Hours;
   let one = yieldOf('loam-grain', 'traditional', 1);
-  for (const p of Object.values((o.farm && o.farm.plots) || {})) if (p.crop) one = Math.max(one, yieldOf(p.crop, p.method, p.level));
+  for (const p of Object.values((o.farm && o.farm.plots) || {})) if (p.crop) one = Math.max(one, plotYield(p));
   return Math.max(Math.ceil(hours * outputPerHour(o)), one);
 }
 
@@ -199,14 +209,14 @@ export function harvest(outpost, plotId, ctx) {
   if (!p) return { error: `no plot ${plotId}` };
   const st = plotState(outpost, p);
   if (st !== 'fruited' && st !== 'dead') return { error: `nothing to harvest (${st})` };
-  const o = clone(outpost), q = o.farm.plots[plotId], n = methodOf(q.method).pods;
-  const clear = () => Object.assign(q, { crop: null, level: null, plantedAt: null, progress: 0, ripeAt: null, prepDone: null, yieldShare: 1 });
+  const o = clone(outpost), q = o.farm.plots[plotId], n = plotPlants(q);
+  const clear = () => Object.assign(q, { crop: null, level: null, plantedAt: null, progress: 0, ripeAt: null, prepDone: null, yieldShare: 1, plants: null });
   if (st === 'dead') {
     const out = { outpost: o, kind: 'pods', crop: q.crop, level: q.level, units: 0, pods: [{ crop: q.crop, n }] };
     clear();
     return out;
   }
-  const units = Math.max(1, Math.floor(yieldOf(q.crop, q.method, q.level) * (q.yieldShare ?? 1)));
+  const units = Math.max(1, Math.floor(plotYield(q)));
   const room = storeCapacity(outpost, ctx.map) - (ctx.held || 0);
   if (units > room) return { error: 'the Silo is full', full: true };
   const pods = [];

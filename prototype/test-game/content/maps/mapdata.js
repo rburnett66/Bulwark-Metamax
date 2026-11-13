@@ -6195,7 +6195,7 @@ export const MAPDATA = {
   "Sprout_At": 0.1,
   "Plant_At": 0.3,
   "Fruited_Window": 1,
-  "Pods_Per_Plot": 4,
+  "Pods_Per_Plot": 16,
   "Pod_Price": 25,
   "Pod_Unlock_Units": 500,
   "Chest_Units_Per_Pod": 100,
@@ -6762,7 +6762,7 @@ export const MAPDATA = {
    "Yield_Mult": 1,
    "Power": 0,
    "Prep_Mult": 1,
-   "Pods_Per": 4,
+   "Pods_Per": 16,
    "Water_Reach": 0,
    "Taught_By": "every F1",
    "Level5_Needs": "never"
@@ -6778,7 +6778,7 @@ export const MAPDATA = {
    "Yield_Mult": 1,
    "Power": 0,
    "Prep_Mult": 1,
-   "Pods_Per": 4,
+   "Pods_Per": 16,
    "Water_Reach": 4,
    "Taught_By": "the first F1",
    "Level5_Needs": "water"

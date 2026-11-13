@@ -16,7 +16,7 @@
  *   update(dt), counts(), dispose() }
  */
 import { POD_LEVELS, cropOf } from '../../data/farm.js';
-import { plotState } from '../model.js';
+import { plotState, plotPlants } from '../model.js';
 import { RIPE } from './farmUi.js';   // a ripe crop's colour by category (shared with the FARM tab's crop pictures)
 import { mergeGeos } from '../../outpost/view/outpostScene.js';   // the outpost scene's merge (one draw call per material)
 import { PAD_SIZE, MODEL_PAD_SIZE } from '../../terrain/outpostPads.js';
@@ -135,7 +135,9 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
     for (const p of plots) {
       const st = plotState(o, p), c = p.crop ? cropOf(p.crop) : null;
       if (st === 'prepping' || st === 'prepped') continue;
+      const shown = st === 'harvested' ? Infinity : plotPlants(p);   // 1 pod = 1 plant [MM-story_mwelnbfc_1]
       for (const [i, [x, z]] of spots(p).entries()) {
+        if (i >= shown) break;
         const j = ((i * 37) % 11) / 11 - 0.5;   // a fixed per-plant jitter (no randomness: the same plot always looks the same)
         if (st === 'harvested') { push('stubble', x + j * 0.1, z, C.stubble); continue; }
         n++;

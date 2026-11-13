@@ -18,6 +18,8 @@ import patch_outpost_params as P  # noqa: E402
 P.SHEET = "Farm_Params"
 P.ROWS = {
     "Prep_Sec": (2, "s", "prep time of a Traditional plot (§5.1); owner 2026-11-12: 'farm plot prepping should take 2 seconds'"),
+    "Pods_Per_Plot": (16, "count", "one pod per plant, 16 plants a full plot; owner 2026-11-12: '1 pod = 1 plant' "
+                      "[MM-story_mwelnbfc_1] (was one pod per row of a 4-row plot, D36)"),
 }
 
 if __name__ == "__main__":

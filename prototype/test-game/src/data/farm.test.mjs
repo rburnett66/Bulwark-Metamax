@@ -52,11 +52,12 @@ test('grow times and yields follow Farming-Design §5.4: category × tier stretc
   assert.deepEqual(cropsOf('ground'), cropsOf('Verdance'));
 });
 
-test('Phase A methods: Traditional and Irrigated, both 2 × 2 with 4 pods; Irrigated grows 1.5× within 4 cells of water', () => {
+test('Phase A methods: Traditional and Irrigated, both 2 × 2 with 16 pods (1 pod = 1 plant); Irrigated grows 1.5× within 4 cells of water', () => {
   assert.deepEqual(METHODS.map((m) => m.id), ['traditional', 'irrigated']);
   const t = methodOf('traditional'), i = methodOf('irrigated');
   assert.deepEqual([t.w, t.h, t.pods, t.speed, t.waterReach], [2, 2, FARM.Pods_Per_Plot, 1, 0]);
-  assert.deepEqual([i.w, i.h, i.pods, i.speed, i.waterReach], [2, 2, 4, 1.5, 4]);
+  assert.deepEqual([i.w, i.h, i.pods, i.speed, i.waterReach], [2, 2, FARM.Pods_Per_Plot, 1.5, 4]);
+  assert.equal(FARM.Pods_Per_Plot, 16, 'owner 2026-11-12: 1 pod = 1 plant, 16 a full plot');
   assert.equal(methodOf('hydroponic'), null, 'the grow rooms are future (owner rule 2)');
 });
 
