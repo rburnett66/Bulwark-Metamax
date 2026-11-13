@@ -75,8 +75,10 @@ test('a damaged structure throws red sparks and grey smoke, more the more HP it 
   }
 });
 
-test('nothing off a healthy finished structure, a sale, or one whose repair is under way; it stops once repaired', () => {
-  for (const s of [tower(), tower({ lifecycle: 'Active' }), tower({ lifecycle: 'Selling', hp: 100 }), tower({ hp: 100, lifecycle: 'Damaged', repairPending: true }),
+test('nothing off a healthy finished structure, or one whose repair is under way; it stops once repaired (a sale: its sparklers only)', () => {
+  // a sale throws its four red sparklers (owner 2026-11-13 [MM-story_mwf950rz_7]) but no damage smoke
+  assert.equal(run(world(tower({ lifecycle: 'Selling', hp: 100 })), 1).of(K.SMOKE).length, 0, 'a sale: no smoke');
+  for (const s of [tower(), tower({ lifecycle: 'Active' }), tower({ hp: 100, lifecycle: 'Damaged', repairPending: true }),
     tower({ lifecycle: 'Destroyed', hp: 0 }), tower({ lifecycle: 'Placing' })]) {
     assert.equal(run(world(s), 1).out.length, 0, `${s.lifecycle}${s.repairPending ? ' (repairing)' : ''}`);
   }
@@ -94,4 +96,27 @@ test('the quality tier scales the counts like the build dust (Low ≈ a quarter 
     const h = hi.of(kind, shade).length, l = lo.of(kind, shade).length;
     assert.ok(Math.abs(l - h * BUILD_TIER.low) <= 3, `${kind}/${shade}: ${l} vs ${h} × ${BUILD_TIER.low}`);
   }
+});
+
+// Owner 2026-11-13 [MM-story_mwf950rz_7]: "when we sell a tower then should be four red sparklers at the same time as the
+// workers tear down the structure"
+test('a structure being sold throws four red sparklers at once, one at each corner, for the whole teardown', async () => {
+  const { SELL_SPARKLERS } = await import('./structureFx.js');
+  const { cellToWorld } = await import('../camera.js');
+  const c = cellToWorld(10);
+  assert.equal(SELL_SPARKLERS, 4);
+  const fx = createStructureFx({ seed: 9 });
+  const s = { id: 7, pos: { x: 10, y: 10 }, footprint: { w: 1, h: 1 }, lifecycle: 'Selling', progress: 0.3, hp: 100, maxHp: 100 };
+  const state = { structures: new Map([[7, s]]) };
+  const K = new Proxy({}, { get: (_, k) => k });
+  const sparks = [];
+  const emit = (kind, x, y, z, vx, vy, vz, life, size, g, tint) => { if (kind !== 'FLASH') sparks.push({ x, z, tint }); };
+  let lit = 0, n = 0;
+  for (let i = 0; i < 30; i++) { const o = fx.step(1 / 30, state, emit, K, 'high'); lit = Math.max(lit, o.sparklers); n += o.sell; }
+  assert.equal(lit, 4, 'four at the same time');
+  assert.ok(n >= 4 * 10, 'each one sparks steadily: ' + n);
+  assert.ok(sparks.every((p) => p.tint === SPARK_TINT.damage), 'red');
+  const quadrants = new Set(sparks.map((p) => (p.x > c ? 'E' : 'W') + (p.z > c ? 'S' : 'N')));
+  assert.ok(quadrants.size >= 4, 'from all four corners: ' + [...quadrants]);
+  assert.equal(fx.step(1 / 30, { structures: new Map([[7, { ...s, lifecycle: 'Complete' }]]) }, emit, K).sparklers, 0, 'none once it is not being sold');
 });

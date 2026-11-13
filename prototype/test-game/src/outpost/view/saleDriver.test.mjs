@@ -109,7 +109,7 @@ test('the session view wires it: sell through actOnSave starts the sale, the fra
   assert.match(s, /saleRun\.step\(dt, sceneOut\);/);
   assert.match(s, /goldShown: \(bank\) => saleRun\.shown\(bank\),/);
   // the card's S SELL and a building's SELL RESOURCES both go through actOnSave
-  assert.match(s, /const cardAct = \(action\) => \{ const r = actOnSave\(action\);/);
+  assert.match(s, /const cardAct = \(action\) => \{ if \(action\.type === 'repairAll'\) return repairAllLive\(\); const r = actOnSave\(action\);/);
   assert.match(s, /act: \(action\) => \{\s*const r = actOnSave\(action\);/);
 });
 
