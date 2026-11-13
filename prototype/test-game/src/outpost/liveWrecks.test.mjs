@@ -68,11 +68,11 @@ test('a wreck from before the visit is a Wrecked structure at 0 HP, and the save
   assert.equal(fromLiveSim(state, link, T0).outpost.defenses.find((d) => d.id === gun.id).hp, 0);
 });
 
-test('a wreck has no say in the fight: walked past, never targeted, never fires, cannot be sold / upgraded / repaired in the sim', () => {
+test('a wreck has no say in the fight: walked past, never targeted, never fires, cannot be sold / upgraded in the sim (a repair bot rebuilds it: repairBot.test.mjs)', () => {
   const { state, s } = withWreck();
   const cols = state.navGrid.cols;
   assert.equal(state.navGrid.passable[s.pos.y * cols + s.pos.x], 1, 'its cell is open to walkers');
-  for (const type of ['sell', 'upgrade', 'repair']) assert.equal(applyCommand(state, { type, id: s.id }).ok, false, type);
+  for (const type of ['sell', 'upgrade']) assert.equal(applyCommand(state, { type, id: s.id }).ok, false, type);
   assert.equal(s.dps > 0 && s.lifecycle !== 'Wrecked', false);
 });
 

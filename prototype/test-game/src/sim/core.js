@@ -515,7 +515,11 @@ function cmdSell(state, cmd) {
 function cmdRepair(state, cmd) {
   const sid = typeof cmd.id === 'number' ? cmd.id : cmd.structureId;
   if (typeof sid !== 'number') return { ok: false, reason: 'badCommand' };
-  if (!state.structures.get(sid)) return { ok: false, reason: 'noStructure' };
+  const target = state.structures.get(sid);
+  if (!target) return { ok: false, reason: 'noStructure' };
+  // a priced repair (the outpost's state.repairPrice) the player cannot pay reads as a build they cannot pay
+  const price = typeof state.repairPrice === 'function' ? state.repairPrice(target) : 0;
+  if (price > 0 && !canAfford(state, price) && target.hp < target.maxHp && !target.repairPending) return { ok: false, reason: 'cost' };
   if (!requestRepair(state, sid)) {   // requestRepair→spend() tracks state.goldSpent
     return { ok: false, reason: 'noRepairNeeded' };
   }
