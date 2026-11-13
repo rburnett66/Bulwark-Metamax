@@ -6190,7 +6190,7 @@ export const MAPDATA = {
   }
  ],
  "farmParams": {
-  "Prep_Gold": 100,
+  "Prep_Gold": 0,
   "Prep_Sec": 2,
   "Sprout_At": 0.1,
   "Plant_At": 0.3,
@@ -6206,7 +6206,8 @@ export const MAPDATA = {
   "Breach_Silo_Loss": 0.25,
   "Trample_Fruited_Yield": 0.5,
   "Avatar_Cells": 0.45,
-  "Farmhands": 3
+  "Farmhands": 3,
+  "Plot_Gold": 100
  },
  "crops": [
   {
