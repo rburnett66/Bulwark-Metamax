@@ -413,7 +413,7 @@ export function boot(mountEl, seed) {
     suppressPreDialog = true; comm.dismiss();
     restart(currentSeed);
     // the map banner waits for the landing too (owner 2026-10-17) — see afterLanding
-    const announceMap = () => flashMessage(hud, currentMapId ? `${currentMap.name} — ${currentMap.cols}x${currentMap.rows}, ${currentMap.primary}${currentMap.hasWater ? ', water' : ''}` : 'Classic board');
+    const announceMap = () => flashMessage(hud, currentMapId ? `${currentMap.name} — ${currentMap.cols}x${currentMap.rows}, ${currentMap.primary}${currentMap.hasWater ? ', water' : ''}` : 'Classic board', 'info');
 
     // WB2 — WAVE INTEL: brief the FIRST wave's unit types (no counts; new units flagged). Per-wave intel for later
     // waves fires from the interlude below.
@@ -551,7 +551,7 @@ export function boot(mountEl, seed) {
     onBuyHarvesterUnit: () => {
       const res = submit({ type: 'buyHarvester' });
       flashMessage(hud, (res && res.ok) ? ('Harvester purchased' + (res.cost ? ' (−' + res.cost + 'g)' : ''))
-        : ((res && res.reason === 'max harvesters') ? 'Max harvesters (4)' : ('Harvester: ' + ((res && res.reason) || 'unavailable'))));
+        : ((res && res.reason === 'max harvesters') ? 'Max harvesters (4)' : ('Harvester: ' + ((res && res.reason) || 'unavailable'))), res && res.ok ? 'ok' : 'error');
     },
     defaultFaction: DEFAULT_FACTION,
     onFactionSelect: (faction) => {
@@ -865,7 +865,7 @@ export function boot(mountEl, seed) {
       await new Promise((res) => showBonusPicker(mountEl, sim.bonuses.offer, getBonusDef, (bonusId) => {
         const r = submit({ type: 'chooseBonus', bonusId });
         const d = getBonusDef(bonusId);
-        flashMessage(hud, (r && r.ok) ? ('Bonus: ' + (d ? d.label : bonusId)) : ('Bonus failed: ' + ((r && r.reason) || '')));
+        flashMessage(hud, (r && r.ok) ? ('Bonus: ' + (d ? d.label : bonusId)) : ('Bonus failed: ' + ((r && r.reason) || '')), r && r.ok ? 'ok' : 'error');
         res();
       }, sim.bonuses.owned));
       if (!live()) return;
@@ -926,7 +926,7 @@ export function boot(mountEl, seed) {
       rareRun.contract = { ...terms, buyer, buyerFaction: fac ? fac.name : null, ship: cs.ship || BP.name, contact: contact ? contact.name : null, rareName };
       // the contact greets the player aboard on the first visit (Q4): remembered per ship
       if (contact) updateSave((s) => { const r = ensureReveals(s).reveals; (r.contacts || (r.contacts = {}))[buyer] = r.contacts[buyer] || contact.name; });
-      flashMessage(hud, 'Contract accepted — ' + rareName + ' sells to ' + rareRun.contract.ship);
+      flashMessage(hud, 'Contract accepted — ' + rareName + ' sells to ' + rareRun.contract.ship, 'ok');
     }
   }
   function commOutcome() {
@@ -991,8 +991,8 @@ export function boot(mountEl, seed) {
             if (evs[i].type === 'deposit') {
               const d = evs[i];
               const keptNote = d.kept > 0 ? `+${d.kept} kept` : '';   // above the Collective quota: no gold, kept
-              if (d.role === 'quest' && !d.contract) flashMessage(hud, `+${d.units} quest units (loyalty)`);
-              else flashMessage(hud, [d.gold > 0 ? `+${d.gold}g ${d.role}` : '', keptNote].filter(Boolean).join(' · ') || `+0g ${d.role}`);
+              if (d.role === 'quest' && !d.contract) flashMessage(hud, `+${d.units} quest units (loyalty)`, 'ok');
+              else flashMessage(hud, [d.gold > 0 ? `+${d.gold}g ${d.role}` : '', keptNote].filter(Boolean).join(' · ') || `+0g ${d.role}`, 'ok');
             }
             // Between waves (owner 2026-07-16): ONE dialog from the opposing (next) faction, held.
             // NO tap-to-start prompt — the dialog's TAP TO CLOSE is the continue: closing it (after
@@ -1084,7 +1084,7 @@ export function boot(mountEl, seed) {
           const presentResult = () => {
             if (S !== sim) return;   // restarted during the Kill Camera
             musicSting(S.result === 'win' ? 'win' : 'lose');
-            if (contractMsg) flashMessage(hud, contractMsg);
+            if (contractMsg) flashMessage(hud, contractMsg, 'ok');
             showResult(hud, S.result, S.finalScore, nextMap, S.waveStars, rewards, {
               resources: S.resourceNodes ? { total: resLedger.total, names: battleResourceNames(), contract: !!S.contract } : null,
               planet: planetOfFaction(currentTestFaction) || '', mapId: currentMapId || null,

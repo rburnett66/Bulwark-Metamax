@@ -56,9 +56,10 @@ test('hudModel carries the threat at `now` (one model for both views); the text 
   assert.ok(h.threat.short.length <= 20, h.threat.short);
 });
 
-test('the outpost renders hudModel().threat.text in its existing panel (no new HUD of its own; the old view went in S6)', () => {
+test('the outpost shows hudModel().threat in the battle top bar\'s ☠ readout (AAA UX pass, spec §8) — no HUD of its own', () => {
   const src = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
-  const sv = src('./sessionView.js');
-  assert.match(sv, /threatLine\.textContent = h\.threat\.text/, 'session path: the outpost panel on the battle HUD');
-  assert.match(sv, /session\.addPanel\(panel\)/);
+  const sv = src('./sessionView.js'), card = src('./outpostCard.js');
+  assert.match(sv, /hud\.setReadouts\(outpostReadouts\(/, 'session path: the readouts on the battle HUD\'s top bar');
+  assert.match(card, /id: 'op-threat', glyph: '☠'[\s\S]{0,260}title: h\.threat\.text/, 'the chip\'s title is the threat line');
+  assert.match(card, /threatInfo[\s\S]{0,200}t\.text/, 'its tap says the same line');
 });

@@ -36,6 +36,27 @@ test('the report uses the results screen pattern: plate, star rows, damage repor
   assert.match(html, /data-act="continue"/);
 });
 
+test('the outpost away report: the same takeover — plate, EXTRACTED, RAIDS, OUTPOST, one CONTINUE, no pods (D5) [MM-story_mwcuyrqr_3j]', async () => {
+  const { awayReportHtml } = await import('./waveReport.js');
+  const { awayReportModel } = await import('../outpost/view/awayReport.js');
+  const T = Date.UTC(2026, 10, 7), H = 3_600_000;
+  const m = awayReportModel({ from: T, to: T + 2 * H, extracted: { iron: 179.6 }, full: [{ pad: 'r1' }], built: [{ pad: 'r2', kind: 'rig', tier: 1 }],
+    raids: [{ at: T + H, result: 'held', lost: {}, damage: 40, bounty: 120 }, { at: T + H + 60_000, result: 'breach', lost: { iron: 12 }, damage: 300 }] }, 'ground', null);
+  assert.equal(m.show, true);
+  const html = awayReportHtml(m);
+  assert.match(html, /class="rs-word">OUTPOST</);
+  assert.match(html, /WHILE YOU WERE AWAY · <b>2 H<\/b>/);
+  assert.match(html, /EXTRACTED/);
+  assert.match(html, /data-count="179"/);
+  assert.equal((html.match(/class="rs-cond ok"><span class="ic">★/g) || []).length, 1, 'one raid held');
+  assert.match(html, /RAID BROKE THROUGH/);
+  assert.match(html, /RAID BOUNTY/);
+  assert.match(html, /MINING STATION FINISHED/);
+  assert.equal((html.match(/data-act=/g) || []).length, 1);
+  assert.match(html, /data-act="continue"/);
+  assert.doesNotMatch(html, /pod|chest/i, 'never pod or chest progress');
+});
+
 test('the sim sends the numbers with the stars when a wave clears', () => {
   const map = resolveResourceTypes(buildCampaignMap(1, { seed: 2 }), 1);
   const s = createSim(3, { map, waves: buildCampaignWaves(map) });

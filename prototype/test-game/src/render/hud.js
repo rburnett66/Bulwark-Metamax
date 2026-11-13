@@ -7,7 +7,9 @@ import { upgradeRuleRefusal } from '../sim/structures.js';
 import { VERSION, VERSION_NOTE } from '../version.js';
 import { levelFromXp } from '../data/progression.js';
 import { resultsModel, mountResults } from './resultsScreen.js';
-import { mountWaveReport } from './waveReport.js';
+import { mountWaveReport, mountAwayReport } from './waveReport.js';
+import { HUD_CARD_CSS, HUD_CARD_W, createHudCard, hudCardButton, setCardLabel } from './hudCard.js';
+import { AAA_VARS, ensureAaaFonts } from './uiTokens.js';
 import { fogWindow, insideWindow } from '../render3d/overlays/fogModel.js';
 import { createFpsMeter, loadFpsChoice, saveFpsChoice, FPS_CSS } from './fpsMeter.js';
 import { resourceInfoModel, resourceInfoHtml, RESOURCE_INFO_CSS } from './resourceInfo.js';
@@ -16,7 +18,8 @@ const STYLE_ID = 'bw-hud-style';
 
 const CSS = `
 .bw-hud { position:absolute; left:0; top:0; right:0; bottom:0; pointer-events:none;
-  font-family: 'Courier New', monospace; color:#e8e8e8; user-select:none; z-index:10; }
+  font-family: 'Courier New', monospace; color:#e8e8e8; user-select:none; z-index:10;
+  ${AAA_VARS} }   /* the Victory pop-up's palette, for the HUD cards (render/uiTokens.js) [MM-story_mwcuyrqr_3j] */
 .bw-hud * { box-sizing:border-box; }
 .bw-panel { background:rgba(10,14,20,0.85); border:1px solid #3a4a5a; border-radius:4px; padding:6px 8px; pointer-events:auto; }
 .bw-topbar { position:absolute; top:6px; left:6px; right:6px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
@@ -110,6 +113,28 @@ ${SELPANEL_CSS}
 .bw-toast { position:absolute; left:50%; top:70px; transform:translateX(-50%); background:rgba(60,20,20,0.92);
   border:1px solid #c66; border-radius:4px; padding:6px 14px; font-size:13px; color:#ffd7d7;
   display:none; pointer-events:none; }
+/* a mode opened over the menu (the outpost): its full-screen host (battle/session.js createModeHost) */
+.bw-mode-host { position:fixed; inset:0; z-index:2000; background:#0f1412; overflow:hidden; touch-action:none; }
+/* TOAST KINDS (spec §5, D6) [MM-story_mwcuyrqr_3j]: red is a refusal (the default, unchanged); good news is green; a fact is the panel's ink */
+.bw-toast.bw-toast-ok { background:rgba(16,40,26,0.92); border-color:#57a057; color:#c8f5cf; }
+.bw-toast.bw-toast-info { background:rgba(10,14,20,0.92); border-color:#3a4a5a; color:#cfe3f0; }
+/* THE RIGHT COLUMN (spec §2-4, D3): one slot under the top bar — the selection panel while something is selected, the
+   mode's cards (the outpost card) otherwise. Both are HudCards (render/hudCard.js), the same width and place. */
+.bw-mode-panels { position:absolute; right:6px; top:56px; z-index:20; display:flex; flex-direction:column; gap:6px; width:${HUD_CARD_W}px; pointer-events:none; }
+.bw-mode-panels > * { pointer-events:auto; }
+/* TOP-BAR READOUTS (spec §1, §8, D2): a mode's chips — glyph, value, an optional fill bar — and the primary action */
+.bw-readouts { display:flex; gap:8px; align-items:center; min-width:0; overflow:hidden; }
+.bw-ro { display:inline-flex; align-items:center; gap:4px; font-size:13px; color:#cfe3f0; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.bw-ro + .bw-ro { border-left:1px solid #2c3e50; padding-left:8px; }
+.bw-ro .g { font-weight:800; color:#8fa4b8; }
+.bw-ro.t-clock { font-size:15px; font-weight:bold; letter-spacing:1px; color:#8fe0ff; }
+.bw-ro.t-off { color:#8fa4b8; } .bw-ro.t-ok { color:#9be37a; } .bw-ro.t-warn { color:#ffd76a; } .bw-ro.t-bad { color:#ff9d7a; }
+.bw-ro .bar { display:inline-block; width:38px; height:7px; background:#34373c; border:1px solid #141619; }
+.bw-ro .bar > i { display:block; height:100%; background:#5fb8ff; }
+.bw-ro.t-warn .bar > i { background:#ffd76a; } .bw-ro.t-bad .bar > i { background:#ff9d7a; }
+.bw-ro.bw-tap { cursor:pointer; pointer-events:auto; }
+.bw-topbar .bw-btn.bw-primary-end { margin-left:auto; }
+@media (max-width: 900px) { .bw-readouts { gap:6px; } .bw-ro { font-size:12px; } .bw-ro + .bw-ro { padding-left:6px; } .bw-ro.t-clock { font-size:13px; } .bw-ro .bar { width:28px; } }
 .bw-result { position:absolute; left:0; top:0; right:0; bottom:0; display:none; align-items:center; justify-content:center; z-index:60;
   background:none; pointer-events:auto; flex-direction:column; gap:14px; }
 .bw-result.bw-show { display:flex; }
@@ -198,16 +223,21 @@ ${SELPANEL_CSS}
 .bw-rscores .bw-srow.bw-best { color:#ffd76a; font-weight:bold; }
 `;
 
+/** The HUD's stylesheet into `doc`, once (createHud does it; a mode's host asks first: battle/session.js createModeHost). */
+export function injectHudStyle(doc) { injectStyle(doc); }
+
 function injectStyle(doc) {
   try {
     if (doc.getElementById && doc.getElementById(STYLE_ID)) return;
     const style = doc.createElement('style');
     style.id = STYLE_ID;
-    style.textContent = CSS + FPS_CSS + RESOURCE_INFO_CSS;
+    style.textContent = CSS + HUD_CARD_CSS + FPS_CSS + RESOURCE_INFO_CSS;
     const host = doc.head || doc.body || doc.documentElement;
     if (host) host.appendChild(style);
   } catch (e) { /* styling is non-critical */ }
 }
+
+const escHtml = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
 function el(doc, tag, className, text) {
   const node = doc.createElement(tag);
@@ -224,12 +254,15 @@ export function createHud(mountEl, callbacks) {
   // NOTE: do NOT use getComputedStyle here (may not exist in headless boot).
   // Just ensure the mount element is a positioning context for the overlay.
   try {
-    if (!mountEl.style.position || mountEl.style.position === 'static') {
+    // (a mode host — battle/session.js createModeHost — is already fixed full-screen by the sheet's .bw-mode-host)
+    const modeHost = mountEl.classList && mountEl.classList.contains('bw-mode-host');
+    if (!modeHost && (!mountEl.style.position || mountEl.style.position === 'static')) {
       mountEl.style.position = 'relative';
     }
   } catch (e) { /* non-critical */ }
 
   injectStyle(doc);
+  ensureAaaFonts(doc);   // the HUD cards' type pair (the Victory pop-up's) [MM-story_mwcuyrqr_3j]
 
   const root = el(doc, 'div', 'bw-hud');
 
@@ -246,7 +279,7 @@ export function createHud(mountEl, callbacks) {
     const m = maxHp || 1;
     const cur = hp != null ? hp : 0;
     hpfill.style.width = Math.max(0, Math.min(100, (cur / m) * 100)) + '%';
-    hptext.textContent = 'Base: ' + Math.max(0, Math.round(cur)) + '/' + Math.round(m);
+    hptext.textContent = (hud.hpLabel || 'Base') + ': ' + Math.max(0, Math.round(cur)) + '/' + Math.round(m);
   };
 
   const timerEl = el(doc, 'span', 'bw-timer', '00:00:0');
@@ -257,7 +290,10 @@ export function createHud(mountEl, callbacks) {
   const enemiesEl = el(doc, 'span', 'bw-wave', '');
   enemiesEl.style.color = '#ff9d7a';
   const startWaveBtn = el(doc, 'button', 'bw-btn', 'Start Wave');
-  startWaveBtn.addEventListener('click', () => { if (cbs.onStartWave) cbs.onStartWave(); });
+  startWaveBtn.addEventListener('click', () => {
+    if (hud.primary) { if (hud.primary.onClick) hud.primary.onClick(); return; }   // a mode's primary action (setPrimaryAction)
+    if (cbs.onStartWave) cbs.onStartWave();
+  });
   const seedEl = el(doc, 'span', 'bw-seed', 'seed: -');
   cbs.__updMoney = (money) => { moneyEl.textContent = Math.round(money || 0) + 'g'; };
   const PHASE_READOUT = {
@@ -303,12 +339,16 @@ export function createHud(mountEl, callbacks) {
   topbar.appendChild(enemiesEl);
   // QUEST objectives readout — red + green crystal units hauled (owner color economy). Hidden on
   // boards with no resources.
-  const questEl = el(doc, 'span', 'bw-seed');
+  // READOUTS [MM-story_mwcuyrqr_3j]: every top-bar fact a mode adds is a readout (hud.setReadout / setReadouts below);
+  // the battle's quest / contract and tracked-mission spans are the first two, drawn exactly as before
+  const readouts = new Map();   // id → its element
+  const readoutEl = (id, cls) => { const n = el(doc, 'span', cls); readouts.set(id, n); return n; };
+  const questEl = readoutEl('quest', 'bw-seed');
   questEl.style.display = 'none';
   questEl.title = 'Quest crystals hauled (red / green) — they also pay gold';   // campaign: replaced by the contract readout
   topbar.appendChild(questEl);
   // the tracked mission (Mission-Log tech plan D5): one line beside the quest crystals [MM-story_mvyqoplz_g]
-  const trackEl = el(doc, 'span', 'bw-seed');
+  const trackEl = readoutEl('track', 'bw-seed');
   trackEl.style.display = 'none';
   trackEl.style.color = '#f2c869';
   trackEl.title = 'Tracked mission';
@@ -538,24 +578,26 @@ export function createHud(mountEl, callbacks) {
   // double-toggle and cancel each other out (press = select then immediately deselect).
 
   // ---- selected-structure panel ---------------------------------------
-  const selPanel = el(doc, 'div', 'bw-selpanel bw-panel');
-  const sname = el(doc, 'div', 'bw-sname', '-');
-  const sinfo = el(doc, 'div', null, '-');
+  // THE HUD CARD [MM-story_mwcuyrqr_3j] (render/hudCard.js; owner 2026-11-12: "our Victory pop-ups look very good, follow
+  // that design pattern for upper right info panels"): the selection panel is the same card the outpost card is, in the
+  // same place, so the two modes share one look. Its parts keep their names (sname, sinfo, the HP bar, U / X / R).
+  const selCard = createHudCard(doc, { className: 'bw-selpanel' });
+  const selPanel = selCard.root;
+  const sname = selCard.title;
+  sname.classList.add('bw-sname');
+  sname.textContent = '-';
+  const sinfo = el(doc, 'div', 'bw-card-line bw-sinfo', '-');
   const shpbar = el(doc, 'div', 'bw-shpbar');
   const shpfill = el(doc, 'div', 'bw-shpfill');
   shpbar.appendChild(shpfill);
-  const shptext = el(doc, 'div', null, '');
-  const selrow = el(doc, 'div', 'bw-selrow');
+  const shptext = el(doc, 'div', 'bw-card-line bw-card-num bw-shptext', '');
+  const selrow = selCard.actions;
+  selrow.classList.add('bw-selrow');
   // action buttons carry their BOLD keyboard shortcut (handled in input/input.js): U upgrade, X sell, R repair
-  const actionBtn = (label, keyChar) => {
-    const b = el(doc, 'button', 'bw-btn');
-    b.appendChild(el(doc, 'b', 'bw-key', keyChar));       // BOLD hotkey glyph (persists across label updates)
-    const lbl = el(doc, 'span', null, ' ' + label);
-    b.appendChild(lbl);
-    b._label = lbl;                                       // updateHud rewrites THIS, not the whole button
-    return b;
-  };
+  // (hudCardButton: the bold glyph persists across label updates; updateHud rewrites b._label, not the whole button)
+  const actionBtn = (label, keyChar) => hudCardButton(doc, label, keyChar);
   const upgradeBtn = actionBtn('Upgrade', 'U');
+  upgradeBtn.classList.add('wide');   // "Upgrade (750g)" takes the row; Sell and Repair share the next
   const sellBtn = actionBtn('Sell', 'X');
   const repairBtn = actionBtn('Repair', 'R');
   upgradeBtn.addEventListener('click', () => { if (cbs.onUpgrade && hud.currentSelectedId != null) cbs.onUpgrade(hud.currentSelectedId); });
@@ -564,17 +606,15 @@ export function createHud(mountEl, callbacks) {
   selrow.appendChild(upgradeBtn);
   selrow.appendChild(sellBtn);
   selrow.appendChild(repairBtn);
-  selPanel.appendChild(sname);
-  selPanel.appendChild(sinfo);
-  selPanel.appendChild(shpbar);
-  selPanel.appendChild(shptext);
-  selPanel.appendChild(selrow);
+  selCard.body.appendChild(sinfo);
+  selCard.body.appendChild(shpbar);
+  selCard.body.appendChild(shptext);
   // A MODE'S EXTRAS for the selected structure (cbs.selectionExtras(structure, state) → { lines, actions } | null): its
   // own status lines and the actions the battle has no equivalent for (the outpost's SELL RESOURCES, DEEP SEAM), drawn
   // INSIDE this panel with the battle's own button — one selection panel for every mode, never a second one beside it
   // (owner 2026-11-11: "the exact same UX I see on the battle map, same font .. same buttons, same layout").
   const sextra = el(doc, 'div', 'bw-sextra');
-  const sactions = el(doc, 'div', 'bw-selrow bw-sactions');
+  const sactions = el(doc, 'div', 'bw-card-actions bw-selrow bw-sactions');
   sextra.style.display = 'none'; sactions.style.display = 'none';   // a battle has none: the panel is exactly as before
   sactions.style.flexDirection = 'column';                          // an extra action's label is long: one per line
   sactions.addEventListener('click', (e) => {
@@ -582,7 +622,7 @@ export function createHud(mountEl, callbacks) {
     const a = b && hud.selActions ? hud.selActions[+b.dataset.i] : null;
     if (a && !b.disabled && typeof a.run === 'function') a.run();
   });
-  selPanel.appendChild(sextra);
+  selCard.body.appendChild(sextra);
   selPanel.appendChild(sactions);
   root.appendChild(selPanel);
 
@@ -854,6 +894,83 @@ export function createHud(mountEl, callbacks) {
       slot.appendChild(node);
       return node;
     },
+    /**
+     * A mode's CARD in the right column (render/hudCard.js; the outpost card): a HudCard in the mode slot, which yields to
+     * the selection panel while a structure is selected. → the card ({ render(model), runKey, root … }).
+     */
+    addCard(opts = {}) {
+      const card = createHudCard(doc, { className: 'bw-modecard' + (opts.className ? ' ' + opts.className : '') });
+      hud.addPanel(card.root);
+      hud.cards.push(card);
+      return card;
+    },
+    cards: [],
+    /** A hotkey nothing else took (input/input.js onModeKey; D10: S sell, R repair all): the visible mode cards' action. */
+    runCardKey(key) {
+      const slot = root.querySelector('.bw-mode-panels');
+      if (!slot || slot.style.display === 'none') return false;
+      return hud.cards.some((c) => !c.root.hidden && c.runKey(key));
+    },
+    selCard,
+    readouts,
+    hpLabel: null,
+    /**
+     * One top-bar readout by id (the battle's 'quest' and 'track'; a mode's chips): r = { text | html, title, hidden } —
+     * only what changed is written. A null r hides it.
+     */
+    setReadout(id, r) {
+      const n = readouts.get(id);
+      if (!n) return false;
+      if (!r || r.hidden) { if (n.style.display !== 'none') n.style.display = 'none'; return true; }
+      if (n.style.display === 'none') n.style.display = '';
+      if (r.title != null && n.title !== r.title) n.title = r.title;
+      if (r.html != null) { if (n._ro !== r.html) { n._ro = r.html; n.innerHTML = r.html; } }
+      else if (r.text != null && n.textContent !== String(r.text)) n.textContent = String(r.text);
+      return true;
+    },
+    /**
+     * A MODE'S READOUTS (spec §1, §8, D2) [MM-story_mwcuyrqr_3j]: chips in the top bar, after the gold, in order —
+     * [{ id, glyph, text, tone ('clock'|'ok'|'warn'|'bad'|'off'), title, bar (0..1, a fill bar), hidden, onTap }].
+     * A battle sets none (its bar is exactly as before); the outpost sets status, power, storage and threat.
+     */
+    setReadouts(list) {
+      let box = topbar.querySelector('.bw-readouts');
+      if (!box) { box = el(doc, 'span', 'bw-readouts'); topbar.insertBefore(box, startWaveBtn); }
+      for (const r of list || []) {
+        let n = readouts.get(r.id);
+        if (!n) {
+          n = readoutEl(r.id, 'bw-ro');
+          n.dataset.ro = r.id;
+          n.addEventListener('click', () => { if (n._tap) n._tap(); });
+          box.appendChild(n);
+        }
+        n._tap = typeof r.onTap === 'function' ? r.onTap : null;
+        const cls = 'bw-ro' + (r.tone ? ' t-' + r.tone : '') + (n._tap ? ' bw-tap' : '');
+        if (n.className !== cls) n.className = cls;
+        const bar = r.bar != null ? Math.max(0, Math.min(1, r.bar)) : null;
+        const html = (r.glyph ? '<b class="g">' + escHtml(r.glyph) + '</b>' : '') + '<span>' + escHtml(r.text) + '</span>' +
+          (bar != null ? '<span class="bar"><i style="width:' + (bar * 100).toFixed(1) + '%"></i></span>' : '');
+        hud.setReadout(r.id, { html, title: r.title || '', hidden: !!r.hidden });
+      }
+    },
+    /** A mode's top bar (spec §1): { hpLabel ('Hub'), clock: false (no battle clock), wave: false (no wave count) }. */
+    setTopbar({ hpLabel, clock = true, wave = true } = {}) {
+      hud.hpLabel = hpLabel || null;
+      timerEl.style.display = clock ? '' : 'none';
+      waveEl.style.display = wave ? '' : 'none';
+    },
+    /**
+     * The top bar's PRIMARY ACTION (spec §1, D4): Start Wave in a battle; a mode replaces it — the outpost's LEAVE —
+     * in the same slot, with the same button. { label, title, onClick }.
+     */
+    setPrimaryAction({ label, title = '', onClick } = {}) {
+      hud.primary = { label, onClick };
+      startWaveBtn.textContent = label;
+      startWaveBtn.title = title;
+      startWaveBtn.disabled = false;
+      startWaveBtn.classList.add('bw-primary-end');
+    },
+    primary: null,
     selPanel,
     sname,
     sinfo,
@@ -1046,7 +1163,7 @@ export function updateHud(hud, state, ui) {
   const base = state.base || { hp: 0, maxHp: 1 };
   const frac = base.maxHp > 0 ? Math.max(0, Math.min(1, base.hp / base.maxHp)) : 0;
   hud.hpfill.style.width = (frac * 100).toFixed(1) + '%';
-  hud.hptext.textContent = 'Base: ' + Math.max(0, Math.ceil(base.hp)) + '/' + Math.ceil(base.maxHp);
+  hud.hptext.textContent = (hud.hpLabel || 'Base') + ': ' + Math.max(0, Math.ceil(base.hp)) + '/' + Math.ceil(base.maxHp);
 
   // Harvester buy button — live price / MAX / affordability (bought at the base, cap 4). A mode that sells its harvesters
   // by its own rules supplies callbacks.harvesterTile(state) → { cost, poor, title } (or null to hide the tile) — the
@@ -1082,32 +1199,23 @@ export function updateHud(hud, state, ui) {
     hud.moneyEl.insertBefore(hud.doc.createTextNode(money + 'g'), hud.moneyEl.firstChild || null);
   }
 
-  // Quest crystal objectives (campaign maps only)
+  // Quest crystal objectives (campaign maps only) — the 'quest' readout
   if (hud.questEl) {
     if (state.contract) {
       // COLLECTIVE CONTRACT [MM-story_mw12m2df_2]: sold / quota per tier; once a tier is filled, what is kept
-      const html = contractReadout(state.contract);
-      if (html !== hud.contractShown) {
-        hud.contractShown = html;
-        hud.questEl.style.display = '';
-        hud.questEl.title = 'Collective contract: sold / required per resource. Above the quota a load pays no gold and is kept in your inventory.';
-        hud.questEl.innerHTML = html;
-      }
+      hud.setReadout('quest', { html: contractReadout(state.contract),
+        title: 'Collective contract: sold / required per resource. Above the quota a load pays no gold and is kept in your inventory.' });
     } else if (state.mapScore) {
-      hud.questEl.style.display = '';
-      hud.questEl.innerHTML = '<span style="color:#ff7a6a">● ' + (state.mapScore.questRed || 0) +
-        '</span> <span style="color:#7ae08a">● ' + (state.mapScore.questGreen || 0) + '</span>';
+      hud.setReadout('quest', { html: '<span style="color:#ff7a6a">● ' + (state.mapScore.questRed || 0) +
+        '</span> <span style="color:#7ae08a">● ' + (state.mapScore.questGreen || 0) + '</span>' });
     } else {
-      hud.questEl.style.display = 'none';
+      hud.setReadout('quest', null);
     }
   }
+  // the tracked mission — the 'track' readout
   if (hud.trackEl) {
     const line = hud.trackedLine ? hud.trackedLine(state) : null;
-    if (line !== hud.trackShown) {
-      hud.trackShown = line;
-      hud.trackEl.style.display = line ? '' : 'none';
-      hud.trackEl.textContent = line ? '◆ ' + line : '';
-    }
+    hud.setReadout('track', line ? { text: '◆ ' + line } : null);
   }
 
   // Waves
@@ -1121,7 +1229,7 @@ export function updateHud(hud, state, ui) {
       hud.enemiesEl.textContent = waveClockText(waves, left, state.time);
     } else hud.enemiesEl.textContent = '';
   }
-  hud.startWaveBtn.disabled = !!(waves.active || state.result || waves.current >= waves.total);
+  if (!hud.primary) hud.startWaveBtn.disabled = !!(waves.active || state.result || waves.current >= waves.total);   // a mode's primary stays live
 
   // Build palette
   hud.currentBuildSelection = ui ? ui.buildSelection : null;
@@ -1184,14 +1292,14 @@ export function updateHud(hud, state, ui) {
     const ruleWhy = busy || s.tier >= maxTier || tierLocked ? null : upgradeRuleRefusal(state, s);
     hud.upgradeBtn.disabled = busy || s.tier >= maxTier || tierLocked || !!ruleWhy || money < upCost;
     hud.upgradeBtn.title = ruleWhy || '';
-    hud.upgradeBtn._label.textContent = ' ' + (s.tier >= maxTier ? 'Max Tier'
+    setCardLabel(hud.upgradeBtn, ' ' + (s.tier >= maxTier ? 'Max Tier'
       : tierLocked ? 'T' + (s.tier + 1) + ' locked (campaign)'
       : ruleWhy ? 'T' + (s.tier + 1) + ' locked'   // the reason is the button's title
-      : 'Upgrade (' + upCost + 'g)');   // keep bold U
+      : 'Upgrade (' + upCost + 'g)'));   // keep bold U
     let sellVal = 0;
     try { sellVal = getSellValue(s, STRUCTURES, ASSUMPTIONS); } catch (e) { sellVal = 0; }
     hud.sellBtn.disabled = busy;
-    hud.sellBtn._label.textContent = ' Sell (+' + Math.floor(sellVal) + 'g)';   // keep bold X
+    setCardLabel(hud.sellBtn, ' Sell (+' + Math.floor(sellVal) + 'g)');   // keep bold X
     hud.repairBtn.disabled = busy || s.hp >= s.maxHp;
   }
 
@@ -1392,19 +1500,41 @@ export function showWaveReport(hud, model) {
   });
 }
 
+/**
+ * The outpost's AWAY REPORT (spec §6, D5) [MM-story_mwcuyrqr_3j]: the wave report's takeover in the same container, fed
+ * by outpost/view/awayReport.js's model (render/waveReport.js mountAwayReport). Resolves on CONTINUE; the HUD comes back.
+ */
+export function showAwayReport(hud, model) {
+  if (!hud || !hud.resultEl) return Promise.resolve();
+  if (hud._results) hud._results.dispose();
+  return new Promise((resolve) => {
+    hud._results = mountAwayReport(hud.resultEl, model, () => { hud.hideResult(); resolve(); });
+    hud.root.classList.add('bw-results-open');
+    hud.resultEl.style.display = 'flex';
+    hud.resultEl.classList.add('bw-show');
+  });
+}
+
 /** A harvester's load as whole units, "held / capacity" (owner 2026-11-10: the capacity, scaled by upgrades and
  *  bonuses, printed with a long tail of decimals — round to integer) [MM-story_mwbdaa9o_29]. */
 export function cargoText(u) {
   return Math.floor((u && u.cargo) || 0) + ' / ' + Math.round((u && u.capacity) || 0);
 }
 
-export function flashMessage(hud, text) {
+/** The toast kinds (spec §5, D6): error (a refusal — today's red, the default), ok (good news, green), info (a fact). */
+export const TOAST_KINDS = Object.freeze(['error', 'ok', 'info']);
+/** How long a toast stays: 1.6 s, 3 s for a long one (GO ONLINE's "raiders will come" line). */
+export const toastMs = (text) => (String(text).length > 48 ? 3000 : 1600);
+
+export function flashMessage(hud, text, kind = 'error') {
   if (!hud) return;
+  const k = TOAST_KINDS.includes(kind) ? kind : 'error';
+  hud.toast.className = 'bw-toast' + (k === 'error' ? '' : ' bw-toast-' + k);
   hud.toast.textContent = String(text);
   hud.toast.style.display = 'block';
   if (typeof clearTimeout === 'function' && hud.toastTimer) clearTimeout(hud.toastTimer);
   if (typeof setTimeout === 'function') {
-    hud.toastTimer = setTimeout(() => { hud.toast.style.display = 'none'; }, 1600);
+    hud.toastTimer = setTimeout(() => { hud.toast.style.display = 'none'; }, toastMs(text));
   }
 }
 

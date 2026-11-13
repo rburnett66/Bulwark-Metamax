@@ -22,7 +22,7 @@
 import { MAP, fxScaleForMap, projScaleForMap } from '../data/tables.js';
 import { stepSim, FIXED_DT } from '../sim/core.js';
 import { createRenderer, renderFrame, destroyRenderer } from '../render/renderer.js';
-import { createHud, updateHud, flashMessage } from '../render/hud.js';
+import { createHud, updateHud, flashMessage, injectHudStyle } from '../render/hud.js';
 import { createInput, destroyInput } from '../input/input.js';
 import { createCatalogue } from './catalogue.js';
 
@@ -38,6 +38,18 @@ export function hudInsets(mountEl) {
   if (vis(bar)) out.top = Math.max(0, bar.getBoundingClientRect().bottom - m.top);
   if (vis(tray)) out.left = Math.max(0, tray.getBoundingClientRect().right - m.left);
   return out;
+}
+
+/**
+ * A full-screen host for a mode opened over the menu (the outpost): one element, styled by the battle HUD's sheet
+ * (.bw-mode-host in render/hud.js), so no mode writes its own inline styles [MM-story_mwcuyrqr_3j].
+ */
+export function createModeHost(mount, className = '') {
+  injectHudStyle(mount.ownerDocument);   // the host's look is the HUD sheet's, there before the HUD itself
+  const host = mount.ownerDocument.createElement('div');
+  host.className = 'bw-mode-host' + (className ? ' ' + className : '');
+  mount.appendChild(host);
+  return host;
 }
 
 /**
@@ -242,14 +254,16 @@ export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0,
   let accumulator = 0;        // fixed-timestep accumulator (seconds)
   let pendingEvents = [];     // events produced by fixed steps, flushed to renderer each frame
   let inputHandle = null;
+  // a key nothing else took, with no structure selected: the mode card's hotkey (render/hud.js runCardKey; D10)
+  const onModeKey = (k) => !!(hud && hud.runCardKey && hud.runCardKey(k));
   // Input binds to the LIVE view: the Pixi canvas by default; under ?renderer=three the 3D canvas, picking
   // through its camera and acting only on a tap (a drag there pans the camera).
   function makeInput() {
     if (renderer3d) {
       return createInput(renderer3d.canvas, renderer, getSim, submit, getUi(),
-        { pick: (ev, u) => render3dMod.eventToCell(renderer3d, ev, u), tapToAct: true, catalogue, onGroundTap });
+        { pick: (ev, u) => render3dMod.eventToCell(renderer3d, ev, u), tapToAct: true, catalogue, onGroundTap, onModeKey });
     }
-    return createInput(canvas, renderer, getSim, submit, getUi(), { catalogue, onGroundTap });
+    return createInput(canvas, renderer, getSim, submit, getUi(), { catalogue, onGroundTap, onModeKey });
   }
   function rebindInput() {
     if (!inputHandle) return;   // no session yet — the boot path creates it

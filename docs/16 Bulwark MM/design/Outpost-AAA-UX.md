@@ -220,7 +220,7 @@ and `src/farm/**` cannot set panel styles inline or inject HUD CSS.
 
 | # | question | recommendation |
 |---|---|---|
-| D1 | HUD font: keep the combat screen's Courier New for both modes, or move both to Orbitron/Rajdhani (the menu's)? | **Keep Courier New.** You said combat looks good; zero risk to it. Dialog cards keep their own sans. |
+| D1 | HUD font: keep the combat screen's Courier New for both modes, or move both to Orbitron/Rajdhani (the menu's)? | **Updated by the owner 2026-11-12** ("our Victory pop-ups look very good, follow that design pattern for upper right info panels"): the **top bar** keeps Courier New (its numbers stay monospace); the **upper-right cards** — the battle selection panel, the outpost card, the farm panel — follow the **Victory pop-up**: Rajdhani text, Orbitron title and numbers, its steel gradient panel, hairline border, gold corner ticks, letter-spaced section heads and button style. One token set (`render/uiTokens.js`) feeds both the pop-up and the cards. |
 | D2 | Top-bar clock at the outpost: next-raid countdown (`RAID 1:12`) when online, `OFFLINE` when not? | **Yes.** It's the outpost's one tension timer. (It's not pod/chest progress.) |
 | D3 | Outpost card placement: right column, hidden while something is selected? | **Yes** — one slot, selection wins; deselect brings it back. |
 | D4 | LEAVE: top-bar right (where Start Wave sits), or inside the card / ⚙ menu? | **Top-bar right**, always visible. |
@@ -230,6 +230,21 @@ and `src/farm/**` cannot set panel styles inline or inject HUD CSS.
 | D8 | Off-screen threat pointer — new for both modes? | **Yes**, small red chevron; off when attackers are on screen. |
 | D9 | Farm plot = the battle selection panel (growth in the HP-bar slot, Plant/Harvest/Clear actions)? | **Yes.** |
 | D10 | Hotkeys on the outpost card: `S` Sell, `R` Repair all when nothing is selected (`R` = Repair the selection otherwise)? | **Yes** — same key, same meaning, scoped by selection. |
+
+## Step 2 — as built (lane V, 2026-11-12)
+
+- **Owner direction, 2026-11-12:** the upper-right panels follow the **Victory pop-up** (`render/resultsScreen.js`), not
+  the plain Courier HUD panel. This replaces "the selection panel rebuilt on HudCard, same pixels": the battle
+  selection panel moves to the new look too (same place, same U / X / R buttons and keys), so both modes match.
+- `render/uiTokens.js` — the pop-up's palette, panel fill, corner ticks and type pair as tokens; `RESULTS_CSS` is built
+  from them (byte-identical output) and so is `HUD_CARD_CSS`.
+- `render/hudCard.js` — `HudCard` (model + DOM): the battle selection panel, the outpost card and the farm plot panel.
+- `render/hud.js` — readouts (`setReadout` / `setReadouts`), `setTopbar`, `setPrimaryAction` (LEAVE in Start Wave's
+  slot), `addCard` + `runCardKey` (S / R with nothing selected, D10), `flashMessage(hud, text, kind)` (D6),
+  `showAwayReport` (D5). The battle top bar's markup is pinned to origin/main's by `hudTopbar.test.mjs`.
+- `render3d` `frameRect` (D7): the outpost frames `outpostBoard.js baseFrameRect`; battles pass none.
+- Guard: `uxGuard.test.mjs` forbids inline-styled panels / injected CSS in `src/outpost/**` and `src/farm/**`.
+- Next: the raid banners (§7), the off-screen threat pointer (D8), the farm plot as the selection panel (D9).
 
 ## Step 2 (implementation) outline — for planning, not done here
 

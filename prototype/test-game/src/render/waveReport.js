@@ -16,8 +16,8 @@
 import { RESULTS_CSS } from './resultsScreen.js';
 import { TIERS, TIER_COLOR, iconIdFor } from './resourceSummary.js';
 import { resourceIconHtml } from '../data/resourceIcons.js';
+import { ensureAaaFonts } from './uiTokens.js';
 
-const FONTS = 'https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&family=Rajdhani:wght@500;600;700&display=swap';
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const fmt = (n) => Math.round(n || 0).toLocaleString('en-US');
 const sec = (n) => (Math.round((n || 0) * 10) / 10).toFixed(1) + 's';
@@ -115,18 +115,19 @@ function countUp(el, ms, now) {
 }
 
 /**
- * Mount the report into `host` (the HUD's result container) and play the reveal; onContinue runs on CONTINUE.
- * → { root, finish, dispose }. opts.reduced forces the end state (tests, reduced motion).
+ * The takeover's shell, shared by every report on the results screen's pattern (the wave report, the outpost's away
+ * report): its stylesheets, the root, TAP TO SKIP (a tap anywhere but a button shows the end state), CONTINUE, and the
+ * end state. play({ at, $, $$, now, root, finish }) schedules the reveal. → { root, finish, dispose }.
  */
-export function mountWaveReport(host, model, onContinue, opts = {}) {
+function mountReport(host, className, html, onContinue, opts, play) {
   const doc = host.ownerDocument;
   if (!doc.getElementById('rs-css')) { const st = doc.createElement('style'); st.id = 'rs-css'; st.textContent = RESULTS_CSS; doc.head.appendChild(st); }
   if (!doc.getElementById('rs-wr-css')) { const st = doc.createElement('style'); st.id = 'rs-wr-css'; st.textContent = WAVE_CSS; doc.head.appendChild(st); }
-  if (!doc.getElementById('rs-fonts')) { const l = doc.createElement('link'); l.id = 'rs-fonts'; l.rel = 'stylesheet'; l.href = FONTS; doc.head.appendChild(l); }
+  ensureAaaFonts(doc);
   host.innerHTML = '';
   const root = doc.createElement('div');
-  root.className = 'rs rs-wave-report';
-  root.innerHTML = waveReportHtml(model);
+  root.className = className;
+  root.innerHTML = html;
   host.appendChild(root);
   const win = doc.defaultView;
   const now = () => (win.performance ? win.performance.now() : Date.now());
@@ -145,12 +146,22 @@ export function mountWaveReport(host, model, onContinue, opts = {}) {
   };
   $('[data-act="continue"]').addEventListener('click', (e) => { e.stopPropagation(); finish(); if (onContinue) onContinue(); });
   root.addEventListener('pointerdown', (e) => { if (!e.target.closest('[data-act]')) finish(); });
-
   if (reduced) finish();
   else {
-    // the reveal, in reading order (≈ 2.5 s): plate → stars → damage → resources → CONTINUE
     win.requestAnimationFrame(() => root.classList.add('on'));
     at(150, () => root.classList.add('s1'));
+    play({ at, $, $$, now, root, finish });
+  }
+  return { root, finish, dispose() { finish(); host.innerHTML = ''; } };
+}
+
+/**
+ * Mount the report into `host` (the HUD's result container) and play the reveal; onContinue runs on CONTINUE.
+ * → { root, finish, dispose }. opts.reduced forces the end state (tests, reduced motion).
+ */
+export function mountWaveReport(host, model, onContinue, opts = {}) {
+  return mountReport(host, 'rs rs-wave-report', waveReportHtml(model), onContinue, opts, ({ at, $, $$, now, finish }) => {
+    // the reveal, in reading order (≈ 2.5 s): plate → stars → damage → resources → CONTINUE
     let t = 650;
     const stars = $('[data-step="stars"]');
     at(t, () => stars.classList.add('in'));
@@ -165,6 +176,65 @@ export function mountWaveReport(host, model, onContinue, opts = {}) {
     t += 80 + $$('.rs-res').length * 140 + 300;
     at(t, () => $('.rs-act').classList.add('in'));
     at(t + 600, finish);
-  }
-  return { root, finish, dispose() { finish(); host.innerHTML = ''; } };
+  });
 }
+
+// ── the outpost's AWAY REPORT (spec docs/16 Bulwark MM/design/Outpost-AAA-UX.md §6, D5) [MM-story_mwcuyrqr_3j] ──────
+// The same takeover as the wave report, fed by outpost/view/awayReport.js awayReportModel: a plate (OUTPOST · while you
+// were away), what was mined and gathered, the raids, what finished, one CONTINUE. Nothing about pods or the Pod Reward
+// Chest, ever (owner rule): the model carries none, and this markup has no slot for it.
+/** The away report's markup in its end state. m: awayReportModel(...) (show true). Pure. */
+export function awayReportHtml(m) {
+  const extracted = [...(m.extracted || []).map((x) => ({ name: x.name, colour: x.colour, units: x.units, icon: null })),
+    ...(m.harvested || []).map((x) => ({ name: x.name, colour: x.colour, units: x.units, icon: x.icon || null }))];
+  const max = Math.max(1, ...extracted.map((x) => x.units));
+  let h = '<div class="rs-scrim"></div><div class="rs-skip">TAP TO SKIP</div><div class="rs-body"><div class="rs-col">';
+  h += '<div class="rs-verdict"><div class="rs-word">OUTPOST</div><div class="rs-rule"></div>' +
+    '<div class="rs-sub">WHILE YOU WERE AWAY · <b>' + esc(String(m.away || '').toUpperCase()) + '</b>' + (m.capped ? ' · <b>72 H MAX</b>' : '') + '</div></div>';
+  h += '<div class="rs-panel" data-step="extracted"><div class="rs-h"><span>EXTRACTED</span><span>INTO STORAGE</span></div>';
+  if (!extracted.length) h += '<div class="rs-none">Nothing was mined or gathered.</div>';
+  for (const r of extracted) {
+    h += '<div class="rs-res" style="--c:' + esc(r.colour || '#cfd6de') + ';--sold:' + (r.units / max * 100).toFixed(1) + '%;--kept:0%">' +
+      '<div class="n">' + (r.icon ? resourceIconHtml(r.icon, 'ic') : '<span class="d"></span>') + '<span>' + esc(r.name) + '</span></div>' +
+      '<div class="q">+<span data-count="' + r.units + '">' + fmt(r.units) + '</span></div>' +
+      '<div class="rs-bar"><span class="sold"></span><span class="kept"></span></div></div>';
+  }
+  h += '</div></div><div class="rs-col">';
+  const raids = m.raids || [];
+  h += '<div class="rs-panel" data-step="raids"><div class="rs-h"><span>RAIDS</span><span>' + (raids.length ? (m.held || 0) + ' HELD · ' + (m.breached || 0) + ' BROKE THROUGH' : 'NONE') + '</span></div>';
+  if (!raids.length) h += '<div class="rs-none">No raids while you were away.</div>';
+  for (const r of raids) {
+    const ok = r.result !== 'breach';
+    h += '<div class="rs-cond' + (ok ? ' ok' : '') + '"><span class="ic">' + (ok ? '★' : '✕') + '</span>' +
+      '<span class="l">' + esc(r.label.toUpperCase()) + '</span><span class="t">' + esc(r.when.toUpperCase()) + (r.lostText ? ' · ' + esc(r.lostText.toUpperCase()) : '') + '</span></div>';
+  }
+  if (m.bounty) h += '<div class="rs-cond ok"><span class="ic">◆</span><span class="l">RAID BOUNTY</span><span class="t">+<span data-count="' + m.bounty + '">' + fmt(m.bounty) + '</span> GOLD</span></div>';
+  h += '</div>';
+  const built = m.built || [], notes = [];
+  if (m.full) notes.push(m.full + (m.full === 1 ? ' Mining Station bay filled' : ' Mining Station bays filled') + ' · sell to resume');
+  if (m.hopperFull) notes.push('The Resource Bay\'s hopper filled');
+  if (built.length || notes.length) {
+    h += '<div class="rs-panel" data-step="built"><div class="rs-h"><span>OUTPOST</span><span>' + built.length + ' FINISHED</span></div>';
+    for (const b of built) h += '<div class="rs-cond ok"><span class="ic">▣</span><span class="l">' + esc(b.toUpperCase()) + '</span><span class="t"></span></div>';
+    for (const n of notes) h += '<div class="rs-cond"><span class="ic">!</span><span class="l">' + esc(n.toUpperCase()) + '</span><span class="t"></span></div>';
+    h += '</div>';
+  }
+  h += '</div></div><div class="rs-act"><button class="rs-btn primary" data-act="continue">Continue</button></div>';
+  return h;
+}
+
+/** Mount the away report (hud.js showAwayReport) and play its reveal: plate → extracted → raids → outpost → CONTINUE. */
+export function mountAwayReport(host, model, onContinue, opts = {}) {
+  return mountReport(host, 'rs rs-away-report', awayReportHtml(model), onContinue, opts, ({ at, $, $$, now, finish }) => {
+    let t = 600;
+    for (const p of $$('.rs-panel')) {
+      at(t, () => p.classList.add('in'));
+      const rows = [...p.querySelectorAll('.rs-res, .rs-cond')];
+      rows.forEach((r, i) => at(t + 100 + i * 130, () => { r.classList.add('in'); r.querySelectorAll('[data-count]').forEach((el) => countUp(el, 650, now)); }));
+      t += 100 + rows.length * 130 + 200;
+    }
+    at(t, () => $('.rs-act').classList.add('in'));
+    at(t + 600, finish);
+  });
+}
+
