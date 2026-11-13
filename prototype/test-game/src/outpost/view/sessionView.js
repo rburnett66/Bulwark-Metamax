@@ -56,7 +56,7 @@ import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../../data/outpostStruc
 import { DEFENSE_KINDS } from '../../data/outpost.js';
 import { getStructureDef } from '../../data/tables.js';
 import { PLANETS } from '../../data/planets.js';
-import { toLiveSim, fromLiveSim, stepLiveOutpost } from '../liveSim.js';
+import { toLiveSim, fromLiveSim, stepLiveOutpost, repairPriceOf } from '../liveSim.js';
 import { ghostPowerOf, powerWarning } from '../placementRules.js';
 import { createVisitRaids } from '../visitRaids.js';
 import { validatePlacement } from '../../sim/structures.js';
@@ -88,6 +88,7 @@ import { awayReportModel } from './awayReport.js';
 import { loadSave, updateSave } from '../../save/save.js';
 import { loadMissionCatalog } from '../../save/missionCatalog.js';
 import { crumb } from '../../diag/errorLog.js';
+import { outpostSafeMode, outpostQuality, gpuLine, SAFE_LODS } from './safeMode.js';
 
 const ROOT = new URL('../../../', import.meta.url).href;   // the game root (prototype/test-game/)
 
@@ -169,6 +170,10 @@ async function openSession(opts, opening) {
   const store = opts.store || { load: loadSave, update: updateSave };
   const reduced = opts.reduced ?? !!(win.matchMedia && win.matchMedia('(prefers-reduced-motion: reduce)').matches);
   crumb('outpost: session view');
+  // safe mode (safeMode.js) [MM-story_mwf40d9i_1]: a device that lost the tab mid-visit opens the outpost light from then on
+  let urlQuality = null;
+  try { urlQuality = new URLSearchParams(win.location.search).get('quality'); } catch (e) { /* no location */ }
+  const safe = !opts.tier && outpostSafeMode(win);
   // the SELL sequence's player (saleDriver.js): fed by actOnSave's sell, stepped in beforeHud, read by the HUD's gold
   const saleRun = createSaleDriver({ reduced, crumb });
 
@@ -176,11 +181,13 @@ async function openSession(opts, opening) {
   const host = createModeHost(mount, 'outpost-view outpost-session');   // styled by the battle HUD's sheet
   opening.host = host;
 
+  crumb('outpost: reading the map');
   const map = opts.map || await outpostMapFor(planet);
   const catalog = opts.catalog !== undefined ? opts.catalog : await loadMissionCatalog().catch(() => null);
   const saveSession = createSession({ store, planet, map, catalog, raidHook: opts.raidHook });
   if (!store.load().outposts || !store.load().outposts[planet]) { host.remove(); throw new Error(`no outpost on ${planet}`); }
   const nextFrame = () => new Promise((ok) => win.requestAnimationFrame(() => ok()));
+  crumb('outpost: catching up while you were away');
   const opened = await saveSession.openChunked(clockNow(), nextFrame);   // the away catch-up
   // the OUTPOST catalogue on the battle rail; a lock is refused by the sim too. The rail has two tabs, BUILD (the
   // outpost's equipment) and FARM (plots, farm machinery, crops) — one rail, one placement (S6). FARM is there before
@@ -255,7 +262,7 @@ async function openSession(opts, opening) {
   const session = createBattleSession(host, {
     getSim: () => sim, getUi: () => ui, submit, mapId: 0, catalogue, onGroundTap: (cell, tapUi) => tapFarm(cell, tapUi),
     mountOptions: () => ({ planet, landing: false, landingHeld: true,
-      render3d: { baseUrl: ROOT, craft: false, landing: false, qualityQuery: opts.tier || null, frameRect: () => frame } }),
+      render3d: { baseUrl: ROOT, craft: false, landing: false, ...outpostQuality({ tier: opts.tier, safe, query: urlQuality }), frameRect: () => frame } }),
   });
   // the battle rail's HARVESTER tile sells the OUTPOST's harvesters (S4 follow-up, owner 2026-11-11): its price and
   // refusals from the model, the purchase through the save session (act 'buyHarvester'), the live state rebuilt with the truck
@@ -285,13 +292,15 @@ async function openSession(opts, opening) {
   // the FARM tab's pictures: the farm glyphs the old farm menu drew (menuIcons.js), a crop's seed in its colour
   for (const id of farmIds) { const g = farmRailGlyph(id); if (g && hud.setBuildPicture) hud.setBuildPicture(id, { glyph: g }); }
   session.setBoard(board, 0);
+  crumb('outpost: starting the 3D view');
   await session.mount3D(board, slug);
   const r = session.view3d;
   let scene = null, farmLayer = null, farmFx = null, crew = null;
   if (r) {
     if (r.markers && r.markers.setBaseVisible) r.markers.setBaseVisible(false);   // the hub model stands on the base
     const { GLTFLoader } = await import(ROOT + 'vendor/three-addons/loaders/GLTFLoader.js');
-    const kit = await createOutpostKit(r.THREE, { base: ROOT + 'content/outposts/', tier: r.tier.key, GLTFLoader });
+    crumb('outpost: loading the building models');
+    const kit = await createOutpostKit(r.THREE, { base: ROOT + 'content/outposts/', tier: r.tier.key, GLTFLoader, lodLevels: safe ? SAFE_LODS : null });
     scene = createOutpostScene(r.THREE, r, { map, kit, tier: r.tier.key, reduced });
     const o = fromLiveSim(sim, live.link, nowOf()).outpost;
     const slugs = new Set(planBuildings(o, map, nowOf()).map((b) => modelSlug(b.kind, b.tier, b.rigHead)).filter(Boolean));
@@ -299,16 +308,18 @@ async function openSession(opts, opening) {
     // the farm on this same scene (S6): its plots and plants, its buildings, the avatar and farmhands, the harvest embers
     if (farmed) {
       farmLayer = createFarmLayer(r.THREE, r, { map, kit, reduced });
-      farmFx = createFarmEmbers({ safe: false });
-      crew = createFarmCrew(r.THREE, r, { map, board, safe: false, reduced, land: (a) => landFarm(a), busy: () => false });
+      farmFx = createFarmEmbers({ safe });
+      crew = createFarmCrew(r.THREE, r, { map, board, safe, reduced, land: (a) => landFarm(a), busy: () => false });
       const fo = farmNow();
       farmLayer.sync(fo, nowOf()); crew.sync(fo);
     }
+    crumb('outpost: placing the buildings');
     await kit.preload([...slugs]);
     // the buildings' pictures for the rail, rendered from their GLBs (menuIcons.js, as the old build menu does)
     const rigHead = (oresOf(planet)[0] || {}).rig;
     const iconSlug = new Map(RAIL_KINDS.map((k) => [k, modelSlug(k, 1, rigHead)]).filter(([, sl]) => sl && kit.manifest[sl]));
-    renderMenuIcons(r.THREE, r.renderer, kit, [...new Set(iconSlug.values())]).then((pics) => {
+    // safe mode keeps the glyphs: no offscreen renders of the GLBs
+    if (!safe) renderMenuIcons(r.THREE, r.renderer, kit, [...new Set(iconSlug.values())]).then((pics) => {
       if (closed) return;
       for (const [k, sl] of iconSlug) if (pics[sl]) hud.setBuildPicture(outpostStructId(k), { src: pics[sl] });
     }).catch((e) => console.warn('[outpost] rail pictures', e));
@@ -495,10 +506,26 @@ async function openSession(opts, opening) {
   function okToast(action, r) {
     if (action.type === 'sell') flashMessage(hud, 'Sold · +' + fmtGold(r.earned != null ? r.earned : 0) + ' gold', 'ok');
     else if (action.type === 'online') flashMessage(hud, 'OUTPOST ONLINE · mining has begun. Raiders will come: hold the first one.', 'ok');
-    else if (action.type === 'repairAll') flashMessage(hud, 'Repair drones launched · −' + fmtGold(r.cost || 0) + ' gold', 'ok');
     else if (action.type === 'deep') flashMessage(hud, action.on ? 'Deep seam: ¼ the speed, 5× the price' : 'Shallow seam', 'info');
   }
-  const cardAct = (action) => { const r = actOnSave(action); if (r.ok) okToast(action, r); };
+  const cardAct = (action) => { if (action.type === 'repairAll') return repairAllLive(); const r = actOnSave(action); if (r.ok) okToast(action, r); };
+  /**
+   * REPAIR ALL (owner 2026-11-13 [MM-story_mwf7z51a_3]: "Repairs on the outpost should work like they do in tower defense,
+   * small bot roams form base to toweer to do repairs"): the battle's repair command on every worn defense and wreck — a bot
+   * walks from the base to each (sim/structures.js requestRepair), the outpost's price paid as it leaves (liveSim.js).
+   */
+  function repairAllLive() {
+    const before = sim.economy.money;
+    let sent = 0, short = false;
+    for (const s of [...sim.structures.values()].sort((a, b) => a.id - b.id)) {
+      if (!(s.hp < s.maxHp) || s.repairPending || repairPriceOf(s) == null) continue;
+      const r = applyCommand(sim, { type: 'repair', id: s.id });
+      if (r.ok) sent++; else if (r.reason === 'cost') short = true;
+    }
+    if (sent) flashMessage(hud, `Repair bot${sent === 1 ? '' : 's'} on the way · −${fmtGold(before - sim.economy.money)} gold`, 'ok');
+    else flashMessage(hud, short ? 'Not enough gold to repair' : 'Nothing needs repair');
+    panelSince = 1;
+  }
   const closeFarm = () => { farmSel = null; if (farmLayer) farmLayer.select(null); panelSince = 1; };
   // the away report (what happened while the player was gone): a report card on arrival, once, only when something happened (D5)
   const away = awayReportModel(opened.report, planet, map, catalog);
@@ -527,6 +554,8 @@ async function openSession(opts, opening) {
       : outpostCardModel(v, map, { planet, gold, now: nowOf(), live: sim, issues: onlineIssues(v, map), gate, repairCost: repairAllCost(v), raid, act: cardAct }));
   }
   session.bindInput();
+  let frameNo = 0;
+  crumb(`outpost: open · ${r ? gpuLine(r) : 'no 3D'}${safe ? ' · SAFE MODE' : ''}`);
   session.start({
     paused: () => false,
     stopped: () => false,
@@ -557,6 +586,8 @@ async function openSession(opts, opening) {
       if (r3 && r3.cam && (j.x || j.z) && !r3.camGlide) { r3.cam.tx += j.x; r3.cam.tz += j.z; shook = { r3, ...j }; }
     },
     beforeHud: () => {
+      frameNo++;
+      if ((frameNo === 1 || frameNo === 30 || frameNo === 180) && session.view3d) crumb(`outpost: frame ${frameNo} · ${gpuLine(session.view3d)}`);
       if (shook) { shook.r3.cam.tx -= shook.x; shook.r3.cam.tz -= shook.z; shook = null; }
       panelSince += dt;
       if (panelSince >= 0.5) { panelSince = 0; try { refreshPanel(); } catch (e) { console.warn('[outpost] panel', e); } }
@@ -596,6 +627,7 @@ async function openSession(opts, opening) {
   function close() {
     if (closed) return;
     closed = true;
+    crumb('outpost: closed');
     try {
       const { outpost, gold } = fromLiveSim(sim, live.link, nowOf());
       bankVisit(store, planet, outpost, gold);
@@ -612,7 +644,7 @@ async function openSession(opts, opening) {
   const handle = { session, get sim() { return sim; }, get live() { return live; }, get ui() { return ui; }, get raids() { return raids; }, get scene() { return scene; }, panel: card.root, card, away, actOnSave,
     // the farm (S6; review pages and the headless check): its tab, the picture's counts, the crew, a farm action, a tap
     catalogue, get farm() { return farmLayer; }, get crew() { return crew ? crew.info() : null; }, farmAct, tapFarm, farmNow,
-    get farmSel() { return farmSel; },
+    get farmSel() { return farmSel; }, safe,
     // the SELL sequence playing now (review pages and the headless check)
     get sale() { return { active: saleRun.active, t: saleRun.t, shown: saleRun.shown(sim.economy.money), pops: saleRun.timeline ? saleRun.timeline.pops.length : 0, saling: !!(scene && scene.saling) }; } };
   // the open outpost for the review pages and the headless check (window.Bulwark is the game's diagnostics namespace)
