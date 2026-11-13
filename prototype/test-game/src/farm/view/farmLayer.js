@@ -20,6 +20,9 @@ import { plotState, plotPlants } from '../model.js';
 import { RIPE } from './farmUi.js';   // a ripe crop's colour by category (shared with the FARM tab's crop pictures)
 import { mergeGeos } from '../../outpost/view/outpostScene.js';   // the outpost scene's merge (one draw call per material)
 import { PAD_SIZE, MODEL_PAD_SIZE } from '../../terrain/outpostPads.js';
+import { resourceModel } from '../../render3d/resources/models.js';
+import { mergeResourceModel } from '../../render3d/resources/resources3d.js';
+import { createPrims } from '../../render3d/units/prims.js';
 const KIT_SCALE = PAD_SIZE.pad / MODEL_PAD_SIZE.pad;   // 0.5: the outpost kit's authoring scale to the map's (task_mwagi1nr_1e)
 
 const Y = 0.05;   // the ground plate height the outpost scene stands its pads on (outpostScene.js PAD_Y)
@@ -35,6 +38,19 @@ export function plantSpots(p) {
 /** The height the plots' ground plate stands at (the plants and the embers start from it). */
 export const FARM_Y = Y;
 
+/**
+ * A FRUITED plant is the crop's own battle model (owner 2026-11-12: "in the farm the fully grown fruit looks placeholder,
+ * but our game already has full detail models") [MM-story_mwelxcb8_2]: every crop is one of the 36 harvestable
+ * resources (data/farm.js: planetKey + tier), drawn in battle by render3d/resources (models.js, merged by
+ * resources3d.mergeResourceModel). A battle model fills one cell; a plot spot is half a cell, so it stands at this scale.
+ * → the model def, or null (the drawn ripe head stands in).
+ */
+export const CROP_MODEL_SCALE = 0.55;
+export function cropModelDef(cropId) {
+  const c = cropOf(cropId);
+  return c && c.planetKey && c.tier ? resourceModel(c.planetKey, c.tier) : null;
+}
+
 export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } = {}) {
   const root = new THREE.Group();
   root.name = 'farm';
@@ -46,7 +62,21 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
     plant: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.8 }),
     glow: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
     sel: new THREE.MeshBasicMaterial({ color: C.sel, toneMapped: false }),
+    // the battle resources' own materials (resources3d.js): vertex-coloured lit body + unlit glow parts
+    cropLit: new THREE.MeshLambertMaterial({ vertexColors: true }),
+    cropGlow: new THREE.MeshBasicMaterial({ vertexColors: true }),
   };
+  // the crop models, merged once per crop and kept (the plant meshes are rebuilt; these geometries are not)
+  const cropGeo = new Map(), keepGeo = new Set();
+  let prims = null;
+  function cropGeometry(cropId) {
+    if (cropGeo.has(cropId)) return cropGeo.get(cropId);
+    const def = cropModelDef(cropId);
+    let g = null;
+    if (def) { prims = prims || createPrims(THREE); const m = mergeResourceModel(THREE, def, prims); g = { lit: m.lit, glow: m.glow }; for (const x of [m.lit, m.glow]) if (x) keepGeo.add(x); }
+    cropGeo.set(cropId, g);
+    return g;
+  }
   // the plant shapes, one per state, unit-sized (scaled per instance): 16 to a plot, four rows running north–south
   const G = {
     pod: new THREE.SphereGeometry(0.07, 8, 6),
@@ -71,7 +101,7 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
   function clear(g) {
     for (const c of [...g.children]) {
       g.remove(c);
-      if (c.geometry && !Object.values(G).includes(c.geometry)) c.geometry.dispose();
+      if (c.geometry && !Object.values(G).includes(c.geometry) && !keepGeo.has(c.geometry)) c.geometry.dispose();
       if (c.material && !Object.values(mats).includes(c.material)) c.material.dispose();   // the per-plot inlays
       if (c.isInstancedMesh) c.dispose();
     }
@@ -114,11 +144,26 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
         if (st === 'planted') push('pod', x, z, levelColour(p.level).getHex());
         else if (st === 'sprout') push('sprout', x, z, C.sprout, 0.9 + j * 0.2);
         else if (st === 'plant') push('plant', x, z, C.leaf, 0.7 + p.progress * 0.4 + j * 0.15);
+        else if (st === 'fruited' && cropGeometry(c.id)) push('crop:' + c.id, x, z, 0xffffff, CROP_MODEL_SCALE * (1 + j * 0.12));
         else if (st === 'fruited') { push('ripe', x, z, C.leaf, 1 + j * 0.1); push('head', x, z, RIPE[c.category] || RIPE.Grain, 1 + j * 0.1); }
         else if (st === 'dead') push('dead', x + j * 0.08, z, C.dead);
       }
     }
     for (const [key, list] of by) {
+      if (key.startsWith('crop:')) {   // the crop's battle model: its lit body and its glow parts, one instanced mesh each
+        const g = cropGeometry(key.slice(5));
+        for (const [geo, mat, glowPart] of [[g.lit, mats.cropLit, false], [g.glow, mats.cropGlow, true]]) {
+          if (!geo) continue;
+          const mesh = new THREE.InstancedMesh(geo, mat, list.length);
+          list.forEach((q, i) => {
+            tmp.position.set(q.x, Y, q.z); tmp.rotation.set(0, (i * 2.399) % (Math.PI * 2), 0); tmp.scale.setScalar(q.s); tmp.updateMatrix();
+            mesh.setMatrixAt(i, tmp.matrix); mesh.setColorAt(i, col.setHex(0xffffff));
+          });
+          mesh.name = 'farm-' + key + (glowPart ? '-glow' : ''); mesh.castShadow = !glowPart;
+          groups.plants.add(mesh);
+        }
+        continue;
+      }
       const glow = key === 'pod' || key === 'head';
       const mesh = new THREE.InstancedMesh(G[key], glow ? mats.glow : mats.plant, list.length);
       list.forEach((q, i) => {
@@ -199,6 +244,7 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
       for (const g of Object.values(groups)) clear(g);
       for (const e of built.values()) e.inst.dispose && e.inst.dispose();
       for (const g of Object.values(G)) g.dispose();
+      for (const g of keepGeo) g.dispose();
       for (const m of Object.values(mats)) m.dispose();
     },
   };
