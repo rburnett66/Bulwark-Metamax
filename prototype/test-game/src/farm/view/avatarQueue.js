@@ -21,6 +21,10 @@
 
 /** How long the avatar works a plot before its action lands (seconds; the scale prototype's 0.9 s, a touch longer). */
 export const WORK_SEC = 1.1;
+/** A job's own work time where it differs (owner 2026-11-12: "planting should take 2 seconds") [MM-story_mwef343d_b]. */
+export const JOB_WORK_SEC = Object.freeze({ plant: 2 });
+/** Seconds the avatar works this job: opts.workSec (tests) else the job's own, else WORK_SEC. */
+export const workSecOf = (job, opts = {}) => opts.workSec ?? JOB_WORK_SEC[job && job.action && job.action.type] ?? WORK_SEC;
 
 /** An empty queue. */
 export function createQueue() {
@@ -45,7 +49,6 @@ export function queueView(q) {
  * opts: { workSec }
  */
 export function queueStep(q0, ev, opts = {}) {
-  const workSec = opts.workSec ?? WORK_SEC;
   const q = { ...q0, jobs: q0.jobs.slice(), cur: q0.cur ? { ...q0.cur } : null };
   const effects = [];
   const kick = (wasBusy) => {
@@ -70,7 +73,7 @@ export function queueStep(q0, ev, opts = {}) {
       break;
     }
     case 'arrived':
-      if (q.cur && q.cur.phase === 'walk') { q.cur.phase = 'work'; q.cur.left = workSec; effects.push({ type: 'work', job: q.cur.job }); }
+      if (q.cur && q.cur.phase === 'walk') { q.cur.phase = 'work'; q.cur.left = workSecOf(q.cur.job, opts); effects.push({ type: 'work', job: q.cur.job }); }
       break;
     case 'noPath':   // the plot can't be walked to: do the action at once rather than lose it
       if (q.cur && q.cur.phase === 'walk') land();

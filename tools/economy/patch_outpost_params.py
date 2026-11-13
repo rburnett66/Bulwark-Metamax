@@ -115,7 +115,7 @@ def main(path=XLSX):
     before = zin.read(part).decode("utf-8")
     after, changed = patch_sheet(before, sst)
     if not changed:
-        print("Outpost_Params already holds", ", ".join(ROWS), "in", os.path.relpath(path, ROOT), "- nothing written")
+        print(SHEET, "already holds", ", ".join(ROWS), "in", os.path.relpath(path, ROOT), "- nothing written")
         return
     # every row but the ones we own is byte-identical
     keep = lambda x: [m.group(0) for m in ROW.finditer(x) if not any(">%s<" % escape(p) in m.group(0) for p in ROWS)]
@@ -138,7 +138,7 @@ def main(path=XLSX):
         f.write(buf.getvalue())
     for p, how in changed.items():
         print("  %s: %s (%s)" % (p, how, ROWS[p][0]))
-    print("Outpost_Params written in", os.path.relpath(path, ROOT))
+    print(SHEET, "written in", os.path.relpath(path, ROOT))
 
 
 if __name__ == "__main__":
