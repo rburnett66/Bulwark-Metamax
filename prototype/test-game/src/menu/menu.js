@@ -24,6 +24,7 @@ import { battlesOn } from '../save/battleLog.js';
 import { resourceId, resourceIconHtml } from '../data/resourceIcons.js';
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import { errorReportsRow } from '../diag/reportPanel.js';
+import { qualityRow } from './qualityRow.js';
 import { loadSave, updateSave, buyTech, refundTech, takePendingRewards, markSeen, totalStars, bankOf } from '../save/save.js';
 import { needsIntro, resumeBeat, acceptFirstContract, markLaunched, collectiveOf } from '../save/collective.js';
 import { setChannelVolume, getChannelVolume, isMuted, setMuted, onAudioChange } from '../comm/voice.js';
@@ -888,6 +889,9 @@ export function createMenu(mountEl, cbs) {
     }
   });
   if (isMuted()) volRows.master.vlab.textContent = 'MUTED';
+  // 3D QUALITY (owner 2026-11-12: "I dont see quality controls in settings") — the in-game gear's choice [MM-story_mweksov8_1]
+  let qRow = null;
+  try { qRow = qualityRow(doc); setBox.appendChild(qRow); } catch (e) { qRow = null; }
   // EFFECTS LAB (owner 2026-10-22): every battle effect, per faction, with live tuning [MM-story_mvk63439_o]
   {
     const row = el(doc, 'div', 'bwm-srow');
@@ -915,7 +919,7 @@ export function createMenu(mountEl, cbs) {
   // ERROR REPORTS (owner 2026-11-12: "The feature to turn on error logging should be in settings") [MM-story_mwdppjdb_8]
   const errRow = errorReportsRow(doc);
   setBox.appendChild(errRow);
-  setBox.appendChild(el(doc, 'div', 'note', 'Audio is shared with the in-game settings gear. More options land here as they ship.'));
+  setBox.appendChild(el(doc, 'div', 'note', 'Audio and 3D quality are shared with the in-game settings gear. More options land here as they ship.'));
   const nsty = el(doc, 'style'); nsty.textContent = '.bwm-set .note{font-size:11px;color:#8fa0b3;margin-top:6px}';
   setBox.appendChild(nsty);
   settings.appendChild(setBox);
@@ -940,7 +944,7 @@ export function createMenu(mountEl, cbs) {
     netHost.style.display = screen === 'techtree' ? 'block' : 'none';
     if (screen !== 'techtree' && net) net.stop();
     settings.style.display = screen === 'settings' ? 'block' : 'none';
-    if (screen === 'settings') errRow.sync();   // the count is fresh each time SETTINGS opens
+    if (screen === 'settings') { errRow.sync(); if (qRow) qRow.sync(); }   // the count is fresh each time SETTINGS opens
     survey.style.display = screen === 'survey' ? 'grid' : 'none';
     root.classList.toggle('space', screen === 'main' || screen === 'survey' || overlay);
     for (const b of root.querySelectorAll('[data-globe]')) markSurvey(b);   // a portal bought since the last show opens a planet
