@@ -26,11 +26,15 @@
  */
 import { loadThree, CONTENT } from '../reveal/three.js';
 import { hdrBloom, tonemapPass, chromaticAberrationPass } from '../render3d/space/lensFx.js';
+import { createBackdrop } from '../render3d/space/backdrop.js';
 
 const MODEL = CONTENT + 'farm/pod_chest.glb';
 // owner: "the emissive materials are too bright, try a dark blue emissive color": the glow is a deep blue, gold the accent
 const CYAN = [0.12, 0.3, 1.0], GOLD = [1.0, 0.72, 0.3];
 const SEAM = [0.05, 0.16, 0.85], CORE = [0.1, 0.26, 1.0];
+// the back glow behind the chest at rest: low, so the starfield and nebula read (it was 0.12, a flat blue wall) and only
+// the opening's light rays push it up [MM-story_mwelcqzy_c]
+export const HALO_IDLE = 0.035;
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const easeOut = (x) => 1 - Math.pow(1 - clamp01(x), 3);
 const easeIn = (x) => Math.pow(clamp01(x), 2.2);
@@ -49,8 +53,12 @@ export async function createChestStage({ host, tier = 'high', reduced = false, t
   renderer.localClippingEnabled = true;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x03060a);
+  scene.background = new THREE.Color(0x000000);   // black: the backdrop below adds its deep sky, stars and nebula on top
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100);
+  // the sky (owner 2026-11-12: "the background should be a starfield with the nebula effect instead of a solid blue")
+  // [MM-story_mwelcqzy_c]: the capital-ship reveal's own deep-space backdrop (render3d/space/backdrop.js), no sun
+  const sky = createBackdrop(THREE, { seed: 11, tier, sunDir: [0.7, 0.45, -0.55], nebulaIntensity: 0.95, sunIntensity: 0 });
+  scene.add(sky.group);
   const look = new THREE.Vector3(0, 0.62, 0), camBase = new THREE.Vector3(0, 1.85, 6.6);
 
   // ── light: an environment for the metal (a cool room with three light panels), a warm key, a cyan rim, the core
@@ -156,7 +164,7 @@ export async function createChestStage({ host, tier = 'high', reduced = false, t
         gl_FragColor = vec4(vec3(1., .82, .5) * r * fall * uA * .45, 1.); }` }));
   rays.position.set(0, 1.0, -1.6); scene.add(rays);
 
-  const halo = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShaderMaterial({ ...add, uniforms: U({ uA: 0.12, uC: new THREE.Color(0.08, 0.18, 0.6) }),
+  const halo = new THREE.Mesh(new THREE.PlaneGeometry(10, 10), new THREE.ShaderMaterial({ ...add, uniforms: U({ uA: HALO_IDLE, uC: new THREE.Color(0.08, 0.18, 0.6) }),
     vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
     fragmentShader: 'varying vec2 vP; uniform float uA; uniform vec3 uC; void main(){ float d = length(vP); gl_FragColor = vec4(uC * exp(-d * d * .18) * uA, 1.); }' }));
   halo.position.set(0, 0.9, -3); scene.add(halo);
@@ -330,7 +338,7 @@ export async function createChestStage({ host, tier = 'high', reduced = false, t
     }
     S.flash = Math.max(0, S.flash - dt * 3.2); flashEl.style.opacity = String(reduced ? 0 : S.flash);
     rays.material.uniforms.uA.value = S.raysA;
-    halo.material.uniforms.uA.value = 0.12 + 0.25 * S.raysA;
+    halo.material.uniforms.uA.value = HALO_IDLE + 0.25 * S.raysA;
     S.beamA = Math.max(0, S.beamA - dt * 1.6); if (S.phase !== 'present') beam.material.uniforms.uA.value = S.beamA;
     bloom.strength = (tier === 'low' ? 0.35 : 0.45) + 0.6 * S.flash;
     for (let i = orbs.length - 1; i >= 0; i--) if (orbs[i].step(sdt)) orbs.splice(i, 1);
@@ -339,6 +347,7 @@ export async function createChestStage({ host, tier = 'high', reduced = false, t
     camera.position.set(camBase.x + rnd(-1, 1) * S.shake, camBase.y + rnd(-1, 1) * S.shake, camBase.z);
     camera.lookAt(look);
     lens && lens.tick && lens.tick(dt);
+    sky.update(dt, camera);
     composer.render();
   }
 
@@ -418,6 +427,7 @@ export async function createChestStage({ host, tier = 'high', reduced = false, t
     },
     dispose() {
       disposed = true; win.cancelAnimationFrame(raf); if (ro) ro.disconnect();
+      sky.dispose();
       scene.traverse((o) => { if (o.geometry) o.geometry.dispose(); const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : []; for (const m of ms) m.dispose(); });
       haloTex.dispose(); composer.renderTarget1.dispose(); composer.renderTarget2.dispose(); renderer.dispose();
       try { renderer.forceContextLoss(); } catch (e) { /* already gone */ }   // free the GL context now, not at GC: phones cap them
