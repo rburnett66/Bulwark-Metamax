@@ -112,7 +112,7 @@ export function farmPanelModel(o, map, sel, ctx = {}) {
       if (!choices.length) out.note = `No seed pods: each pod plants one plant, up to ${m.pods} a plot. Buy them at STORES › Seed pods; a won map's Pod Reward Chest brings them; F1 grants a crate.`;
     } else if (st === 'harvested') {
       const c = prepCost(p.method);
-      out.actions.push({ act: 'prep', arg: p.id, label: `PREP · ${fmt(c.gold)}g`, enabled: c.gold <= gold, why: c.gold > gold ? `Costs ${fmt(c.gold)} gold` : null });
+      out.actions.push({ act: 'prep', arg: p.id, label: c.gold > 0 ? `PREP · ${fmt(c.gold)}g` : 'PREP · free', enabled: c.gold <= gold, why: c.gold > gold ? `Costs ${fmt(c.gold)} gold` : null });
     } else if (st === 'prepping') out.stats.push(['Ready in', clock((p.prepDone - now) / 1000)]);
     return out;
   }

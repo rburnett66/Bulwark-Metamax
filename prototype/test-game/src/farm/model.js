@@ -28,7 +28,7 @@
  * Every function returns a NEW outpost; the one passed in is never changed. No Date.now, no Math.random: times come in
  * as ms; nothing here is random.
  */
-import { FARM, cropOf, methodOf, podLevel, farmBuildingOf, yieldOf, podsBack, prepCost, growLevel } from '../data/farm.js';
+import { FARM, cropOf, methodOf, podLevel, farmBuildingOf, yieldOf, podsBack, prepCost, plotCost, growLevel } from '../data/farm.js';
 import { powerGrids, takenRects } from '../outpost/model.js';
 import { windowSec, finished, hasWater } from './grow.js';
 
@@ -90,7 +90,7 @@ export function plotState(o, plot, t = o.t) {
 }
 
 /**
- * Put a new plot on the ground and start its first prep (the plot costs its prep, Farming-Design §5.1).
+ * Put a new plot on the ground and start its first prep. The plot costs Plot_Gold; the prep is free (owner 2026-11-13).
  * what: { x, y, method }. ctx: { map, gold, now, methods?: ids the player has (default ['traditional']), cellOk? }.
  * → { outpost, cost, plot } or { error }
  */
@@ -101,7 +101,7 @@ export function placePlot(outpost, what, ctx) {
   const rect = { x: what.x, y: what.y, w: m.w, h: m.h };
   const why = groundRefusal(outpost, ctx.map, rect, ctx);
   if (why) return { error: why };
-  const cost = prepCost(m.id);
+  const cost = { gold: plotCost().gold, sec: prepCost(m.id).sec };
   if (cost.gold > (ctx.gold ?? Infinity)) return { error: `costs ${cost.gold} gold` };
   const o = clone(outpost), f = ensureFarm(o);
   const id = 'p' + f.next++;
@@ -110,7 +110,7 @@ export function placePlot(outpost, what, ctx) {
   return { outpost: o, cost: cost.gold, plot: id };
 }
 
-/** Prep a harvested plot again (gold and time). → { outpost, cost } or { error } */
+/** Prep a harvested plot again (time only: prep is free, Prep_Gold 0). → { outpost, cost } or { error } */
 export function prep(outpost, plotId, ctx) {
   const p = outpost.farm && outpost.farm.plots[plotId];
   if (!p) return { error: `no plot ${plotId}` };

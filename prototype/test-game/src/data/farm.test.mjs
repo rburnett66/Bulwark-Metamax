@@ -107,11 +107,11 @@ test('Phase A buildings and Verdance F1', () => {
   assert.ok(f1.deliver <= 3 * yieldOf(f1.crop, 'traditional', 1), 'F1\'s delivery fits three Common plots (Farming-Design §5.4)');
   assert.deepEqual(f1.grants, ['farmhouse']);
   assert.ok(f1.unlocks.includes('method:irrigated') && f1.unlocks.includes('tab:seedpods'));
-  assert.deepEqual(prepCost('traditional'), { gold: 100, sec: 2 });   // owner 2026-11-12: prepping takes 2 s
+  assert.deepEqual(prepCost('traditional'), { gold: 0, sec: 2 });   // owner 2026-11-12: prepping takes 2 s; 2026-11-13: prep is free
 });
 
 test('the tuning is all there and numeric', () => {
-  for (const k of ['Prep_Gold', 'Prep_Sec', 'Sprout_At', 'Plant_At', 'Fruited_Window', 'Pods_Per_Plot', 'Pod_Price',
+  for (const k of ['Plot_Gold', 'Prep_Gold', 'Prep_Sec', 'Sprout_At', 'Plant_At', 'Fruited_Window', 'Pods_Per_Plot', 'Pod_Price',
     'Chest_Units_Per_Pod', 'Pod_Crate', 'Silo_Hours',
     'Breach_Silo_Loss', 'Trample_Fruited_Yield', 'Avatar_Cells', 'Farmhands']) assert.equal(typeof FARM[k], 'number', k);
   assert.ok(FARM.Sprout_At < FARM.Plant_At);

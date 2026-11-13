@@ -17,7 +17,7 @@
  * sim never builds it: the outpost session hands the placement to the save session's farm actions (farmPlace, plant)
  * — the farm keeps its rules in one place (farm/model.js). Kept OUT of tables.STRUCTURES so no battle lists them.
  */
-import { METHODS, FARM_BUILDINGS, CROPS, prepCost } from './farm.js';
+import { METHODS, FARM_BUILDINGS, CROPS, plotCost } from './farm.js';
 import { RAIL_SHORT_NAME } from './outpostStructures.js';
 
 export const FARM_PREFIX = 'FARM-';
@@ -47,7 +47,7 @@ export function buildFarmStructures(methods = METHODS, buildings = FARM_BUILDING
   const out = {};
   for (const m of methods) {
     out[farmStructId(m.id)] = farmDef({ farmItem: 'plot', farmId: m.id, name: m.name, label: RAIL_SHORT_NAME[m.id] || m.name.toUpperCase(),
-      cost: Object.freeze([prepCost(m.id).gold]), footprint: Object.freeze({ w: m.w, h: m.h }) });
+      cost: Object.freeze([plotCost().gold]), footprint: Object.freeze({ w: m.w, h: m.h }) });
   }
   for (const b of buildings) {
     if (b.kind === 'farmhouse') continue;
