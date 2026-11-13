@@ -10,8 +10,8 @@
  * room, delivered, f1 } — pods: the save's s.pods ({ cropId: count }; pods have no level, owner rule 9); levels: every
  * crop's tech-tree level ({ cropId: 1–5 }, src/farm/levels.js cropLevels); held: the farm store for this planet.
  */
-import { methodOf, farmBuildingOf, cropOf, podLevel, yieldOf, prepCost, CROPS } from '../../data/farm.js';
-import { plotState, storeCapacity, farmStatus, plantLevel } from '../model.js';
+import { methodOf, farmBuildingOf, cropOf, podLevel, prepCost, CROPS } from '../../data/farm.js';
+import { plotState, storeCapacity, farmStatus, plantLevel, plotPlants, plotFull, plotYield } from '../model.js';
 import { podRowCount } from '../pods.js';
 import { windowSec } from '../grow.js';
 import { OUTPOST_GLYPHS } from '../../outpost/view/menuIcons.js';
@@ -46,12 +46,12 @@ const clock = (sec) => { sec = Math.max(0, Math.round(sec)); const h = Math.floo
  * → [{ crop, n, name, level, techLevel, levelName, colour, capped, why }]
  */
 export function plantChoices(o, map, plot, pods = {}, levels = {}) {
-  const need = methodOf(plot.method).pods, out = [];
+  const need = 1, full = methodOf(plot.method).pods, out = [];
   for (const c of CROPS) {
     const n = podRowCount(pods[c.id]);
     if (n < need) continue;
     const techLevel = levels[c.id] || 1, g = plantLevel(o, map, plot, techLevel), L = podLevel(g.level);
-    out.push({ crop: c.id, n, name: c.name, level: g.level, techLevel, levelName: L.name, colour: L.colour, capped: g.capped, why: g.why });
+    out.push({ crop: c.id, n: Math.min(n, full), name: c.name, level: g.level, techLevel, levelName: L.name, colour: L.colour, capped: g.capped, why: g.why });
   }
   return out;
 }
@@ -93,9 +93,10 @@ export function farmPanelModel(o, map, sel, ctx = {}) {
         out.stats.push(['Grown', `${Math.floor(p.progress * 100)}%`]);
         out.bay = p.progress; out.oreColour = L.colour;
       }
-      out.stats.push(['Yield', `${fmt(Math.floor(yieldOf(p.crop, p.method, p.level) * (p.yieldShare ?? 1)))} ${c.name}${(p.yieldShare ?? 1) < 1 ? ' (trampled)' : ''}`]);
+      out.stats.push(['Plants', `${plotPlants(p)} of ${plotFull(p)}`]);
+      out.stats.push(['Yield', `${fmt(Math.floor(plotYield(p)))} ${c.name}${(p.yieldShare ?? 1) < 1 ? ' (trampled)' : ''}`]);
       if (st === 'fruited' || st === 'dead') {
-        const units = Math.floor(yieldOf(p.crop, p.method, p.level) * (p.yieldShare ?? 1));
+        const units = Math.floor(plotYield(p));
         const full = st === 'fruited' && units > (ctx.room ?? Infinity);
         out.actions.push({ act: 'harvest', arg: p.id, label: st === 'dead' ? 'HARVEST · pods back' : `HARVEST · ${fmt(units)}`, enabled: !full, why: full ? 'The Silo is full: sell or deliver to make room' : null });
         if (full) out.warnings = [{ text: 'Silo full: the crop waits, and dies at the end of its window' }];
@@ -104,11 +105,11 @@ export function farmPanelModel(o, map, sel, ctx = {}) {
       const choices = plantChoices(o, map, p, ctx.pods, ctx.levels);
       for (const ch of choices.slice(0, 6)) {
         out.actions.push({ act: 'plant', arg: ch.crop, level: ch.level, colour: ch.colour, enabled: true, why: ch.capped ? `Level ${ch.level}: ${ch.why}` : null,
-          label: `PLANT ${ch.name} · L${ch.level} ${ch.levelName}${ch.capped ? ` (L5 ${capShort(ch.why)})` : ''} · ${ch.n} pods` });
+          label: `PLANT ${ch.name} · L${ch.level} ${ch.levelName}${ch.capped ? ` (L5 ${capShort(ch.why)})` : ''} · ${ch.n} pod${ch.n === 1 ? '' : 's'}` });
       }
       const capped = choices.find((ch) => ch.capped);
       if (capped) out.note = `Level ${capped.level} — ${capped.why}.`;
-      if (!choices.length) out.note = `No seed pods: ${m.pods} of one crop plant this plot. Buy them at STORES › Seed pods; a won map's Pod Reward Chest brings them; F1 grants a crate.`;
+      if (!choices.length) out.note = `No seed pods: each pod plants one plant, up to ${m.pods} a plot. Buy them at STORES › Seed pods; a won map's Pod Reward Chest brings them; F1 grants a crate.`;
     } else if (st === 'harvested') {
       const c = prepCost(p.method);
       out.actions.push({ act: 'prep', arg: p.id, label: `PREP · ${fmt(c.gold)}g`, enabled: c.gold <= gold, why: c.gold > gold ? `Costs ${fmt(c.gold)} gold` : null });
