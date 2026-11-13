@@ -152,3 +152,20 @@ test('walks follow the outpost nav grid from the Farmhouse to every plot; farmha
   const l = farmhandLeg(rng(3), stops);
   assert.deepEqual(Object.keys(l).sort(), ['hold', 'idx', 'pose', 'stop']);
 });
+
+// Owner 2026-11-12 [MM-story_mwef343d_b]: "farm plot prepping should take 2 seconds, planting should take 2 seconds"
+test('planting is 2 s of the avatar\'s work; a fresh plot preps in 2 s', async () => {
+  const { workSecOf, WORK_SEC, queueStep, createQueue } = await import('./avatarQueue.js');
+  const { prepCost } = await import('../../data/farm.js');
+  assert.equal(workSecOf({ action: { type: 'plant' } }), 2);
+  assert.equal(workSecOf({ action: { type: 'harvest' } }), WORK_SEC);
+  assert.equal(prepCost('traditional').sec, 2);
+  assert.equal(prepCost('irrigated').sec, 2);
+  let q = createQueue(), fx;
+  ({ q } = queueStep(q, { type: 'enqueue', action: { type: 'plant', plot: 'p1', pick: 'loam-grain' } }));
+  ({ q } = queueStep(q, { type: 'arrived' }));
+  ({ q, effects: fx } = queueStep(q, { type: 'tick', dt: 1.9 }));
+  assert.ok(!fx.some((e) => e.type === 'land'), 'still planting at 1.9 s');
+  ({ q, effects: fx } = queueStep(q, { type: 'tick', dt: 0.11 }));
+  assert.ok(fx.some((e) => e.type === 'land'), 'planted at 2 s');
+});
