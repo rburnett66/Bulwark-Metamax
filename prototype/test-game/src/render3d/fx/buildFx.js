@@ -22,6 +22,19 @@ import { cellToWorld } from '../camera.js';
 // — DUST_MULT (4) times the puffs ("the construction dust should be 4x what you demoed", 2026-11-08) and more opaque
 // ("the dust need to be more opaque"). The welding sparks that go with it are fx/structureFx.js.
 export const DUST_MULT = 4;
+
+/**
+ * The structures the build FX read: the sim's, plus a mode's extra build sites — state.extraBuildSites() → [{ id, pos,
+ * footprint, lifecycle: 'Building', progress }] — things built outside the sim that should raise the same dust and
+ * sparks: the outpost's farm buildings (owner 2026-11-13 [MM-story_mwf8eikt_5]: "when outpost buildings are
+ * constructed they should have dust clouds and sparks"; outpost/view/sessionView.js). A battle sets none.
+ */
+export function fxStructures(state) {
+  const out = state && state.structures ? [...state.structures.values()] : [];
+  let more = null;
+  try { more = state && typeof state.extraBuildSites === 'function' ? state.extraBuildSites() : null; } catch (e) { more = null; }
+  return more && more.length ? out.concat(more) : out;
+}
 export const BUILD_FX = Object.freeze({
   rate: 24 * DUST_MULT, // puffs / s around a 1×1 footprint at progress 0 (× perimeter for bigger footprints)
   ease: 0.75,           // the rate falls by this share as progress → 1
@@ -96,7 +109,7 @@ export function createBuildFx({ seed = 23 } = {}) {
       const q = BUILD_TIER[tierKey] ?? 1;
       let n = 0;
       const live = new Set();
-      if (state.structures) for (const s of state.structures.values()) {
+      for (const s of fxStructures(state)) {
         if (!DUSTY.has(s.lifecycle) || !s.pos) continue;
         live.add(s.id);
         const b = box(s), perim = (b.hw + b.hh) / 1;   // 1 for a 1×1
