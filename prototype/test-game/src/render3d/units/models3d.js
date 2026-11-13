@@ -121,15 +121,19 @@ export function mergeOffset(THREE, a, b, off) {
   return geo;
 }
 
-/** Planar-shadow material (shared by live units and FX wrecks, which reuse their instance matrices). */
-export function shadowMaterial(THREE, sunDir, alpha) {
+/**
+ * Planar-shadow material (shared by live units and FX wrecks, which reuse their instance matrices, and by the
+ * outpost/farm crew — `instanced: false` — whose walkers are plain meshes [MM-story_mweijotw_1]). `groundY` is the
+ * plane the shadow lies on (the farm plate stands at 0.05, above the battle ground's 0.03).
+ */
+export function shadowMaterial(THREE, sunDir, alpha, { instanced = true, groundY = 0.03 } = {}) {
   return new THREE.ShaderMaterial({
     uniforms: { uSunDir: { value: new THREE.Vector3(sunDir.x, sunDir.y, sunDir.z) }, alpha: { value: alpha } },
     vertexShader: `uniform vec3 uSunDir;
       void main() {
-        vec4 w = modelMatrix * instanceMatrix * vec4(position, 1.0);
+        vec4 w = modelMatrix * ${instanced ? 'instanceMatrix * ' : ''}vec4(position, 1.0);
         w.xyz -= uSunDir * (max(w.y, 0.0) / uSunDir.y);   // a wading hull's submerged part casts from the waterline
-        w.y = 0.03;
+        w.y = ${groundY.toFixed(4)};
         gl_Position = projectionMatrix * viewMatrix * w;
       }`,
     fragmentShader: 'uniform float alpha; void main() { gl_FragColor = vec4(0.0, 0.0, 0.0, alpha); }',
