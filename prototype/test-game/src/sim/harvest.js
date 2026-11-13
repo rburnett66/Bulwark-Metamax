@@ -10,7 +10,7 @@
 // The harvester is driven HERE (marchAlong on its own nav path, like repair troops) — stepMovement,
 // separation, and the contact clamp all skip it, so the economy loop never tangles with the crowd sim.
 import { MAPDATA } from '../../content/maps/mapdata.js';
-import { HARVESTER_UNLOAD_TIME } from '../data/tables.js';
+import { HARVESTER_UNLOAD_TIME, HARVESTER_DOCK_REPAIR_FRAC } from '../data/tables.js';
 import { harvesterStats, nodeHarvestSec } from './harvestStats.js';
 import { createUnit } from './entities.js';
 import { buildNavGrid, findWalkerPath } from './pathfinding.js';
@@ -566,8 +566,20 @@ function stepOneHarvester(state, u, dt) {
     if (u.unloadTicks > 0) return;
     u.unloadTicks = 0;
     creditDeposit(state, u);
+    dockRepair(state, u);
     leaveDock(state, u);
   }
+}
+
+/** DOCK REPAIR [MM-story_mwel9hhv_b]: an unload that lands patches the truck up by HARVESTER_DOCK_REPAIR_FRAC of its
+ *  max HP (capped). A full-health truck gets nothing and emits nothing. */
+export function dockRepair(state, u) {
+  if (!(u.hp > 0) || !(u.maxHp > 0) || u.hp >= u.maxHp) return 0;
+  const before = u.hp;
+  u.hp = Math.min(u.maxHp, u.hp + u.maxHp * HARVESTER_DOCK_REPAIR_FRAC);
+  const amount = u.hp - before;
+  emitEvent(state, { type: 'harvesterRepair', tick: state.tick, id: u.id, amount, hp: u.hp, maxHp: u.maxHp, pos: { x: u.pos.x, y: u.pos.y } });
+  return amount;
 }
 
 /** Gold a load is worth on delivery (yield applied, floored) — the value unloadStart promises and
