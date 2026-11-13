@@ -25,6 +25,7 @@ import { resourceId, resourceIconHtml } from '../data/resourceIcons.js';
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import { errorReportsRow } from '../diag/reportPanel.js';
 import { qualityRow } from './qualityRow.js';
+import { planetNebula } from './planetNebula.js';
 import { loadSave, updateSave, buyTech, refundTech, takePendingRewards, markSeen, totalStars, bankOf } from '../save/save.js';
 import { needsIntro, resumeBeat, acceptFirstContract, markLaunched, collectiveOf } from '../save/collective.js';
 import { setChannelVolume, getChannelVolume, isMuted, setMuted, onAudioChange } from '../comm/voice.js';
@@ -125,6 +126,7 @@ const CSS = `
 /* LIVE 3D (menuStage.js): one canvas over the menu draws into the [data-globe] / [data-craft] / [data-res] boxes */
 .bwm-gl { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; z-index:6; }
 .bwm-root.space { background:
+    var(--nebula, none),   /* the planet on screen's own nebula (planetNebula.js) [MM-story_mwem2l4j_4] */
     radial-gradient(70% 60% at 30% 45%, rgba(40,60,90,.18), transparent 70%),
     var(--stars, none), linear-gradient(160deg,#07090c 0%, #0c1016 60%, #07090c 100%); }
 .bwm-globe { position:relative; aspect-ratio:1/1; touch-action:none; }
@@ -947,6 +949,7 @@ export function createMenu(mountEl, cbs) {
     if (screen === 'settings') { errRow.sync(); if (qRow) qRow.sync(); }   // the count is fresh each time SETTINGS opens
     survey.style.display = screen === 'survey' ? 'grid' : 'none';
     root.classList.toggle('space', screen === 'main' || screen === 'survey' || overlay);
+    root.style.setProperty('--nebula', planetNebula(screen === 'survey' ? (surveyKey || targetKey()) : targetKey()));   // its own nebula [MM-story_mwem2l4j_4]
     for (const b of root.querySelectorAll('[data-globe]')) markSurvey(b);   // a portal bought since the last show opens a planet
     current = screen;
     syncStage();
