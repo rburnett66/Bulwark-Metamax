@@ -176,9 +176,9 @@
   "lods": {
    "flat": {
     "file": "cargo_cube_flat.glb",
-    "tris": 72,
+    "tris": 132,
     "meshes": 1,
-    "bytes": 6836
+    "bytes": 11516
    },
    "tex": {
     "file": "cargo_cube_tex.glb",
@@ -205,9 +205,9 @@
   "lods": {
    "flat": {
     "file": "cargo_lift_flat.glb",
-    "tris": 376,
+    "tris": 496,
     "meshes": 3,
-    "bytes": 30084
+    "bytes": 39084
    },
    "tex": {
     "file": "cargo_lift_tex.glb",

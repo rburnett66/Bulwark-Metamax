@@ -21,7 +21,13 @@ def cube(prefix, center, P, detail, side=S):
         for sx in (-1, 1):
             for sy in (-1, 1):
                 box(f"{prefix}__edge_{sx}{sy}", (x + sx * h * 0.93, y + sy * h * 0.93, zc), (side * 0.1, side * 0.1, side * 0.98), P["hazard"])
-        box(f"{prefix}__plate", (x, y - h * 0.985, zc), (side * 0.5, side * 0.02, side * 0.5), P["dark"])
+        # the light steel side panels and lid the textured cube shows (all gunmetal read near-black in the game)
+        for ax, sgn in (("x", -1), ("x", 1), ("y", -1), ("y", 1)):
+            px, py = (x + sgn * h * 0.985, y) if ax == "x" else (x, y + sgn * h * 0.985)
+            size = (side * 0.02, side * 0.7, side * 0.7) if ax == "x" else (side * 0.7, side * 0.02, side * 0.7)
+            box(f"{prefix}__panel_{ax}{sgn}", (px, py, zc), size, P["steel"])
+        box(f"{prefix}__lid", (x, y, z + side * 0.985), (side * 0.7, side * 0.7, side * 0.03), P["steel"])
+        box(f"{prefix}__plate", (x, y - h * 1.0, zc - side * 0.26), (side * 0.3, side * 0.01, side * 0.1), P["hazard"])
         return
     stripes = mat_stripes(scale=18)
     for sx in (-1, 1):

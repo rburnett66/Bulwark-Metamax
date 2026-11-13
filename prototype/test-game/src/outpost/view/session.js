@@ -24,6 +24,7 @@ import { noteRapportEvent, captainOf } from '../../save/standings.js';
 import { structureDef, OUTPOST, OUTPOST_TECH_IDS } from '../../data/outpost.js';
 import { raidHookFor } from './raidSeam.js';
 import { migrateOutpostLayout, LAYOUT_VERSION } from '../siting.js';
+import { accrueDecor } from '../decor.js';
 import { awayReportModel } from './awayReport.js';
 import { trample, placePlot, placeFarmBuilding, prep, plant, harvest, harvestAll, applyFarmLoss } from '../../farm/model.js';
 // the FARM tab (story A7): the farm's actions run through this same session, on the same save and settle (owner rule 7)
@@ -133,6 +134,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
     if (!o) return null;
     const r = advance(o, now, ctxFor(s, now));
     s.outposts[planet] = r.outpost;
+    accrueDecor(r.outpost, map);   // 2 decor pieces for each new structure / plot; an old save gets its decor once
     bankRaidLoss(s, planet, r.report);
     bankRaidBounty(s, r.report);
     return r.report;
