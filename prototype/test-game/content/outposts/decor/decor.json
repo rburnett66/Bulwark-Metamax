@@ -1,0 +1,221 @@
+{
+ "water_tank": {
+  "label": "Water tank",
+  "class": "small",
+  "footprint": [
+   0.162,
+   0.129
+  ],
+  "height": 0.231,
+  "nodes": [
+   "base"
+  ],
+  "lods": {
+   "flat": {
+    "file": "water_tank_flat.glb",
+    "tris": 144,
+    "meshes": 1,
+    "bytes": 11136
+   },
+   "tex": {
+    "file": "water_tank_tex.glb",
+    "tris": 452,
+    "meshes": 1,
+    "bytes": 38652
+   }
+  },
+  "ref": "Design/water-tank.png"
+ },
+ "antenna": {
+  "label": "Antenna mast",
+  "class": "small",
+  "footprint": [
+   0.103,
+   0.105
+  ],
+  "height": 0.378,
+  "nodes": [
+   "base"
+  ],
+  "lods": {
+   "flat": {
+    "file": "antenna_flat.glb",
+    "tris": 108,
+    "meshes": 1,
+    "bytes": 8740
+   },
+   "tex": {
+    "file": "antenna_tex.glb",
+    "tris": 492,
+    "meshes": 1,
+    "bytes": 39668
+   }
+  },
+  "ref": "Design/antenna.png"
+ },
+ "chemical_drum": {
+  "label": "Chemical drum: fuel JP-8 / F-76",
+  "class": "small",
+  "footprint": [
+   0.148,
+   0.155
+  ],
+  "height": 0.242,
+  "nodes": [
+   "base",
+   "drum"
+  ],
+  "lods": {
+   "flat": {
+    "file": "chemical_drum_flat.glb",
+    "tris": 108,
+    "meshes": 2,
+    "bytes": 9168
+   },
+   "tex": {
+    "file": "chemical_drum_tex.glb",
+    "tris": 672,
+    "meshes": 2,
+    "bytes": 51792
+   }
+  },
+  "ref": "Design/chemical-drum.png"
+ },
+ "road_signs": {
+  "label": "Road sign post",
+  "class": "small",
+  "footprint": [
+   0.243,
+   0.075
+  ],
+  "height": 0.38,
+  "nodes": [
+   "base"
+  ],
+  "lods": {
+   "flat": {
+    "file": "road_signs_flat.glb",
+    "tris": 80,
+    "meshes": 1,
+    "bytes": 7068
+   },
+   "tex": {
+    "file": "road_signs_tex.glb",
+    "tris": 304,
+    "meshes": 1,
+    "bytes": 30688
+   }
+  },
+  "ref": "Design/road-signs.png"
+ },
+ "supply_shelf": {
+  "label": "Supply shelf",
+  "class": "small",
+  "footprint": [
+   0.3,
+   0.112
+  ],
+  "height": 0.425,
+  "nodes": [
+   "base"
+  ],
+  "lods": {
+   "flat": {
+    "file": "supply_shelf_flat.glb",
+    "tris": 156,
+    "meshes": 1,
+    "bytes": 13376
+   },
+   "tex": {
+    "file": "supply_shelf_tex.glb",
+    "tris": 496,
+    "meshes": 1,
+    "bytes": 42296
+   }
+  },
+  "ref": "Design/supply-shelf.png"
+ },
+ "supplies": {
+  "label": "Supply crate stack",
+  "class": "large",
+  "footprint": [
+   0.476,
+   0.292
+  ],
+  "height": 0.275,
+  "nodes": [
+   "base"
+  ],
+  "lods": {
+   "flat": {
+    "file": "supplies_flat.glb",
+    "tris": 84,
+    "meshes": 1,
+    "bytes": 7748
+   },
+   "tex": {
+    "file": "supplies_tex.glb",
+    "tris": 712,
+    "meshes": 1,
+    "bytes": 96324
+   }
+  },
+  "ref": "Design/supplies.png"
+ },
+ "cargo_cube": {
+  "label": "Heavy cargo cube OC-47",
+  "class": "large",
+  "footprint": [
+   0.589,
+   0.589
+  ],
+  "height": 0.588,
+  "nodes": [
+   "cube"
+  ],
+  "lods": {
+   "flat": {
+    "file": "cargo_cube_flat.glb",
+    "tris": 72,
+    "meshes": 1,
+    "bytes": 6836
+   },
+   "tex": {
+    "file": "cargo_cube_tex.glb",
+    "tris": 432,
+    "meshes": 1,
+    "bytes": 81616
+   }
+  },
+  "ref": "Design/cargo-cube.png"
+ },
+ "cargo_lift": {
+  "label": "Cargo lift: the farm's cube transport (2 cubes)",
+  "class": "lift",
+  "footprint": [
+   0.663,
+   1.7
+  ],
+  "height": 0.474,
+  "nodes": [
+   "base",
+   "cube_a",
+   "cube_b"
+  ],
+  "lods": {
+   "flat": {
+    "file": "cargo_lift_flat.glb",
+    "tris": 376,
+    "meshes": 3,
+    "bytes": 30084
+   },
+   "tex": {
+    "file": "cargo_lift_tex.glb",
+    "tris": 1844,
+    "meshes": 3,
+    "bytes": 182844
+   }
+  },
+  "ref": "Design/cargo-lift.png"
+ }
+}

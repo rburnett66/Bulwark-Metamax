@@ -59,6 +59,22 @@ Scene budget (the whole base):
 - **No shadows from small decor** (it would cost a shadow-map draw each); large decor and the lift cast into the static
   shadow map like the buildings. The moving lift uses the planar shadow (`models3d.shadowMaterial`), as walkers do.
 
+
+### Built (2026-11-13, Blender 5.2.3, `tools/blender/outposts/decor/`)
+
+| Model | Class | Size (cells) | Flat | Textured |
+|---|---|---|---|---|
+| water_tank | small | 0.16 × 0.13 × 0.23 | 144 tris · 10 KB | 452 tris · 37 KB |
+| antenna | small | 0.10 × 0.10 × 0.38 | 108 tris · 8 KB | 492 tris · 38 KB |
+| chemical_drum | small | 0.15 × 0.15 × 0.24 | 108 tris · 8 KB | 672 tris · 50 KB |
+| road_signs | small | 0.24 × 0.07 × 0.38 | 80 tris · 6 KB | 304 tris · 29 KB |
+| supply_shelf | small | 0.30 × 0.11 × 0.42 | 156 tris · 13 KB | 496 tris · 41 KB |
+| supplies | large | 0.48 × 0.29 × 0.28 | 84 tris · 7 KB | 712 tris · 94 KB |
+| cargo_cube | large | 0.59 × 0.59 × 0.59 | 72 tris · 6 KB | 432 tris · 79 KB |
+| cargo_lift | lift | 0.66 × 1.70 × 0.47 | 376 tris · 29 KB | 1844 tris · 178 KB |
+
+All 16 files: 642 KB (budget 1.5 MB). Held to the budget by `src/render3d/outposts/decorBudget.test.mjs`.
+
 ## 3. Decor placement
 
 - **When:** each time a structure is built or a plot is laid, **2 decor pieces** are added to the outpost record
