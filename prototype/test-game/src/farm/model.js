@@ -200,13 +200,23 @@ export function siloReady(o, map) {
   return ids.find((id) => powered.has(id)) || null;
 }
 
+/** The finished, powered Silos — each holds Silo_Hours of the farm's output [MM-story_mwf8bjo0_4]. */
+export function silosReady(o, map) {
+  const ids = Object.keys((o.farm && o.farm.buildings) || {}).filter((id) => o.farm.buildings[id].kind === 'silo' && finished(o.farm.buildings[id], o.t));
+  if (!ids.length) return 0;
+  const { powered } = powerGrids(o, map);
+  return ids.filter((id) => powered.has(id)).length;
+}
 /**
- * How many units the farm can hold: Silo_Hours of its output with a finished, powered Silo, else
+ * How many units the farm can hold: Silo_Hours of its output for each finished, powered Silo, else
  * Farmhouse_Store_Hours of it; never less than the largest single harvest on the farm (at least one Traditional plot of
  * Loam Grain), so an empty store always takes one harvest.
  */
 export function storeCapacity(o, map) {
-  const hours = siloReady(o, map) ? FARM.Silo_Hours : FARM.Farmhouse_Store_Hours;
+  // owner 2026-11-13: "My silo was full so I built a second silo, and it filled immediately .. is that a bug" / "silo
+  // capacity should be doubled": every Silo adds its own Silo_Hours (two Silos hold twice one) [MM-story_mwf8bjo0_4]
+  const silos = silosReady(o, map);
+  const hours = silos ? FARM.Silo_Hours * silos : FARM.Farmhouse_Store_Hours;
   let one = yieldOf('loam-grain', 'traditional', 1);
   for (const p of Object.values((o.farm && o.farm.plots) || {})) if (p.crop) one = Math.max(one, plotYield(p));
   return Math.max(Math.ceil(hours * outputPerHour(o)), one);

@@ -163,6 +163,16 @@ test('the Silo: a finished, powered Silo holds Silo_Hours of output; without one
   const g = powerGrids(o, map);
   assert.ok(g.powered.has(b.id), 'the Silo is a consumer on the outpost\'s own grid');
   assert.equal(storeCapacity(o, map), Math.ceil(FARM.Silo_Hours * out));
+  // owner 2026-11-13 [MM-story_mwf8bjo0_4]: "I built a second silo, and it filled immediately" / "silo capacity should be
+  // doubled" — a second powered Silo holds as much again
+  const s2 = nearPower(o, 2, 2);
+  const b2 = placeFarmBuilding(o, { kind: 'silo', ...s2 }, { map, now: o.t, gold: 1e9 });
+  assert.ok(b2.outpost, String(b2.error));
+  const building = b2.outpost;
+  assert.equal(storeCapacity(building, map), Math.ceil(FARM.Silo_Hours * out), 'not until it is finished');
+  o = go(building, o.t + 10 * MIN);
+  assert.ok(powerGrids(o, map).powered.has(b2.id), 'the second Silo is powered');
+  assert.equal(storeCapacity(o, map), Math.ceil(2 * FARM.Silo_Hours * out), 'two Silos hold twice one');
 });
 
 test('Irrigated grows 1.5× with water in reach: a powered Pump or a natural water cell; without water it grows as Traditional', () => {

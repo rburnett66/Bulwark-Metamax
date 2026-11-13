@@ -325,9 +325,18 @@ export function startSell(state, structureId) {
 export function requestRepair(state, structureId) {
   const s = state.structures.get(structureId);
   if (!s) return false;
-  if (s.lifecycle !== 'Damaged' && s.lifecycle !== 'Complete') return false;
+  // a kept wreck (state.keepWreck, the outpost's opt-in) is repaired too: the bot rebuilds it to full and it fights again
+  const wreck = s.lifecycle === 'Wrecked' && typeof state.keepWreck === 'function';
+  if (s.lifecycle !== 'Damaged' && s.lifecycle !== 'Complete' && !wreck) return false;
   if (s.hp >= s.maxHp) return false;
   if (s.repairPending) return false;
+  // a mode's repair price (the outpost's, outpost/liveSim.js repairPriceOf) [MM-story_mwf7z51a_3]: paid when the bot
+  // leaves the base; null = this structure is not repaired. A battle sets none: its repairs are free, as they were.
+  if (typeof state.repairPrice === 'function') {
+    const price = state.repairPrice(s);
+    if (price == null) return false;
+    if (price > 0 && !spend(state, price, 'repair:' + s.structId)) return false;
+  }
 
   const map = getMap(state);
   const basePos = { x: map.base.x, y: map.base.y };
@@ -446,7 +455,7 @@ export function stepStructures(state, dt) {
       // OPT-IN WRECKS [MM-story_mwcrfnyf_3c]: a state whose owner asks (state.keepWreck(s) — the outpost's live state,
       // outpost/liveSim.js; a battle never sets it) keeps the structure as an inert 'Wrecked' hulk at 0 HP instead of
       // removing it: drawn and smoking, but it blocks no walker (pathfinding.js), is never targeted (hp 0), never fires,
-      // cannot be sold, upgraded or repaired here (the outpost repairs wrecks through its own save rules).
+      // cannot be sold or upgraded; a repair bot (requestRepair) rebuilds it [MM-story_mwf7z51a_3].
       if (state.keepWreck && state.keepWreck(s)) { s.lifecycle = 'Wrecked'; s.hp = 0; s.targetId = null; s.progress = 0; pathDirty = true; }
       else toRemove.push(s);
     }
@@ -509,6 +518,7 @@ export function stepStructures(state, dt) {
       if (target.hp >= target.maxHp) {
         target.hp = target.maxHp;
         if (target.lifecycle === 'Damaged') target.lifecycle = 'Complete';
+        if (target.lifecycle === 'Wrecked') { target.lifecycle = 'Complete'; target.targetId = null; pathDirty = true; }   // whole again: it blocks and fights
         target.repairPending = false;
         state.units.delete(u.id);
         emitEvent(state, { type: 'build', tick: state.tick, id: target.id, structId: target.structId, phase: 'repaired' });

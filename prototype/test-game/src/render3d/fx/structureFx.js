@@ -34,6 +34,12 @@ export const DAMAGE_SMOKE = Object.freeze({
   count: 1, size: 0.13, speed: Object.freeze([0.35, 0.65]), drag: 0.5, spread: 0.14, rise: 0.05,
   life: Object.freeze([2.6, 3.8]), grow: 1.8, shade: 0.4,   // mid grey, ~1 world unit wide at the top (impactsView: smoke at 0.55 alpha)
 });
+/**
+ * SELLING (owner 2026-11-13 [MM-story_mwf950rz_7]: "when we sell a tower then should be four red sparklers at the same
+ * time as the workers tear down the structure"): four red sparklers at once, one at each corner of the structure, for
+ * the whole teardown — the welder's spray (emitWeldSpark) in the damage tint, each at the build weld's rate.
+ */
+export const SELL_SPARKLERS = 4;
 const WELDING = new Set(['Building', 'Upgrading']);
 const STANDING = new Set(['Complete', 'Damaged', 'Active', 'Wrecked']);
 
@@ -58,6 +64,14 @@ export function createStructureFx({ seed = 41 } = {}) {
     const hy = Math.max(w, h) > 1 ? WELD_HEIGHT.large : WELD_HEIGHT.small;
     return { x: cx + dx * 0.32 * w, z: cz + dz * 0.32 * h, y: hy[0] + (hy[1] - hy[0]) * rnd(), dx, dz, age: 0, carry: 0, smoke: 0, mode };
   }
+  /** Sparkler i of a structure being sold: at corner i (45°, 135°, …), a little jitter, a random height. */
+  function sellPoint(s, i) {
+    const fp = s.footprint || {}, w = fp.w || 1, h = fp.h || 1;
+    const cx = cellToWorld(s.pos.x + (w - 1) / 2), cz = cellToWorld(s.pos.y + (h - 1) / 2);
+    const ang = Math.PI / 4 + i * (Math.PI / 2) + jit() * 0.4, dx = Math.cos(ang), dz = Math.sin(ang);
+    const hy = Math.max(w, h) > 1 ? WELD_HEIGHT.large : WELD_HEIGHT.small;
+    return { x: cx + dx * 0.4 * w, z: cz + dz * 0.4 * h, y: hy[0] + (hy[1] - hy[0]) * rnd(), dx, dz, age: 0, carry: rnd(), smoke: 0, mode: 'sell' };
+  }
   /** `rate` sparks a second in `tint` off point p, and the arc flicker. → sparks emitted */
   function spray(p, d, rate, tint, emit, K) {
     let n = 0;
@@ -70,16 +84,28 @@ export function createStructureFx({ seed = 41 } = {}) {
   return {
     /**
      * Emit this frame's welding and damage FX for `state.structures`. emit = impacts.emit, K = impacts' kinds,
-     * tierKey = 'high' | 'standard' | 'low'. → { weld, damage, smoke } emitted.
+     * tierKey = 'high' | 'standard' | 'low'. → { weld, damage, smoke, sell, sparklers } emitted / lit this frame.
      */
     step(dt, state, emit, K, tierKey = 'high') {
-      const out = { weld: 0, damage: 0, smoke: 0 };
+      const out = { weld: 0, damage: 0, smoke: 0, sell: 0, sparklers: 0 };
       if (!state || !state.structures || !emit) return out;
       const q = BUILD_TIER[tierKey] ?? 1;
       const d = Math.max(0, Math.min(0.1, dt || 0));
       const live = new Set();
       for (const s of fxStructures(state)) {
         if (!s || !s.pos) continue;
+        if (s.lifecycle === 'Selling') {   // the teardown: four red sparklers at once
+          for (let i = 0; i < SELL_SPARKLERS; i++) {
+            const key = s.id + ':sell' + i;
+            live.add(key);
+            let p = points.get(key);
+            if (p) p.age += d;
+            if (!p || p.age >= WELD_CYCLE) { p = sellPoint(s, i); points.set(key, p); }
+            out.sell += spray(p, d, REPAIR_FX.rate * q, SPARK_TINT.damage, emit, K);
+            out.sparklers++;
+          }
+          continue;
+        }
         const welding = WELDING.has(s.lifecycle), dmg = welding ? 0 : damageOf(s);
         if (!welding && !(dmg > 0)) continue;
         const mode = welding ? 'weld' : 'damage';

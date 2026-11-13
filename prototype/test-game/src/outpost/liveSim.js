@@ -29,10 +29,11 @@
  */
 import { createSim } from '../sim/core.js';
 import { createStructure } from '../sim/entities.js';
+import { requestRepair } from '../sim/structures.js';
 import { buildNavGrid } from '../sim/pathfinding.js';
 import { getStructureDef } from '../data/tables.js';
 import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../data/outpostStructures.js';
-import { structureDef, surfaceResource, surfaceStock } from '../data/outpost.js';
+import { structureDef, surfaceResource, surfaceStock, OUTPOST } from '../data/outpost.js';
 import { buildingRect, surfaceFieldGroups, fieldStock, harvestPlan, resourceBayPad, powerGrids, hopperUnits, hopperCap, upgradeRefusal, rigExtraction } from './model.js';
 import { resourceNode, spawnHarvester, initContract } from '../sim/harvest.js';
 import { raidSimMap } from './raid.js';
@@ -45,6 +46,34 @@ const isBuilding = (kind) => OUTPOST_BUILDING_KINDS.includes(kind);
 const progressOf = (since, done, now) => (done > since ? clamp01((now - since) / (done - since)) : 1);
 const doneAt = (since, done, progress, now) => Math.round(now + (1 - progress) * (done - since));
 const sinceOf = (done, ms) => done - ms;   // a pad job records only `done`; its start is `done − its Build_Sec`
+
+/**
+ * REPAIRS are the battle's repair bot (owner 2026-11-13 [MM-story_mwf7z51a_3]: "Repairs on the outpost should work like
+ * they do in tower defense, small bot roams form base to toweer to do repairs"): sim/structures.js requestRepair sends
+ * it walking from the base; it welds the defense (a wreck too) back to full. The outpost's price (model.repairCost: Value
+ * × Repair_Share_Per_HP × the share of HP missing) is paid when it leaves (state.repairPrice). A building is not repaired.
+ */
+export function repairPriceOf(s, params = OUTPOST) {
+  let def = null;
+  try { def = getStructureDef(s.structId); } catch (e) { return null; }
+  const kind = def && def.outpostKind;
+  if (!kind || isBuilding(kind)) return null;
+  const sd = structureDef(kind, s.tier);
+  if (!sd) return null;
+  return Math.ceil(sd.value * params.Repair_Share_Per_HP * (1 - Math.max(0, s.hp) / s.maxHp));
+}
+/** The ms a repair under way still needs: its bot's walk left, then the welding left (structures.js: full HP in buildTime). */
+function repairLeftMs(state, s) {
+  let def = null;
+  try { def = getStructureDef(s.structId); } catch (e) { return 0; }
+  const dur = def.buildTime > 0 ? def.buildTime : 3;
+  let walk = 0;
+  for (const u of state.units.values()) {
+    if (!u.isRepairTroop || u.repairTargetId !== s.id || u.state !== 'repairMarch') continue;
+    walk = Math.hypot(s.pos.x - u.pos.x, s.pos.y - u.pos.y) / (u.speed || 1.5);
+  }
+  return Math.round(1000 * (walk + dur * (1 - Math.max(0, s.hp) / s.maxHp)));
+}
 
 /** sim/structures.js opt-in: an outpost DEFENSE the raid destroys stays as a wreck; a building is gone (as fromLiveSim saves). */
 function keepDefenseWreck(s) {
@@ -120,11 +149,12 @@ export function toLiveSim(outpost, { map, now, gold = 0, unlocks = null, techOwn
   // sparking (render3d/fx/structureFx.js), but it blocks no raider, is never targeted, never fires and draws no power
   // in the sim — as a raid treats it. A defense a raid destroys during the visit becomes one the same tick
   // (state.keepWreck), so it is in the save as a wreck, never lost between two reads [MM-story_mwcrfnyf_3c].
-  const wrecks = [];
+  const wrecks = [], repairsPaid = [];
   state.keepWreck = keepDefenseWreck;
   for (const d of outpost.defenses) {
-    const { id, kind, tier, cell, hp, building, selling, ...extra } = d;
+    const { id, kind, tier, cell, hp, building, selling, repair: paid, ...extra } = d;
     const s = addStructure(state, kind, cell, tier);
+    if (paid) repairsPaid.push(s);
     if (!(hp > 0)) {
       wrecks.push(d);
       s.hp = 0; s.lifecycle = 'Wrecked';
@@ -140,6 +170,10 @@ export function toLiveSim(outpost, { map, now, gold = 0, unlocks = null, techOwn
     ids.set(s.id, { defense: id, extra, building, selling, upgrading: u });
   }
   state.navGrid = buildNavGrid(state.map, Array.from(state.structures.values()));
+  // a repair already paid for (one under way when the last visit ended, or one the save still runs) walks out again,
+  // free; then every new repair has the outpost's price
+  for (const s of repairsPaid) requestRepair(state, s.id);
+  state.repairPrice = (s) => repairPriceOf(s);
   Object.assign(link, { ids, wrecks, harvest: seedHarvest(state, outpost, map) });
   return { state, link };
 }
@@ -340,6 +374,7 @@ export function fromLiveSim(state, link, now, where = new Map()) {
       if (!isBuilding(kind)) {
         const id = e ? e.defense : `d${nextDefense++}`;
         const wreck = { id, kind, tier: s.tier, cell: [s.pos.x, s.pos.y], hp: 0, ...(e ? e.extra : {}) };
+        if (s.repairPending) wreck.repair = { at: now, arrive: now, done: now + repairLeftMs(state, s) };   // paid: the save finishes it
         if (e) defenses.set(id, wreck); else newDefenses.push(wreck);
       }
       continue;
@@ -366,6 +401,8 @@ export function fromLiveSim(state, link, now, where = new Map()) {
     const id = e ? e.defense : `d${nextDefense++}`;
     where.set(s.id, { defense: id });
     const d = { id, kind, tier: s.tier, cell: [s.pos.x, s.pos.y], hp: s.hp, ...(e ? e.extra : {}) };
+    // a repair bot at work: paid, so the save carries it (model.advance finishes it at done; the next visit walks it out again)
+    if (s.repairPending && s.hp < s.maxHp) d.repair = { at: now, arrive: now, done: now + repairLeftMs(state, s) };
     if (s.lifecycle === 'Building') {
       const b = (e && e.building) || { since: now, done: now + def.buildTime * 1000 };
       d.building = { since: b.since, done: doneAt(b.since, b.done, s.progress, now) };
