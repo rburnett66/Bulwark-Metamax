@@ -6,7 +6,7 @@
  * tier, rate, the deep / shallow switch on a rig, upgrade). Pure: reads the outpost through src/outpost/model.js; the
  * DOM lives in hud.js.
  */
-import { harvesterRefusal, powerGrids, loadsReady, bayCapacity, rigRatePerMin, repairCost, depositAt, buildingRect, onlineProblems, harvestPlan, hopperCap, hopperUnits,
+import { unlitChains, harvesterRefusal, powerGrids, loadsReady, bayCapacity, rigRatePerMin, repairCost, depositAt, buildingRect, onlineProblems, harvestPlan, hopperCap, hopperUnits,
   gunCount, gunCap, defenseUpgradeRefusal, harvesterCap, raidWarning, upgradeBayReady, steadyHarvest, fieldStock, surfaceFieldGroups , sellStructureQuote,
   outpostSize, raidChance } from '../model.js';
 import { structureDef, maxTier, DEFENSE_KINDS, OUTPOST, OUTPOST_TECH, harvesterDef } from '../../data/outpost.js';
@@ -181,6 +181,7 @@ export function panelModel(o, map, sel, ctx = {}) {
   if (!b) { status = `Building · ${fmtClock((job.done - now) / 1000)}`; tone = 'busy'; }
   else if (job) { status = `Upgrading to ${ROMAN[job.tier]} · ${fmtClock((job.done - now) / 1000)}`; tone = 'busy'; }
   else if (off[pad.id]) { status = noPowerStatus(o, map, pad.id, off[pad.id]); tone = 'off'; }
+  else if (unlinkedPylonStatus(o, map, pad.id)) { status = unlinkedPylonStatus(o, map, pad.id); tone = 'off'; }
   // offline is not unpowered (owner 2026-11-12: "the base is acting like it is under powered"): a powered building
   // works offline — a rig mines (model.runningRigs) — so say it runs, and that the outpost itself is offline
   else if (!o.online) { status = kind === 'rig' ? 'Mining · outpost offline' : kind === 'power' ? 'Supplying · outpost offline' : 'Powered · outpost offline'; tone = 'warn'; }
@@ -275,11 +276,36 @@ function upgradeBlock(o, def, ctx) {
  * model.powerGrids links nodes only within reach), so a Pylon between them is the fix.
  */
 export function noPowerStatus(o, map, padId, why) {
-  if (why === 'reach') return 'No power: out of reach of a station';
+  if (why === 'reach') {
+    // owner 2026-11-12: "shows out of reach of power, but it is sitting right next to a valid pylon" — the pylon in reach
+    // is linked to no Power Station, so it carries nothing; say so, not "out of reach" [MM-story_mwefibdv_i]
+    return unlitPylonInReach(o, map, padId) ? 'No power: the Pylon here is not linked to a Power Station' : 'No power: out of reach of a station';
+  }
   const b = o.pads[padId], need = b ? (structureDef(b.kind, b.tier) || {}).draw || 0 : 0;
   // serveGrids is greedy: this building's own grid ended with less spare than it draws, so a grid with that spare is another
   const spare = powerGrids(o, map).grids.some((g) => g.supply - g.draw >= need);
   return spare ? 'No power: grid short · another station has spare but is not linked (add a Pylon)' : 'No power: grid short';
+}
+const rectCentre = (r) => [r.x + r.w / 2, r.y + r.h / 2];
+/** Is building `padId` within reach of a pylon whose chain no Power Station links (model.unlitChains)? */
+function unlitPylonInReach(o, map, padId) {
+  const r = buildingRect(o, map, padId);
+  if (!r) return false;
+  const at = rectCentre(r);
+  return unlitChains(o, map).some((ch) => ch.nodes.some((id) => {
+    const q = buildingRect(o, map, id), b = o.pads[id];
+    if (!q || !b) return false;
+    const c = rectCentre(q);
+    return Math.hypot(c[0] - at[0], c[1] - at[1]) <= (structureDef(b.kind, b.tier) || {}).reach;
+  }));
+}
+/** A Pylon linked to no Power Station (it draws nothing, so the grid never marks it off): its status. → text | null */
+export function unlinkedPylonStatus(o, map, padId) {
+  const b = o.pads[padId];
+  if (!b || b.kind !== 'pylon') return null;
+  if (!unlitChains(o, map).some((ch) => ch.nodes.includes(padId))) return null;
+  const reach = Math.max((structureDef('power', 1) || {}).reach || 0, (structureDef('pylon', b.tier) || {}).reach || 0);
+  return `Not linked: no Power Station or linked Pylon within ${reach} cells`;
 }
 function powerGridOf(o, map, stationPad) {
   return powerGrids(o, map).grids.find((g) => g.stations.includes(stationPad)) || null;
