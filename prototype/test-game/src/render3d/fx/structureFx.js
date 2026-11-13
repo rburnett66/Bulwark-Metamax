@@ -20,7 +20,7 @@
  */
 import { cellToWorld } from '../camera.js';
 import { REPAIR_FX, SPARK_TINT, emitWeldSpark } from './repairFx.js';
-import { BUILD_TIER } from './buildFx.js';
+import { BUILD_TIER, fxStructures } from './buildFx.js';
 import { emitMuzzleSmoke } from './muzzleSmoke.js';
 
 export const WELD_CYCLE = 4;   // seconds a weld (or damage) point holds before it moves on
@@ -78,7 +78,7 @@ export function createStructureFx({ seed = 41 } = {}) {
       const q = BUILD_TIER[tierKey] ?? 1;
       const d = Math.max(0, Math.min(0.1, dt || 0));
       const live = new Set();
-      for (const s of state.structures.values()) {
+      for (const s of fxStructures(state)) {
         if (!s || !s.pos) continue;
         const welding = WELDING.has(s.lifecycle), dmg = welding ? 0 : damageOf(s);
         if (!welding && !(dmg > 0)) continue;

@@ -176,6 +176,22 @@ export function outputPerHour(o) {
   return u;
 }
 
+/**
+ * The farm buildings under construction at `now`, as build sites for the battle's construction dust and welding sparks
+ * (render3d/fx/buildFx.js fxStructures; owner 2026-11-13 [MM-story_mwf8eikt_5]: "when outpost buildings are constructed
+ * they should have dust clouds and sparks"). → [{ id, pos, footprint, lifecycle: 'Building', progress }]
+ */
+export function farmBuildSites(o, now) {
+  const out = [];
+  for (const [id, b] of Object.entries((o && o.farm && o.farm.buildings) || {})) {
+    if (!(b.done > now)) continue;
+    const ms = ((farmBuildingOf(b.kind) || {}).buildSec || 0) * 1000;
+    const progress = ms > 0 ? Math.max(0, Math.min(1, 1 - (b.done - now) / ms)) : 0;
+    out.push({ id: 'farm:' + id, pos: { x: b.x, y: b.y }, footprint: { w: b.w, h: b.h }, lifecycle: 'Building', progress });
+  }
+  return out;
+}
+
 /** The finished, powered Silo, or null. */
 export function siloReady(o, map) {
   const ids = Object.keys((o.farm && o.farm.buildings) || {}).filter((id) => o.farm.buildings[id].kind === 'silo' && finished(o.farm.buildings[id], o.t));

@@ -65,7 +65,7 @@ import { cropOf } from '../../data/farm.js';
 import { hasFarm } from '../../farm/contract.js';
 import { farmRailTab, farmGateReason, farmRailLocks, farmGroundRule, farmThingAt, grownFarm, farmRailLabel } from '../../farm/farmRail.js';
 import { farmPanelModel, farmRailGlyph } from '../../farm/view/farmUi.js';
-import { storeCapacity } from '../../farm/model.js';
+import { storeCapacity, farmBuildSites } from '../../farm/model.js';
 import { createFarmLayer } from '../../farm/view/farmLayer.js';
 import { createFarmEmbers } from '../../farm/view/embers.js';
 import { createFarmCrew } from '../../farm/view/avatar.js';
@@ -221,6 +221,7 @@ async function openSession(opts, opening) {
     live = toLiveSim(outpost, { map, now: t0, gold, unlocks, techOwned });
     sim = live.state;
     sim.placementRules = [...(sim.placementRules || []), lockRule(catalogue)];
+    sim.extraBuildSites = () => farmSites();
     // legal but unpowered → the shared ghost's amber (sim/structures.js placementWarnings → ui.hoverWarn)
     sim.placementWarnings = [...(sim.placementWarnings || []), powerWarning(() => view, map, ghostOf)];
     // the farm's ground (S6): a farm item goes only where the farm model allows it, a crop only on a prepped plot, and an
@@ -230,6 +231,9 @@ async function openSession(opts, opening) {
     raids = outpost.online ? createVisitRaids(sim, { planet, seed: outpost.seed, ...carry }) : null;
   }
   rebuild(opened.outpost, saveSession.gold());
+  // the farm's buildings under construction raise the battle's build dust and welding sparks (render3d/fx/buildFx.js
+  // fxStructures) [MM-story_mwf8eikt_5]; read through `sim` at call time, so it survives every rebuild
+  const farmSites = () => (farmed || (view && view.farm) ? farmBuildSites(farmNow(), nowOf()) : []);
   // the clock the save sees: the arrival time plus the sim's own time (the sim never reads the wall clock)
   const nowOf = () => t0 + Math.round(sim.time * 1000);
   let ui = createUiState();
