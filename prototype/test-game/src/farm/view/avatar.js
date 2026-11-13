@@ -28,6 +28,7 @@ import { buildNavGrid, findWalkerPath } from '../../sim/pathfinding.js';
 import { plotState } from '../model.js';
 import { takenRects } from '../../outpost/model.js';
 import { createQueue, queueStep, queueView, queueIdle } from './avatarQueue.js';
+import { shadowMaterial } from '../../render3d/units/models3d.js';
 
 /** The avatar's height on the surface: 0.45 of a battle cell (D44). */
 export const AVATAR_CELLS = 0.45;
@@ -113,6 +114,9 @@ export function createFarmCrew(THREE, r, { map, board, safe = false, reduced = f
   root.name = 'farm-crew';
   r.scene.add(root);
   let kit = null;
+  const liveShadows = !(r.tier && r.tier.liveShadows === false);
+  let shMatC = null;
+  const shMat = () => shMatC || (shMatC = shadowMaterial(THREE, r.lights.dir, 0.34, { instanced: false, groundY: Y + 0.02 }));
   let o = null, q = createQueue(), avatar = null, hands = [], navSig = '', nav = null, clock = 0, sheltering = false;
 
   function makeWalker(cfg, at, phase) {
@@ -120,7 +124,12 @@ export function createFarmCrew(THREE, r, { map, board, safe = false, reduced = f
     const g = kit.makeChar(cfg);
     g.scale.setScalar(AVATAR_CELLS / RIG_H);
     g.position.set(at.x, Y, at.z);
-    g.traverse((m) => { if (m.isMesh) { m.castShadow = !m.material.transparent; m.receiveShadow = true; } });
+    // Walkers move; the shadow map is static (renders on scene changes only), so a walker baked into it showed no
+    // shadow while walking, or left one behind. They cast the battle units' live planar shadow instead, on the same
+    // quality switch (off on Low) [MM-story_mweijotw_1].
+    const casters = [];
+    g.traverse((m) => { if (m.isMesh) { m.castShadow = false; m.receiveShadow = true; if (!m.material.transparent) casters.push(m); } });
+    if (liveShadows) for (const m of casters) { const s = new THREE.Mesh(m.geometry, shMat()); s.name = 'walker-shadow'; s.renderOrder = 2; s.frustumCulled = false; m.add(s); }
     root.add(g);
     return { g, ud: g.userData, cur: { rax: 0, raz: 0, lax: 0, laz: 0, hx: 0, bx: 0, leg: 0, yaw: 0 }, pose: 'idle', yaw: 0, ph: 0, phase,
       path: null, onArrive: null, hold: 0, then: null };
@@ -251,6 +260,6 @@ export function createFarmCrew(THREE, r, { map, board, safe = false, reduced = f
       if (!o || !o.farm) return [];
       return Object.keys(o.farm.plots).sort((a, b) => +a.slice(1) - +b.slice(1)).filter((id) => { const s = plotState(o, o.farm.plots[id], now); return s === 'fruited' || s === 'dead'; });
     },
-    dispose() { r.scene.remove(root); if (kit) kit.dispose(); },
+    dispose() { r.scene.remove(root); if (kit) kit.dispose(); if (shMatC) shMatC.dispose(); },
   };
 }
