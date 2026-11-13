@@ -173,7 +173,8 @@ CONTRACTS = [
 
 PARAMS = [
     ["Param", "Value", "Unit", "Notes"],
-    ["Prep_Gold", 100, "gold", "prepping a Traditional plot (§5.1); a method's Prep_Mult scales it"],
+    ["Plot_Gold", 100, "gold", "placing a plot, the farm's one gold charge; owner 2026-11-13: 'Charge for dropping the plot, do not charge for prep' [MM-story_mwf605xu_2]"],
+    ["Prep_Gold", 0, "gold", "prepping is free (was 100); owner 2026-11-13: 'Charge for dropping the plot, do not charge for prep' [MM-story_mwf605xu_2]"],
     ["Prep_Sec", 2, "s", "prep time of a Traditional plot (§5.1); owner 2026-11-12: 'farm plot prepping should take 2 seconds'"],
     ["Sprout_At", 0.1, "share", "Planted becomes Sprout at this share of the grow time (§5.1)"],
     ["Plant_At", 0.3, "share", "Sprout becomes Plant at this share of the grow time (§5.1)"],

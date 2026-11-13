@@ -57,7 +57,7 @@ test('the FARM tab: plots, the Silo and Pump, the planet\'s crops; locks for wha
   const crops = ids.filter((id) => id.startsWith('FARM-crop-'));
   assert.ok(crops.includes('FARM-crop-loam-grain') && crops.length >= 4, 'the planet\'s own crops');
   for (const id of ids) { assert.ok(getStructureDef(id), id); assert.ok(farmRailGlyph(id), `${id} has a rail picture`); }
-  assert.equal(getStructureDef('FARM-traditional').cost[0], FARM.Prep_Gold);
+  assert.equal(getStructureDef('FARM-traditional').cost[0], FARM.Plot_Gold);
   assert.equal(getStructureDef('FARM-silo').cost[0], 800);
   const locks = farmRailLocks(s0, { methods: ['traditional'] }, ids);
   assert.match(locks['FARM-irrigated'], /not unlocked/);
@@ -82,7 +82,7 @@ test('the loop through the outpost session: place, prep, plant from the Pod Crat
   let r = ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: spot.cell }, T0);
   assert.ok(r.ok, r.error);
   const plotId = r.farm.placed;
-  assert.equal(r.gold, 20_000 - FARM.Prep_Gold, 'the prep is paid');
+  assert.equal(r.gold, 20_000 - FARM.Plot_Gold, 'the plot is paid');
   const t1 = T0 + FARM.Prep_Sec * 1000;
   r = ses.act({ type: 'plant', plot: plotId, pick: 'loam-grain' }, t1);
   assert.ok(r.ok, r.error);

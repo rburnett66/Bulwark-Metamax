@@ -155,5 +155,12 @@ export function podsBack(c, planted) {
   return c.category === 'Grain' ? Math.max(1, n) : n;
 }
 
+/**
+ * Gold to place a plot (Plot_Gold) — the farm's one gold charge (owner 2026-11-13 [MM-story_mwf605xu_2]: "DONT CHARGE FOR
+ * PLANTING .. the user paid for the seeds by fighting for resources. Charge for dropping the plot, do not charge for
+ * prep. Seeds plant once."). Prep is free (Prep_Gold 0) and planting takes only the pods it plants.
+ */
+export const plotCost = () => ({ gold: num(FARM.Plot_Gold) });
+
 /** Gold to prep one plot of a method (Prep_Gold × the method's Prep_Mult), and the seconds it takes. */
 export const prepCost = (m = 'traditional') => ({ gold: FARM.Prep_Gold * method(m).prepMult, sec: FARM.Prep_Sec * method(m).prepMult });

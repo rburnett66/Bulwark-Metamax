@@ -106,8 +106,25 @@ test('harvest at Fruited: the crop and its units by level, grain pods back, the 
   assert.ok(r.pods.every((p) => !('level' in p) && !p.lucky), 'pods come back as a plain count: no level, no lucky roll (owner rule 9)');
   assert.equal(plotState(r.outpost, r.outpost.farm.plots[id]), 'harvested');
   assert.equal(plotState(ripe, ripe.farm.plots[id]), 'fruited', 'the outpost passed in is unchanged');
-  assert.match(prep(r.outpost, id, { now: r.outpost.t, gold: 0 }).error, /costs 100 gold/);
-  assert.ok(prep(r.outpost, id, { now: r.outpost.t, gold: 100 }).outpost);
+  const again = prep(r.outpost, id, { now: r.outpost.t, gold: 0 });
+  assert.ok(again.outpost && again.cost === 0, 'prepping again is free (owner 2026-11-13)');
+});
+
+// Owner 2026-11-13 [MM-story_mwf605xu_2]: "DONT CHARGE FOR PLANTING .. the user paid for the seeds by fighting for
+// resources. Charge for dropping the plot, do not charge for prep. Seeds plant once."
+test('the plot is the farm’s one gold charge: placing costs Plot_Gold, prep and planting cost no gold', () => {
+  assert.equal(FARM.Plot_Gold, 100);
+  assert.equal(FARM.Prep_Gold, 0);
+  const o = base(), s = freeSpots(o, 1)[0];
+  assert.match(placePlot(o, s, { map, now: T0, gold: FARM.Plot_Gold - 1 }).error, /costs 100 gold/);
+  const r = placePlot(o, s, { map, now: T0, gold: FARM.Plot_Gold });
+  assert.equal(r.cost, FARM.Plot_Gold);
+  assert.ok(r.outpost.farm.plots[r.plot].prepDone > T0, 'the first prep still takes its time');
+  const ready = go(r.outpost, T0 + FARM.Prep_Sec * 1000);
+  const pl = plant(ready, r.plot, { crop: 'loam-grain', level: 1 }, { now: ready.t, podsHeld: 7, map, gold: 0 });
+  assert.ok(pl.outpost, 'planting with no gold');
+  assert.ok(!pl.cost, 'planting charges no gold');
+  assert.equal(pl.outpost.farm.plots[r.plot].plants, 7, 'each pod plants once: 7 pods, 7 plants');
 });
 
 test('Dead gives the same pods back (crop, count) and needs no Silo room', () => {

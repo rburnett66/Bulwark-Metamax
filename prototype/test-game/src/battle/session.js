@@ -376,6 +376,7 @@ export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0,
     destroy() {
       mount3dSeq++;                                         // a mount in flight gives up
       unbindInput();
+      if (hud && hud.destroy) { try { hud.destroy(); } catch (e) { /* already gone */ } }   // its window listeners [MM-story_mwf9ecau_8]
       try { app.ticker.stop(); } catch (e) { /* already stopped */ }
       if (renderer3d && render3dMod) { try { render3dMod.destroyRenderer(renderer3d); } catch (e) { /* already gone */ } }
       renderer3d = null;
