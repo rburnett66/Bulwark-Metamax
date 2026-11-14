@@ -176,11 +176,14 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   mountEl.appendChild(host);
   const banner = makeBanner(mountEl);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true, stencil: true, powerPreference: 'high-performance' });
+  // opts.lean (the outpost's safe mode on a phone that lost the tab, iPhone 2026-11-14 [MM-task_mwfvyhev_1o]): no MSAA,
+  // 1× pixels and a 512 shadow map — the drawing buffers are a large share of the GPU memory iOS counts against the tab
+  const lean = !!opts.lean;
+  const renderer = new THREE.WebGLRenderer({ antialias: !lean, stencil: true, powerPreference: 'high-performance' });
   // Quality tier (T3.5): ?quality= → the player's Settings choice → auto from this device + GPU
   const quality = resolveTier({ query: opts.qualityQuery, stored: opts.qualityChoice, env: probeEnv(window, renderer.getContext()) });
   const tier = quality.tier;
-  renderer.setPixelRatio(pixelRatioFor(tier, window.devicePixelRatio || 1));
+  renderer.setPixelRatio(lean ? 1 : pixelRatioFor(tier, window.devicePixelRatio || 1));
   renderer.setClearColor(0x0f1412, 1);
   const canvas = renderer.domElement;
   Object.assign(canvas.style, { display: 'block', width: '100%', height: '100%', maxWidth: 'none', maxHeight: 'none', margin: '0' });
@@ -188,7 +191,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(CAMERA.fovDeg, 1, CAMERA.near, CAMERA.far);
-  const lights = createLights(THREE, renderer, scene, map.cols, map.rows, tier.shadowSize);
+  const lights = createLights(THREE, renderer, scene, map.cols, map.rows, lean ? Math.min(512, tier.shadowSize) : tier.shadowSize);
   // every map gets the low-poly ground: forge maps from their terrain codes, the rest from codes derived from their own
   // layout (ground/synthTerrain.js — workbook maps carry none, T0 audit §11) [MM-story_mvbr0oo5_n]
   const groundMap = renderMapFor(map);

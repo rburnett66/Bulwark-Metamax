@@ -552,6 +552,7 @@ export function createMenu(mountEl, cbs) {
   // O6 [MM-story_mw5oeer7_n]: it opens the outpost view full screen; the menu's own 3D stage rests while it is open,
   // as it does under the reveals, and the button, missions and gold refresh when it closes
   let outpostOpen = false;
+  const OUTPOST_RELEASE_MS = 350;   // the beat between releasing the menu / battle GPU contexts and building the outpost's
   const outpostBtn = mkBtn('OUTPOST', ' ', 'bwm-outpost', () => {
     const m = outpostButtonModel(loadSave(), targetKey());
     if (!m.locked && !outpostOpen) openOutpost(m.planet);
@@ -569,6 +570,9 @@ export function createMenu(mountEl, cbs) {
     // the battle's 3D view rests behind the menu with its own GPU context: let it go while the outpost (a second full 3D
     // view) is open, so a phone holds one battle-sized scene at a time (iOS crash, owner 2026-11-07)
     if (cbs.onOutpostOpen) { try { cbs.onOutpostOpen(); } catch (e) { console.warn('[outpost] release', e); } }
+    // a beat before the outpost builds its own context: iOS frees a lost context's memory lazily, and the tab was killed
+    // with the old contexts and the new one alive together (iPhone 2026-11-14 [MM-task_mwfvyhev_1o])
+    await new Promise((ok) => setTimeout(ok, OUTPOST_RELEASE_MS));
     try {
       const V = await import('../outpost/view/sessionView.js');
       const q = (() => { try { return new URLSearchParams(location.search).get('quality'); } catch (e) { return null; } })();

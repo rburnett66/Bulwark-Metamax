@@ -28,7 +28,7 @@ test('blocked storage never throws', () => {
 test('quality: a forced tier, else ?quality=, else Low in safe mode, else the battle rules', () => {
   assert.deepEqual(outpostQuality({ tier: 'high', safe: true }), { qualityQuery: 'high' });
   assert.deepEqual(outpostQuality({ safe: true, query: 'high' }), {}, '?quality= is left to the battle mount');
-  assert.deepEqual(outpostQuality({ safe: true }), { qualityQuery: 'low' });
+  assert.deepEqual(outpostQuality({ safe: true }), { qualityQuery: 'low', lean: true }, 'safe mode: Low with lean drawing buffers');
   assert.deepEqual(outpostQuality({ safe: false }), {}, 'no null override of the page query or Settings');
   assert.deepEqual([...SAFE_LODS], [2]);
 });
@@ -50,4 +50,15 @@ test('the session view uses safe mode and logs its steps and its close', () => {
   assert.match(src, /createFarmEmbers\(\{ safe \}\)/);
   for (const c of ['outpost: starting the 3D view', 'outpost: loading the building models', 'outpost: placing the buildings',
     "crumb('outpost: closed')", 'outpost: open · ', 'outpost: frame ']) assert.ok(src.includes(c), c);
+});
+
+// iPhone 2026-11-14 [MM-task_mwfvyhev_1o]: safe mode was still killed after a minute on the menu.
+test('safe mode renders lean (no MSAA, 1x pixels, 512 shadow map) and the menu waits a beat after releasing its GPU contexts', () => {
+  const idx = readFileSync(new URL('../../render3d/index.js', import.meta.url), 'utf8');
+  assert.match(idx, /new THREE\.WebGLRenderer\(\{ antialias: !lean,/);
+  assert.match(idx, /setPixelRatio\(lean \? 1 : pixelRatioFor/);
+  assert.match(idx, /lean \? Math\.min\(512, tier\.shadowSize\) : tier\.shadowSize/);
+  const menu = readFileSync(new URL('../../menu/menu.js', import.meta.url), 'utf8');
+  const open = menu.slice(menu.indexOf('async function openOutpost'));
+  assert.ok(open.indexOf('stage.dispose()') < open.indexOf('OUTPOST_RELEASE_MS') && open.indexOf('OUTPOST_RELEASE_MS') < open.indexOf("import('../outpost/view/sessionView.js')"), 'release, wait, then build the outpost');
 });
