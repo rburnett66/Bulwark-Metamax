@@ -24,7 +24,7 @@ import { planConduits, planBuildings, planDeposits } from './conduits.js';
 import { modelSlug, createOreDebris } from '../../render3d/outposts/outpostModels.js';
 import { K as FXK } from '../../render3d/fx/impacts.js';
 import { createEngineFx } from '../../render3d/ships/engineFx.js';
-import { popColour, FLIGHT, RETURN } from './sellTimeline.js';
+import { popColour, FLIGHT, RETURN, spinTurn } from './sellTimeline.js';
 import { padModelScale } from '../../terrain/outpostPads.js';
 import { createDecorLayer } from '../../render3d/outposts/decorModels.js';
 import { conduitCells } from '../decor.js';
@@ -600,13 +600,14 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
           const k = !box.isEmpty() && sz.x > 0 && mine.x > 0 ? Math.max(sz.x, sz.z) / Math.max(mine.x, mine.z) : (s.hubPad ? padModelScale(s.hubPad) : 1);
           const c = box.isEmpty() ? new THREE.Vector3(hx, 0.8, hz) : box.getCenter(new THREE.Vector3());
           // owner 2026-11-13 [MM-story_mwf8j7jg_6]: it lifts off FACING THE PLAYER (the model's nose is its +z: the heading
-          // whose nose points at the camera), spins round to the departure heading (π, as it always left) one full turn
-          // and more, turning left, and climbs away; the return is the same flight backwards
+          // whose nose points at the camera), spins on round to the departure heading (π, as it always left) — lift and spin
+          // one circle, the spin 180° from the usual camera (owner 2026-11-14: "only spin 180 slowly", sellTimeline
+          // spinTurn) — and climbs away; the return is the same flight backwards
           const cam = r.camera ? r.camera.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(c.x, 20, c.z + 20);
           const face = Math.atan2(cam.x - c.x, cam.z - c.z), go = Math.PI;
-          const turn = Math.PI * 2 + ((((go - face) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2));
           // the parked shuttle sits nose-away (heading go): it turns the short way round to face the player as it lifts
           const toFace = Math.atan2(Math.sin(face - go), Math.cos(face - go));
+          const turn = spinTurn(toFace);
           s.base = { x: c.x, y: box.isEmpty() ? 0.8 : box.min.y, z: c.z, k: Math.min(1.6, Math.max(0.4, k)), face, turn, go, toFace };
           if (shuttleFx) shuttleFx.setIntensity(1.2);
         }
@@ -621,7 +622,8 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
         // the lift's turn to face the player leans the same way (left turn → lean left), gentler than the spin
         const liftLean = -Math.sign(B.toFace) * f.dir * FLIGHT.bank * 0.6 * f.faceTurn;
         const yaw = B.go + B.toFace * f.face + f.spin * B.turn;
-        shuttle.object.rotation.set(-f.pitch, yaw, f.bank + liftLean + Math.sin(t * 7) * 0.02 * (f.y < 3 ? 1 : 0));
+        // f.bank leans into a left (yaw-rising) spin; a right spin (B.turn < 0) leans the other way
+        shuttle.object.rotation.set(-f.pitch, yaw, f.bank * Math.sign(B.turn || 1) + liftLean + Math.sin(t * 7) * 0.02 * (f.y < 3 ? 1 : 0));
         if (shuttleFx) shuttleFx.setIntensity(1 + Math.min(1, f.y / FLIGHT.climb) * 0.8);
       } else if (s.base) {
         shuttle.object.visible = false;

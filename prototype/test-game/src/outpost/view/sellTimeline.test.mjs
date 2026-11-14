@@ -2,7 +2,8 @@
 // from sell()'s per-load entries — the beats, the "$N" pops per load in the ore colour, the gold count-up, the shuttle.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sellTimeline, SELL, MAX_POPS, popColour, FLIGHT, RETURN, flightPath } from './sellTimeline.js';
+import { readFileSync } from 'node:fs';
+import { sellTimeline, SELL, MAX_POPS, popColour, FLIGHT, RETURN, flightPath, spinTurn } from './sellTimeline.js';
 import { referenceOutpost, confirmOnline, advance, sell } from '../model.js';
 import { map, T0, MIN } from './fixtures.mjs';
 
@@ -84,4 +85,20 @@ test('the transport: lifts facing the player, spins banked into the turn, climbs
   assert.deepEqual(flightPath(SELL.lift), { y: 0, fwd: 0, face: 0, faceTurn: 0, spin: 0, turn: 0, pitch: 0 }, 'it starts and ends on the pad, as parked');
   assert.equal(flightPath(FLIGHT.spin[0]).face, 1, 'facing the player by the time it spins');
   assert.ok(flightPath((SELL.lift + FLIGHT.spin[0]) / 2).faceTurn > 0.9, 'it turns to face the player as it lifts, no snap');
+});
+
+// Owner 2026-11-14 [MM-task_mwftv457_1d]: "it should only spin 180 slowly, right now it seems to spin 540".
+test('the transport spins only the rest of one circle: 180° after turning to face the player from behind', () => {
+  const deg = (r) => Math.round(r * 180 / Math.PI);
+  assert.equal(deg(spinTurn(Math.PI)), 180, 'camera behind the departure: 180° to face, 180° more');
+  assert.equal(deg(spinTurn(-Math.PI)), -180);
+  for (const toFace of [-3, -2, -1, -0.2, 0.2, 1, 2, 3]) {
+    const turn = spinTurn(toFace);
+    assert.equal(Math.sign(turn), Math.sign(toFace), 'carries on the same way round as the lift turn');
+    assert.ok(Math.abs(Math.abs(toFace) + Math.abs(turn) - 2 * Math.PI) < 1e-9, 'lift + spin = one circle, never more');
+  }
+  const scene = readFileSync(new URL('./outpostScene.js', import.meta.url), 'utf8');
+  assert.match(scene, /const turn = spinTurn\(toFace\)/);
+  assert.match(scene, /f\.bank \* Math\.sign\(B\.turn \|\| 1\)/, 'the bank leans into the spin whichever way it turns');
+  assert.doesNotMatch(scene, /Math\.PI \* 2 \+ \(\(\(\(go - face\)/, 'no extra full turn');
 });

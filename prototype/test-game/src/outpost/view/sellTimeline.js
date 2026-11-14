@@ -8,7 +8,8 @@
  *   0.9 s       "$N" pops, one per load, staggered 0.12 s, stacking upward in the ore colour
  *   0.6–1.2 s   the shuttle lifts off the pad FACING THE PLAYER (owner 2026-11-13 [MM-story_mwf8j7jg_6]: "the transport
  *               ship on the outpost should face towards the player when it takes off, then spin in the air and ascend")
- *   1.2–2.6 s   it spins in the air, rising, banked into the turn ("if it turns left it should lean left")
+ *   1.2–2.6 s   it spins in the air, rising, banked into the turn ("if it turns left it should lean left") — only the rest
+ *               of one circle, 180° from the usual camera (owner 2026-11-14: "it should only spin 180 slowly")
  *   2.6–4.0 s   it climbs away out of frame; the HUD gold counts up (1.4–3.0 s)
  *   4.8–8.2 s   it comes back down the exact same path, the film run backwards ("Then the transport should return on the
  *               exact same path moments later"), and lands
@@ -52,6 +53,16 @@ export function flightPath(u) {
     turn: ks > 0 && ks < 1 ? (6 * ks * (1 - ks)) / 1.5 : 0,   // smoothstep's slope over its peak (1.5)
     pitch: a * 0.5,
   };
+}
+/**
+ * The spin's yaw (rad) after the lift's turn to face the player (toFace, the short way, ±π at most): it carries on the
+ * same way round to the departure heading, so lift + spin make exactly one circle — 180° + 180° from the usual camera.
+ * Owner 2026-11-14 [MM-task_mwftv457_1d]: "When the transport plane leaves and return it should only spin 180 slowly,
+ * right now it seems to spin 540". Its sign is the spin's direction (+ left), which the bank follows.
+ */
+export function spinTurn(toFace) {
+  const dir = toFace < 0 ? -1 : 1;
+  return dir * (Math.PI * 2 - Math.abs(toFace));
 }
 export const MAX_POPS = 10;
 
