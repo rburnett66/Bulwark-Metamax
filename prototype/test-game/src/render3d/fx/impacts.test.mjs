@@ -10,8 +10,9 @@ import {
 } from './impacts.js';
 import { createImpactsView } from './impactsView.js';
 import { createUnits3D } from '../units/models3d.js';
+import { readFileSync } from 'node:fs';
 import { HOVER_HEIGHT } from '../units/unitViews.js';
-import { UNIT_SCALE } from '../units/modelKeys.js';
+import { UNIT_SCALE, MODEL_KEYS } from '../units/modelKeys.js';
 import { AIM } from './combatFxModel.js';
 import { FACTION_FX, FX_MIX, factionFxColor } from './factionFx.js';
 
@@ -362,4 +363,35 @@ test('debris: thrown up tumbling, lands; a flyer sheds pieces in the air, then i
   most = Math.max(most, deb(fly).length);
   assert.ok(fly.stats.booms >= 1, 'the flyer crashed');
   assert.ok(most >= 2 + 7, `the crash scatters the airframe (${most} pieces)`);
+});
+
+// iPhone 2026-11-14 [MM-task_mwft9db8_1b]: the outpost tab was killed a few seconds after opening — the battle renderer
+// built all ~200 unit models (≈ 46 MB of geometry) for the handful an outpost shows. Lazy mode builds one as it appears.
+test('lazy units: no model is built until a unit or a wreck of it is drawn, then it looks the same as the eager build', () => {
+  const scene = new THREE.Scene();
+  const units = createUnits3D(THREE, scene, { sunDir: { x: -0.5, y: 0.7, z: -0.5 }, lazy: true });
+  assert.deepEqual(units.built, [], 'nothing built at mount');
+  const empty = scene.children.length;
+  const view = createImpactsView(THREE, scene, { lodGroupsOf: units.lodGroupsOf });
+  assert.equal(scene.children.length - empty, 6, 'only the effect batches + chunks: no wreck meshes yet');
+  units.setUnits([{ id: 1, model: 'tank', x: 1, z: 1, y: 0, heading: 0 }], 100, true, 0);
+  assert.deepEqual(units.built, ['tank'], 'the tank is built the frame it first appears');
+  units.setUnits([{ id: 1, model: 'no-such-model', x: 1, z: 1, y: 0, heading: 0 }], 100, true, 0);
+  assert.deepEqual(units.built, ['tank'], 'an unknown model builds nothing');
+  const fx = createImpacts();
+  killFrame(fx, tankView(), [kill()]);
+  fx.update(world({ tick: 7 }), MAP, [], 1 / 30, []);
+  assert.equal(view.sync(fx).wrecks, 2, 'the tank wreck (body + turret) draws from lazily built meshes');
+  const eager = createUnits3D(THREE, new THREE.Scene(), { sunDir: { x: -0.5, y: 0.7, z: -0.5 } });
+  assert.deepEqual(Object.keys(view.wreckMesh.tank).sort(), Object.keys(eager.lodGroups().tank).sort(), 'same wreck parts as the eager build');
+  assert.equal(eager.built.length, MODEL_KEYS.length, 'the battle still builds every model up front');
+  view.dispose(); units.dispose(); eager.dispose();
+  assert.equal(scene.children.length, empty);
+});
+
+test('the outpost mounts the renderer with lazy units', () => {
+  const src = readFileSync(new URL('../../outpost/view/sessionView.js', import.meta.url), 'utf8');
+  assert.match(src, /render3d: \{[^}]*lazyUnits: true/);
+  const idx = readFileSync(new URL('../index.js', import.meta.url), 'utf8');
+  assert.match(idx, /createUnits3D\(THREE, scene, \{ sunDir: lights\.dir, lazy: !!opts\.lazyUnits \}\)/);
 });
