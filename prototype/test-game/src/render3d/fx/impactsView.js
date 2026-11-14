@@ -53,9 +53,11 @@ export function smokeAlpha(p) {
 /**
  * createImpactsView(THREE, scene, { lodGroups, sunDir, caps })
  *   lodGroups — units3d.lodGroups(): { model: { group: { geo, pivot } } }
+ *   lodGroupsOf — or, lazily (the outpost [MM-task_mwft9db8_1b]): units3d.lodGroupsOf; a model's wreck meshes are built
+ *                 the first time one of its wrecks is drawn
  *   caps      — the batch capacities (the model's caps limit what it fills; Low simply fills less)
  */
-export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: -0.5, y: 0.7, z: -0.5 }, caps = DEFAULT_IMPACT_CAPS, shadowAlpha = 0.34, fireAtlas = null } = {}) {
+export function createImpactsView(THREE, scene, { lodGroups = {}, lodGroupsOf = null, sunDir = { x: -0.5, y: 0.7, z: -0.5 }, caps = DEFAULT_IMPACT_CAPS, shadowAlpha = 0.34, fireAtlas = null } = {}) {
   const add = createPBatch(THREE, scene, caps.additive, true, 4.2);
   // every fire is a flipbook flame (the owner's sheet when committed, else the procedural stand-in) [MM-task_mvfqzjkm_7]
   const atlas = fireAtlas || createFireAtlas(THREE, { onSwap: (A) => fire.setAtlas(A) });
@@ -77,9 +79,9 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
   wreckMat.customProgramCacheKey = () => 'unit3d-wreck';
   const shMat = shadowMaterial(THREE, sunDir, shadowAlpha);
   const wreckMesh = {};   // model → group → { im, sh, pivot }
-  for (const [model, groups] of Object.entries(lodGroups)) {
+  function buildWrecks(model, groups) {
     wreckMesh[model] = {};
-    for (const [g, L] of Object.entries(groups)) {
+    for (const [g, L] of Object.entries(groups || {})) {
       const im = new THREE.InstancedMesh(L.geo, wreckMat, caps.wrecks);
       im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       im.receiveShadow = true;
@@ -90,7 +92,9 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
       im.renderOrder = 3; sh.renderOrder = 2;
       wreckMesh[model][g] = { im, sh, pivot: L.pivot };
     }
+    return wreckMesh[model];
   }
+  for (const [model, groups] of Object.entries(lodGroups)) buildWrecks(model, groups);
 
   const m4 = new THREE.Matrix4(), mp = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
   const v = new THREE.Vector3(), s = new THREE.Vector3();
@@ -184,7 +188,8 @@ export function createImpactsView(THREE, scene, { lodGroups = {}, sunDir = { x: 
       counts.clear();
       let nW = 0;
       for (const w of model.wrecks) {
-        const M = wreckMesh[w.model] && wreckMesh[w.model][w.group];
+        const W = wreckMesh[w.model] || (lodGroupsOf ? buildWrecks(w.model, lodGroupsOf(w.model)) : null);
+        const M = W && W[w.group];
         if (!M) continue;
         const key = w.model + '/' + w.group;
         const i = counts.get(key) || 0;
