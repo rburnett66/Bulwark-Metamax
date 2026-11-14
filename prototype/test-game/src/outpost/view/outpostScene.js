@@ -26,6 +26,8 @@ import { K as FXK } from '../../render3d/fx/impacts.js';
 import { createEngineFx } from '../../render3d/ships/engineFx.js';
 import { popColour, FLIGHT, RETURN } from './sellTimeline.js';
 import { padModelScale } from '../../terrain/outpostPads.js';
+import { createDecorLayer } from '../../render3d/outposts/decorModels.js';
+import { conduitCells } from '../decor.js';
 
 const PAD_Y = 0.05;
 const C = { plate: 0x3b4047, plateTop: 0x4a5058, edge: 0x24282d, trim: 0xeb5c0d, cyan: 0x3fd0ff, rock: 0x8a8076, rockDark: 0x6a625b };
@@ -42,7 +44,7 @@ export const gaugeFill = (item) => (item && (item.kind === 'storage' || item.kin
 /** The power icons worth drawing: only a building that has no power or would be cut — never one that is powered. */
 export const visiblePowerIcons = (list) => (list || []).filter((i) => i.state !== 'on');
 
-export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced = false }) {
+export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced = false, decor: decorOpts = null }) {
   const scene = r.scene, root = new THREE.Group();
   root.name = 'outpost';
   scene.add(root);
@@ -58,6 +60,9 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
   // ── pad plates (static): one merged mesh for the slabs, one for the trim, one for the empty-pad frames ────────────
   const plates = buildPlates();
   root.add(plates.group);
+  // the base's decor (src/outpost/decor.js places it, o.decor): instanced, one LOD for the visit
+  const decor = decorOpts && decorOpts.GLTFLoader ? createDecorLayer(THREE, root, { ...decorOpts, y: PAD_Y, onChange: () => r.lights.invalidateShadows() }) : null;
+  let conduitPlan = [];
   function buildPlates() {
     const g = new THREE.Group();
     const slab = [], trim = [];
@@ -652,7 +657,11 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     /** Bring the scene to the outpost's state (call each frame; cheap when nothing changed). */
     sync(o, now, { unlockedTiers } = {}) {
       syncFrames(o);
-      syncConduits(o);
+      conduitPlan = syncConduits(o) || conduitPlan;
+      if (decor) {   // a piece a newer conduit now runs over is left undrawn (it stays in the save)
+        const under = conduitCells(conduitPlan);
+        decor.sync((o.decor || []).filter((d) => !under.has(Math.floor(d.x) + ',' + Math.floor(d.y))));
+      }
       planDepositsCache = syncDeposits(o, unlockedTiers) || planDepositsCache;
       syncBuildings(o, now);
     },
@@ -681,11 +690,14 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     /** The world position of a pad's centre (cells), for the camera. */
     padCentre(id) { const p = rectOf(id); return p ? centre(p) : null; },
     buildingCount: () => [...built.values()].filter((e) => e.inst).length,
+    /** The decor layer (tests / review): { drawn, drawCalls, ready }. */
+    decor,
     ready: () => [...built.values()].every((e) => !e.loading),
     dispose() {
       for (const e of built.values()) if (e.inst) e.inst.dispose();
       if (shuttle) shuttle.dispose();
       debris.dispose();
+      if (decor) decor.dispose();
       scene.remove(root);
       root.traverse((x) => { if (x.geometry) x.geometry.dispose(); });
     },

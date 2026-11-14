@@ -74,6 +74,7 @@ import { outpostMapFor } from '../outpostMap.js';
 import { outpostBattleMap, bakedSlugFor, baseFrameRect } from './outpostBoard.js';
 import { outpostCardModel, outpostReadouts, farmCardModel, threatInfo } from './outpostCard.js';
 import { createOutpostScene } from './outpostScene.js';
+import { accrueDecor } from '../decor.js';
 import { createSaleDriver } from './saleDriver.js';
 import { planBuildings, planPowerIcons, withCuts } from './conduits.js';
 import { createOutpostKit, modelSlug } from '../../render3d/outposts/outpostModels.js';
@@ -306,7 +307,9 @@ async function openSession(opts, opening) {
     const { GLTFLoader } = await import(ROOT + 'vendor/three-addons/loaders/GLTFLoader.js');
     crumb('outpost: loading the building models');
     const kit = await createOutpostKit(r.THREE, { base: ROOT + 'content/outposts/', tier: r.tier.key, GLTFLoader, lodLevels: safe ? SAFE_LODS : null });
-    scene = createOutpostScene(r.THREE, r, { map, kit, tier: r.tier.key, reduced });
+    // the base's decor (decor.js): flat shaded on Low and in safe mode, textured otherwise
+    const decorLod = safe || r.tier.key === 'low' ? 'flat' : 'tex';
+    scene = createOutpostScene(r.THREE, r, { map, kit, tier: r.tier.key, reduced, decor: { base: ROOT + 'content/outposts/decor/', GLTFLoader, lod: decorLod } });
     const o = fromLiveSim(sim, live.link, nowOf()).outpost;
     const slugs = new Set(planBuildings(o, map, nowOf()).map((b) => modelSlug(b.kind, b.tier, b.rigHead)).filter(Boolean));
     if (farmed) for (const k of ['farmhouse', 'silo', 'pump']) if (kit.manifest[k]) slugs.add(k);
@@ -600,7 +603,12 @@ async function openSession(opts, opening) {
       since += dt;
       if (since >= 0.25 || !view) {
         since = 0;
-        try { view = fromLiveSim(sim, live.link, nowOf()).outpost; scene.sync(view, nowOf(), ctxNow()); }
+        try {
+          view = fromLiveSim(sim, live.link, nowOf()).outpost;
+          // a structure placed in the live sim earns its decor now; it rides the link into the save (fromLiveSim)
+          if (accrueDecor(view, map)) { live.link.outpost.decor = view.decor; live.link.outpost.decorFor = view.decorFor; }
+          scene.sync(view, nowOf(), ctxNow());
+        }
         catch (e) { console.warn('[outpost] scene sync', e); }
         if (farmLayer) {
           try { const fo = farmNow(); farmLayer.sync(fo, nowOf()); crew.sync(fo); if (farmSel) farmLayer.select(farmRect(farmSel)); }

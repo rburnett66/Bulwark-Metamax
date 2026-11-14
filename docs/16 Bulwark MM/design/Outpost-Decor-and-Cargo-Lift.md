@@ -70,10 +70,10 @@ Scene budget (the whole base):
 | road_signs | small | 0.24 × 0.07 × 0.38 | 80 tris · 6 KB | 304 tris · 29 KB |
 | supply_shelf | small | 0.30 × 0.11 × 0.42 | 156 tris · 13 KB | 496 tris · 41 KB |
 | supplies | large | 0.48 × 0.29 × 0.28 | 84 tris · 7 KB | 712 tris · 94 KB |
-| cargo_cube | large | 0.59 × 0.59 × 0.59 | 72 tris · 6 KB | 432 tris · 79 KB |
-| cargo_lift | lift | 0.66 × 1.70 × 0.47 | 376 tris · 29 KB | 1844 tris · 178 KB |
+| cargo_cube | large | 0.59 × 0.59 × 0.59 | 132 tris · 11 KB | 432 tris · 79 KB |
+| cargo_lift | lift | 0.66 × 1.70 × 0.47 | 496 tris · 38 KB | 1844 tris · 178 KB |
 
-All 16 files: 642 KB (budget 1.5 MB). Held to the budget by `src/render3d/outposts/decorBudget.test.mjs`.
+All 16 files: 656 KB (budget 1.5 MB). The flat cube carries the textured cube's light steel side panels and lid (2026-11-13: all-gunmetal read near-black in the game). Held to the budget by `src/render3d/outposts/decorBudget.test.mjs`.
 
 ## 3. Decor placement
 
@@ -92,6 +92,20 @@ All 16 files: 642 KB (budget 1.5 MB). Held to the budget by `src/render3d/outpos
   free, a small piece is placed instead.
 - **Mix:** ~70 % small, ~30 % large; never the same kind twice in a row for one structure.
 - **Building over decor:** a structure or plot placed on a decor cell clears that decor (no refund — it is free).
+
+### Built (2026-11-13, `src/outpost/decor.js`, drawn by `src/render3d/outposts/decorModels.js`)
+
+- Save shape: `o.decor = [{ id, kind, x, y, rot, scale, for }]` (x, y the piece's centre in cells) and `o.decorFor` —
+  the keys (`pad:` / `def:` / `plot:` / `farm:` + id) that have had their 2 pieces, so an id is decorated once.
+- `accrueDecor(o, map)` is the one entry, idempotent and seeded (`o.seed` + the key): the save session runs it on every
+  advance (opening, every action, so old saves get their decor once), the visit on every view refresh (a structure placed
+  in the live sim gets its decor at once, and it rides into the save on leaving).
+- Ground: the build ghost's own rule for a 1-cell piece on an outpost with only its hub (`siting.positionCheck`), at the
+  landing pad's height. Small pieces on buildable cells; large pieces on the red rock / rim cells that touch buildable
+  ground (never water, never the landing pad's clearance — the transport keeps its pad clear).
+- Conduits move as the grid changes, so a piece a conduit now runs over is left undrawn (it stays in the save).
+- LOD for the visit: flat on the Low tier and in safe mode, textured otherwise. One InstancedMesh per kind and mesh
+  (7 kinds → ≤ 7–9 draw calls). Large pieces cast shadows; small do not.
 
 ## 4. The cargo lift (real logistics)
 
