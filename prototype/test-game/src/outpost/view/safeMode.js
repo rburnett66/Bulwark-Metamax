@@ -30,7 +30,8 @@ export function outpostSafeMode(win, crashed = lastSessionCrashed) {
 export function outpostQuality({ tier = null, safe = false, query = null } = {}) {
   if (tier) return { qualityQuery: tier };
   if (query) return {};                       // ?quality= wins over safe mode (the headless checks force a tier)
-  return safe ? { qualityQuery: 'low' } : {};
+  // safe mode: Low, and lean drawing buffers (no MSAA, 1× pixels, 512 shadow map) — iPhone 2026-11-14 [MM-task_mwfvyhev_1o]
+  return safe ? { qualityQuery: 'low', lean: true } : {};
 }
 
 /** The renderer's load for a crumb: tier, pixel ratio, drawing buffer, live textures / geometries / shader programs. */
