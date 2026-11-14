@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createQueue, queueStep, queueView, queueIdle, WORK_SEC } from './avatarQueue.js';
-import { farmhandCount, farmhandStops, farmhandLeg, homePoint, standPoint, walkPath, walkerBlocked, MAX_RIGS, AVATAR_CELLS } from './avatar.js';
+import { FARMHAND_CFG, farmhandCount, farmhandStops, farmhandLeg, homePoint, standPoint, walkPath, walkerBlocked, MAX_RIGS, AVATAR_CELLS } from './avatar.js';
 import { rng } from '../../ship-interior/crew.js';
 import { buildNavGrid } from '../../sim/pathfinding.js';
 import { defaultSave } from '../../save/save.js';
@@ -168,4 +168,15 @@ test('planting is 2 s of the avatar\'s work; a fresh plot preps in 2 s', async (
   assert.ok(!fx.some((e) => e.type === 'land'), 'still planting at 1.9 s');
   ({ q, effects: fx } = queueStep(q, { type: 'tick', dt: 0.11 }));
   assert.ok(fx.some((e) => e.type === 'land'), 'planted at 2 s');
+});
+
+// Owner 2026-11-13 [MM-task_mwfsqtn9_18]: "Two of the helpers on the farm also look black" — the farmhands wear a light field look.
+test('farmhands wear the Ground crew helmet in a light field look, never the dark olive drab', () => {
+  const lum = (h) => { const c = [(h >> 16) & 255, (h >> 8) & 255, h & 255].map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  assert.equal(FARMHAND_CFG.helmet, 'combat');
+  assert.equal(FARMHAND_CFG.faction, 'ground');
+  for (const h of [FARMHAND_CFG.outfit, FARMHAND_CFG.hc.shell]) assert.ok(lum(h) > 0.3, `0x${h.toString(16)} reads too dark on the farm`);
+  const src = readFileSync(new URL('./avatar.js', import.meta.url), 'utf8');
+  assert.match(src, /makeWalker\(FARMHAND_CFG,/);
+  assert.doesNotMatch(src, /makeWalker\(cfgFor\('ground'\)/);
 });
