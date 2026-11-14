@@ -41,6 +41,12 @@ export const FARMHANDS = 2;
 const WALK = 1.6, HAND_WALK = 1.15;   // cells per second (the scale prototype's walk; farmhands amble)
 const Y = 0.05;                       // the ground plate the farm layer stands on (farmLayer.js Y)
 const HAND_POSES = ['work', 'work', 'point', 'talk', 'idle', 'work'];
+/**
+ * The farmhands' look: the Ground crew (combat helmet, red accent) in sand-khaki field kit. Owner 2026-11-13 [MM-task_mwfsqtn9_18]:
+ * "Two of the helpers on the farm also look black" — the ship's olive drab (0x5f6a36) reads near-black at 0.45 of a cell
+ * on the grass, and any olive sinks into it; sand khaki stands off the grass and the dark soil, and stays clear of the gold avatar.
+ */
+export const FARMHAND_CFG = Object.freeze(cfgFor('ground', { outfit: 0xd8c48f, stripe: 0xf4ecd0, hc: { shell: 0xd6c290, trim: 0x7d6a42, accent: 0xa83a32 } }));
 
 /** How many farmhands walk this farm: none in safe mode or with no farm, and never past MAX_RIGS with the avatar. */
 export function farmhandCount({ safe = false, farm = null, max = MAX_RIGS } = {}) {
@@ -189,7 +195,7 @@ export function createFarmCrew(THREE, r, { map, board, safe = false, reduced = f
     while (hands.length > want) removeWalker(hands.pop().w);
     while (hands.length < want) {
       const k = hands.length, h0 = homePoint(o, map);
-      const h = { k, w: makeWalker(cfgFor('ground'), { x: h0.x + (k ? 0.9 : -0.9), z: h0.z + 0.2 }, 2.3 + k * 3.1), draw: rng(((o.seed | 0) * 31 + 977 + k * 7919) >>> 0), last: -1 };
+      const h = { k, w: makeWalker(FARMHAND_CFG, { x: h0.x + (k ? 0.9 : -0.9), z: h0.z + 0.2 }, 2.3 + k * 3.1), draw: rng(((o.seed | 0) * 31 + 977 + k * 7919) >>> 0), last: -1 };
       hands.push(h);
       h.w.hold = 0.4 + k * 0.9; h.w.then = () => nextLeg(h);
     }

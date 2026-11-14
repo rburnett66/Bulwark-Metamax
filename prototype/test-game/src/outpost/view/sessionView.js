@@ -267,7 +267,8 @@ async function openSession(opts, opening) {
   const session = createBattleSession(host, {
     getSim: () => sim, getUi: () => ui, submit, mapId: 0, catalogue, onGroundTap: (cell, tapUi) => tapFarm(cell, tapUi),
     mountOptions: () => ({ planet, landing: false, landingHeld: true,
-      render3d: { baseUrl: ROOT, craft: false, landing: false, ...outpostQuality({ tier: opts.tier, safe, query: urlQuality }), frameRect: () => frame } }),
+      // lazyUnits: only the units the outpost shows get models — not the battle's ~200 (iPhone tab kills 2026-11-14)
+      render3d: { baseUrl: ROOT, craft: false, landing: false, lazyUnits: true, ...outpostQuality({ tier: opts.tier, safe, query: urlQuality }), frameRect: () => frame } }),
   });
   // the battle rail's HARVESTER tile sells the OUTPOST's harvesters (S4 follow-up, owner 2026-11-11): its price and
   // refusals from the model, the purchase through the save session (act 'buyHarvester'), the live state rebuilt with the truck

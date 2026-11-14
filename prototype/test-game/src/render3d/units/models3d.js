@@ -148,7 +148,7 @@ export function shadowMaterial(THREE, sunDir, alpha, { instanced = true, groundY
  *   const units = createUnits3D(THREE, scene, { sunDir })
  *   units.setUnits([{ model, x, y, z, heading, aim, scale }], camDist, liveShadows)   // world units
  */
-export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = DEFAULT_CAP } = {}) {
+export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = DEFAULT_CAP, lazy = false } = {}) {
   const prims = createPrims(THREE);
   const metal = createUnitMaterial(THREE);
   const mat = metal.material;
@@ -158,8 +158,12 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
   const shadowTris = {};   // per model: the shadow proxy's triangles (all groups) [MM-story_mvibvqd2_7]
   const owned = [];
 
-  for (const key of MODEL_KEYS) {
+  // lazy (the outpost, iPhone 2026-11-14 [MM-task_mwft9db8_1b]): a model's meshes are built the first time a unit of it is
+  // drawn, not all ~200 at mount (≈ 46 MB of geometry, held on the CPU and the GPU, for the handful an outpost shows).
+  function build(key) {
+    if (types[key]) return types[key];
     const def = UNIT_MODELS[key];
+    if (!def) return null;
     const full = mergeModelGroups(THREE, def, prims, key);
     const lod = mergeModelGroups(THREE, lodDef(def), prims, key);
     const shadow = mergeModelGroups(THREE, shadowDef(def), prims, key);
@@ -188,7 +192,11 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
       if (L !== full[gname]) owned.push(L.geo);
     }
     types[key] = T;
+    if (onBuild) onBuild(key);
+    return T;
   }
+  let onBuild = null;
+  if (!lazy) for (const key of MODEL_KEYS) build(key);
 
   const mk = new THREE.Matrix4(), m1 = new THREE.Matrix4(), m2 = new THREE.Matrix4(), mp = new THREE.Matrix4(), mt = new THREE.Matrix4(), mr = new THREE.Matrix4();
   const q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3(), one = new THREE.Vector3(1, 1, 1), v2 = new THREE.Vector3();
@@ -222,6 +230,29 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
   }
   const FX_TINT = { mirror: [0.3, 1.0, 0.95], raised: [0.35, 1.0, 0.45] };
 
+  const lodCache = {};
+  /** Each model's LOD geometry + pivot per group — FX wrecks are drawn from the unit's own geometry. */
+  function lodGroupsOf(key) {
+    if (lodCache[key]) return lodCache[key];
+    const T = build(key);
+    if (!T) return null;
+    const out = {};
+    for (const [g, G] of Object.entries(T.groups)) if (!g.startsWith('barrel') && !g.startsWith('spin')) out[g] = { geo: G.lodGeo, shGeo: G.shGeo, pivot: G.pivot };   // rotors are not wrecked
+    // a wreck's turret keeps its guns: the barrels (level) folded into the turret geometry
+    const TG = T.groups.turret;
+    if (TG) {
+      let geo = TG.lodGeo, shGeo = TG.shGeo;
+      for (const [g, BG] of Object.entries(T.groups)) if (g.startsWith('barrel')) {
+        const off = BG.pivot.clone().sub(TG.pivot);
+        geo = mergeOffset(THREE, geo, BG.lodGeo, off); owned.push(geo);
+        if (BG.shGeo) { shGeo = shGeo ? mergeOffset(THREE, shGeo, BG.shGeo, off) : BG.shGeo; owned.push(shGeo); }   // the wreck's turret casts its guns' shadow too
+      }
+      out.turret = { geo, shGeo, pivot: TG.pivot };
+    }
+    lodCache[key] = out;
+    return out;
+  }
+
   return {
     tris,
     /** Shadow-proxy triangles per model (shadow.js) — what each live unit's planar shadow costs. */
@@ -233,29 +264,21 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
     /** Each model's LOD geometry + pivot per group — FX wrecks are drawn from the unit's own geometry. */
     lodGroups() {
       const out = {};
-      for (const [key, T] of Object.entries(types)) {
-        out[key] = {};
-        for (const [g, G] of Object.entries(T.groups)) if (!g.startsWith('barrel') && !g.startsWith('spin')) out[key][g] = { geo: G.lodGeo, shGeo: G.shGeo, pivot: G.pivot };   // rotors are not wrecked
-        // a wreck's turret keeps its guns: the barrels (level) folded into the turret geometry
-        const TG = T.groups.turret;
-        if (TG) {
-          let geo = TG.lodGeo, shGeo = TG.shGeo;
-          for (const [g, BG] of Object.entries(T.groups)) if (g.startsWith('barrel')) {
-            const off = BG.pivot.clone().sub(TG.pivot);
-            geo = mergeOffset(THREE, geo, BG.lodGeo, off); owned.push(geo);
-            if (BG.shGeo) { shGeo = shGeo ? mergeOffset(THREE, shGeo, BG.shGeo, off) : BG.shGeo; owned.push(shGeo); }   // the wreck's turret casts its guns' shadow too
-          }
-          out[key].turret = { geo, shGeo, pivot: TG.pivot };
-        }
-      }
+      for (const key of Object.keys(types)) out[key] = lodGroupsOf(key);
       return out;
     },
+    /** One model's wreck geometry (building the model if it is not yet), or null for an unknown model. */
+    lodGroupsOf,
+    /** Called with a model key each time one is built (lazy mode: the wrecks view builds its meshes alongside). */
+    set onBuild(fn) { onBuild = fn; },
+    /** The models built so far (tests / review). */
+    get built() { return Object.keys(types); },
     /** Returns how many units were drawn (capped per model at `cap`). */
     setUnits(list, camDist, liveShadows, t = 0) {   // t: render clock (s) — rotors and fans spin on it
       for (const key of MODEL_KEYS) counts[key] = 0;
       let drawn = 0;
       for (const u of list) {
-        const T = types[u.model];
+        const T = types[u.model] || (lazy ? build(u.model) : null);
         if (!T) continue;
         const fx = u.fx || null;
         const cloaked = !!(fx && fx.kind === 'cloak');
@@ -320,6 +343,7 @@ export function createUnits3D(THREE, scene, { sunDir, shadowAlpha = 0.34, cap = 
       usingLod = camDist > LOD_DISTANCE;
       for (const key of MODEL_KEYS) {
         const n = counts[key];
+        if (!types[key]) continue;
         for (const G of Object.values(types[key].groups)) {
           G.imLod.count = usingLod ? n : 0;
           G.imFull.count = usingLod ? 0 : n;

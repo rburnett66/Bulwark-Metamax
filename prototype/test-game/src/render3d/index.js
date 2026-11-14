@@ -195,7 +195,8 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const lowpoly = opts.ground !== 'baked' || !slug;
   // LPS [MM-story_mv87jzov_9]: low-poly base / walls / towers / crystals on the low-poly ground; boxes under ?ground=baked
   const markers = lowpoly ? createLowPolyStructures(THREE, scene) : createMarkers(THREE, scene);
-  const units3d = createUnits3D(THREE, scene, { sunDir: lights.dir });
+  // opts.lazyUnits (the outpost, iPhone 2026-11-14 [MM-task_mwft9db8_1b]): unit + wreck models built as they first appear
+  const units3d = createUnits3D(THREE, scene, { sunDir: lights.dir, lazy: !!opts.lazyUnits });
   markers.setBase(map.base);
   // SYS [MM-story_mvbr0qfb_o]: the player's cannon / anti-air / wall draw as the System models (owner sheet)
   const system = lowpoly ? createSystemStructures(THREE, scene) : null;
@@ -229,7 +230,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   fxView.skipRockets = true;
   fxView.skipFlak = true; fxView.skipMissiles = true;   // black balls / half-size rockets, not glow dots [MM-task_mvfqb2gm_4] [MM-task_mvfqb454_5]
   const impacts = createImpacts({ seed: (map.seed | 0) || 1, caps: tier.impactCaps });   // the tier's particle budget [MM-task_mveeqkyi_h]
-  const impactsView = createImpactsView(THREE, scene, { lodGroups: units3d.lodGroups(), sunDir: lights.dir });
+  const impactsView = createImpactsView(THREE, scene, opts.lazyUnits ? { lodGroupsOf: units3d.lodGroupsOf, sunDir: lights.dir } : { lodGroups: units3d.lodGroups(), sunDir: lights.dir });
   const fogView = createFogView(THREE, scene, map, { detail: !!tier.cloudDetail });   // phones: the rough cloud path [MM-story_mvfk3el9_b]
   const contactsView = createContactsView(THREE, scene);   // hidden contacts: red reticles outside the play area [MM-story_mveehs1r_f]
   const baseStyle = baseStyleFor(craft && craft.def && craft.def.weaponType);   // each base fires its own weapon's look
