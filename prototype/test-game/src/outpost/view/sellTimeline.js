@@ -6,13 +6,13 @@
  *   0.6 s       the shuttle's engines light; it lifts with a camera shake
  *   0.8 s       ore splatter: a burst of ore chunks from the cargo bay, bouncing on the pad
  *   0.9 s       "$N" pops, one per load, staggered 0.12 s, stacking upward in the ore colour
- *   0.6–1.2 s   the shuttle lifts off the pad FACING THE PLAYER (owner 2026-11-13 [MM-story_mwf8j7jg_6]: "the transport
- *               ship on the outpost should face towards the player when it takes off, then spin in the air and ascend")
- *   1.2–2.6 s   it spins in the air, rising, banked into the turn ("if it turns left it should lean left") — only the rest
- *               of one circle, 180° from the usual camera (owner 2026-11-14: "it should only spin 180 slowly")
+ *   0.6–1.2 s   the shuttle lifts straight off the pad FACING THE PLAYER, as it is parked (owner 2026-11-13
+ *               [MM-story_mwf8j7jg_6]: "the transport ship on the outpost should face towards the player when it takes off")
+ *   1.2–2.6 s   it turns 180° in the air, slowly, rising, banked into the turn, to face away (owner 2026-11-14
+ *               [MM-task_mwftv457_1d]: "The ship is facing me at take off, it should turn 180 and fly away")
  *   2.6–4.0 s   it climbs away out of frame; the HUD gold counts up (1.4–3.0 s)
- *   4.8–8.2 s   it comes back down the exact same path, the film run backwards ("Then the transport should return on the
- *               exact same path moments later"), and lands
+ *   4.8–8.2 s   it comes back down the exact same path, facing the player the whole way, and lands with no turn ("When it
+ *               comes back it is already facing and will just land")
  *
  * Reduced motion: the pops and the count-up stay; the drain, crates, shuttle, shake and splatter are skipped.
  * A sale of many loads keeps one pop per load up to MAX_POPS; past that, consecutive loads share a pop (their gold
@@ -25,19 +25,19 @@ export const SELL = Object.freeze({
   arc: [2.6, 4.0], count: [1.4, 3.0], drainFor: 0.9, cratesFor: 0.7, shakeFor: 0.45,
 });
 /**
- * The shuttle's flight (owner 2026-11-13 [MM-story_mwf8j7jg_6]): lift [SELL.lift, spin0] to `hover` cells facing the
- * player; spin [spin0, spin1], rising `spinRise` more, banked into the turn by up to `bank` rad at the fastest turn; climb
- * away over SELL.arc; out of sight for `away` s; then the same path backwards.
+ * The shuttle's flight (owner 2026-11-13 [MM-story_mwf8j7jg_6], 2026-11-14 [MM-task_mwftv457_1d]): lift [SELL.lift, spin0]
+ * to `hover` cells facing the player; turn `spinBy` (180°, left) over [spin0, spin1], rising `spinRise` more, banked into
+ * the turn by up to `bank` rad at the fastest turn; climb away over SELL.arc; out of sight for `away` s; then down the same
+ * path facing the player, no turn.
  */
-export const FLIGHT = Object.freeze({ spin: [1.2, 2.6], hover: 2.4, spinRise: 1.6, bank: 0.42, away: 0.8, climb: 26, out: 22 });
+export const FLIGHT = Object.freeze({ spin: [1.2, 2.6], spinBy: Math.PI, hover: 2.4, spinRise: 1.6, bank: 0.42, away: 0.8, climb: 26, out: 22 });
 /** When the shuttle is back on the pad: the return is the outbound flight (SELL.lift → SELL.arc[1]) run backwards. */
 export const RETURN = Object.freeze([SELL.arc[1] + FLIGHT.away, SELL.arc[1] + FLIGHT.away + (SELL.arc[1] - SELL.lift)]);
 const smooth = (k) => k * k * (3 - 2 * k);
 /**
  * Where the outbound flight is at time u (SELL.lift ≤ u ≤ SELL.arc[1]), before the scene places it:
- * → { y (cells above the pad), fwd (cells along the departure), face (0 parked heading → 1 facing the player, turned
- *     smoothly as it lifts — no snap off the pad), faceTurn (0..1, how fast that turn is now), spin (0 facing the player →
- *     1 the departure heading), turn (0..1, how fast it is spinning now, 1 at the fastest), pitch (rad, nose up as it climbs) }
+ * → { y (cells above the pad), fwd (cells along the departure), spin (0 facing the player, as parked → 1 turned spinBy,
+ *     facing away), turn (0..1, how fast it is turning now, 1 at the fastest), pitch (rad, nose up as it climbs) }
  */
 export function flightPath(u) {
   const c01 = (v) => Math.max(0, Math.min(1, v));
@@ -47,22 +47,10 @@ export function flightPath(u) {
   return {
     y: FLIGHT.hover * easeOut(kl) + FLIGHT.spinRise * smooth(ks) + a * FLIGHT.climb,
     fwd: a * a * FLIGHT.out,
-    face: smooth(kl),
-    faceTurn: kl > 0 && kl < 1 ? (6 * kl * (1 - kl)) / 1.5 : 0,
     spin: smooth(ks),
     turn: ks > 0 && ks < 1 ? (6 * ks * (1 - ks)) / 1.5 : 0,   // smoothstep's slope over its peak (1.5)
     pitch: a * 0.5,
   };
-}
-/**
- * The spin's yaw (rad) after the lift's turn to face the player (toFace, the short way, ±π at most): it carries on the
- * same way round to the departure heading, so lift + spin make exactly one circle — 180° + 180° from the usual camera.
- * Owner 2026-11-14 [MM-task_mwftv457_1d]: "When the transport plane leaves and return it should only spin 180 slowly,
- * right now it seems to spin 540". Its sign is the spin's direction (+ left), which the bank follows.
- */
-export function spinTurn(toFace) {
-  const dir = toFace < 0 ? -1 : 1;
-  return dir * (Math.PI * 2 - Math.abs(toFace));
 }
 export const MAX_POPS = 10;
 
@@ -109,19 +97,20 @@ export function sellTimeline(loads, { reduced = false, goldFrom = 0 } = {}) {
     /** The storage hologram's drain at t: 1 = as it was, 0 = drained (the share sold). */
     drainAt(t) { return reduced ? 0 : t <= 0 ? 1 : t >= SELL.drainFor ? 0 : 1 - easeOut(t / SELL.drainFor); },
     /**
-     * The shuttle's flight at t: flightPath's pose plus { on, dir, back }. dir: +1 the outbound turn, −1 the return's (the
-     * same spin run backwards turns the other way); bank = −dir × FLIGHT.bank × turn leans INTO the turn. back: returning.
+     * The shuttle's flight at t: flightPath's pose plus { on, bank, back }. Outbound it turns left (spin rising) and
+     * bank = −FLIGHT.bank × turn leans INTO the turn (left). back: returning — the same path down, but facing the player
+     * all the way (spin 0, no turn, no lean): "When it comes back it is already facing and will just land".
      */
     shuttleAt(t) {
-      const off = { on: false, y: 0, fwd: 0, spin: 0, turn: 0, pitch: 0, dir: 1, bank: 0, back: false };
+      const off = { on: false, y: 0, fwd: 0, spin: 0, turn: 0, pitch: 0, bank: 0, back: false };
       if (reduced || t < SELL.lift) return off;
-      let u = t, dir = 1, back = false;
       if (t > SELL.arc[1]) {
         if (t < RETURN[0] || t >= RETURN[1]) return off;
-        u = SELL.arc[1] - (t - RETURN[0]); dir = -1; back = true;
+        const p = flightPath(SELL.arc[1] - (t - RETURN[0]));
+        return { on: true, ...p, spin: 0, turn: 0, bank: 0, back: true };
       }
-      const p = flightPath(u);
-      return { on: true, ...p, dir, bank: p.turn ? -dir * FLIGHT.bank * p.turn : 0, back };
+      const p = flightPath(t);
+      return { on: true, ...p, bank: p.turn ? -FLIGHT.bank * p.turn : 0, back: false };
     },
   };
 }
