@@ -62,3 +62,28 @@ test('safe mode renders lean (no MSAA, 1x pixels, 512 shadow map) and the menu w
   const open = menu.slice(menu.indexOf('async function openOutpost'));
   assert.ok(open.indexOf('stage.dispose()') < open.indexOf('OUTPOST_RELEASE_MS') && open.indexOf('OUTPOST_RELEASE_MS') < open.indexOf("import('../outpost/view/sessionView.js')"), 'release, wait, then build the outpost');
 });
+
+// iPhone v2026.11.13-n [MM-task_mwh8pl3c_1x]: opens within ~20 s of a page load ran; opens after 23 min / an hour on the
+// menu were killed at frame 1. Safe mode now opens a late visit on a fresh page.
+test('safe mode: a late open goes through a fresh page, once, and only in safe mode', async () => {
+  const { needsFreshPage, requestFreshOpen, takeFreshOpen, FRESH_MS, FRESH_KEY } = await import('./safeMode.js');
+  assert.equal(needsFreshPage({ safe: true, sinceLoadMs: FRESH_MS + 1 }), true);
+  assert.equal(needsFreshPage({ safe: true, sinceLoadMs: FRESH_MS - 1 }), false, 'just after a load: open here');
+  assert.equal(needsFreshPage({ safe: false, sinceLoadMs: 3_600_000 }), false, 'not in safe mode: never');
+  assert.equal(needsFreshPage({ safe: true, sinceLoadMs: 3_600_000, fresh: true }), false, 'the open the reload asked for');
+  const ss = store(); ss.removeItem = (k) => ss.m.delete(k);
+  const win = { sessionStorage: ss };
+  assert.equal(requestFreshOpen(win, { planet: 'ground', tab: 'farm' }, 1000), true);
+  assert.ok(ss.m.has(FRESH_KEY));
+  assert.deepEqual(takeFreshOpen(win, 3000), { planet: 'ground', tab: 'farm' });
+  assert.equal(takeFreshOpen(win, 3000), null, 'taken once');
+  requestFreshOpen(win, { planet: 'ground' }, 1000);
+  assert.equal(takeFreshOpen(win, 1000 + 61_000), null, 'a stale request is dropped');
+  assert.equal(requestFreshOpen({}, { planet: 'ground' }, 0), false, 'no sessionStorage: open where it is');
+  const menu = readFileSync(new URL('../../menu/menu.js', import.meta.url), 'utf8');
+  assert.match(menu, /if \(!fresh && freshPageFirst\(planet, tab\)\) return;/);
+  assert.match(menu, /takeFreshOpen\(doc\.defaultView, Date\.now\(\)\); if \(f\) setTimeout\(\(\) => openOutpost\(f\.planet, f\.tab, \{ fresh: true \}\)/);
+  assert.doesNotMatch(menu, /crumb\(`outpost: /, "the reload's crumb is not an outpost step (a cut-short visit to lastSessionCrashed)");
+  const log = readFileSync(new URL('../../diag/errorLog.js', import.meta.url), 'utf8');
+  assert.match(log, /'page hidden'/); assert.match(log, /page visible · away /);
+});

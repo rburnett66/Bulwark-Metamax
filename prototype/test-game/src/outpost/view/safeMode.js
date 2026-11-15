@@ -41,3 +41,29 @@ export function gpuLine(r) {
     return `tier ${r.tier.key} · dpr ${R.getPixelRatio()} · ${size.x}×${size.y} · tex ${m.textures} · geo ${m.geometries} · prog ${(R.info.programs || []).length}`;
   } catch (e) { return 'gpu ?'; }
 }
+
+/**
+ * A fresh page for the outpost (iPhone v2026.11.13-n [MM-task_mwh8pl3c_1x]): every safe-mode visit opened within ~20 s
+ * of a page load ran; the ones opened after 23 min or an hour on the menu were killed at frame 1. So in safe mode, an
+ * open later than FRESH_MS after the page loaded reloads the page first (FRESH_KEY in sessionStorage says where to go)
+ * and the menu opens the outpost as soon as it is up again.
+ */
+export const FRESH_KEY = 'bulwark.openOutpost';
+export const FRESH_MS = 20_000;
+const FRESH_TTL_MS = 60_000;   // a request older than this (a reload that never finished, an old tab) is dropped
+
+/** Should this open go through a fresh page first? (fresh: it is the open that the reload asked for.) */
+export function needsFreshPage({ safe = false, sinceLoadMs = 0, fresh = false } = {}) {
+  return !!safe && !fresh && sinceLoadMs > FRESH_MS;
+}
+/** Note the open for the next page load. → true when it was stored (no sessionStorage: open here instead). */
+export function requestFreshOpen(win, { planet, tab = 'outpost' }, now) {
+  try { win.sessionStorage.setItem(FRESH_KEY, JSON.stringify({ planet, tab, at: now })); return true; } catch (e) { return false; }
+}
+/** The open a reload asked for, taken once (removed as it is read) → { planet, tab } or null. */
+export function takeFreshOpen(win, now) {
+  let v = null;
+  try { const raw = win.sessionStorage.getItem(FRESH_KEY); win.sessionStorage.removeItem(FRESH_KEY); v = raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  if (!v || typeof v.planet !== 'string' || !(now - v.at >= 0 && now - v.at < FRESH_TTL_MS)) return null;
+  return { planet: v.planet, tab: v.tab === 'farm' ? 'farm' : 'outpost' };
+}

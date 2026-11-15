@@ -86,6 +86,16 @@ export function installErrorLog(win, opts = {}) {
     wrapped.__bwWrapped = true;
     C.prototype.getExtension = wrapped;
   }
+  // the tab going to the background and back (iPhone v2026.11.13-n [MM-task_mwh8pl3c_1x]: a long gap before a crash —
+  // was the phone away?)
+  try {
+    const d = win.document;
+    let hiddenAt = 0;
+    if (d && d.addEventListener) d.addEventListener('visibilitychange', () => {
+      if (d.hidden) { hiddenAt = Date.now(); push('crumb', 'page hidden'); }
+      else if (hiddenAt) { push('crumb', `page visible · away ${Math.round((Date.now() - hiddenAt) / 1000)} s`); hiddenAt = 0; }
+    });
+  } catch (_) { /* no document */ }
   win.addEventListener('webglcontextlost', (e) => {
     if (e && e.target && e.target.__bwReleased) return;
     push('gl', 'WebGL context lost');
