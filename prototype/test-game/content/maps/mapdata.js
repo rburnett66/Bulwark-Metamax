@@ -6202,7 +6202,7 @@ export const MAPDATA = {
   "Pod_Crate": 12,
   "Silo_Hours": 8,
   "Farmhouse_Store_Hours": 1,
-  "Plot_Walkway_Cells": 1,
+  "Plot_Walkway_Cells": 0,
   "Breach_Silo_Loss": 0.25,
   "Trample_Fruited_Yield": 0.5,
   "Avatar_Cells": 0.45,
