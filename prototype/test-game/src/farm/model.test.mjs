@@ -303,18 +303,22 @@ test('level 5 needs a trick: a Traditional plot grows a level-5 crop at 4; an Ir
   assert.equal(plantLevel(go(p.outpost, o.t + 2 * MIN), map, plot, 5).level, 4, 'an unpowered Pump gives no water');
 });
 
-test('walkways: a plot keeps one clear cell from every other farm thing (owner 2026-11-10, room for the agrobots)', () => {
+// Owner 2026-11-14 [MM-task_mwh840qo_1w]: "Farm plots should side by side without gaps" (was a 1-cell walkway, 2026-11-10)
+test('plots sit side by side: no walkway between farm things (the gap is still a data dial)', () => {
+  assert.equal(FARM.Plot_Walkway_Cells, 0);
   let o = base();
   const [sp] = freeSpots(o, 1);
   o = placePlot(o, sp, { map, now: T0 }).outpost;
   const id = Object.keys(o.farm.plots)[0];
-  assert.deepEqual(walkwayHit(o, { x: sp.x + 2, y: sp.y, w: 2, h: 2 }), { what: 'plot ' + id });       // edge to edge
-  assert.deepEqual(walkwayHit(o, { x: sp.x + 2, y: sp.y + 2, w: 2, h: 2 }), { what: 'plot ' + id });   // corner to corner
-  assert.equal(walkwayHit(o, { x: sp.x + 3, y: sp.y, w: 2, h: 2 }), null);                             // one cell between
-  assert.equal(walkwayHit(o, { x: sp.x + 2, y: sp.y, w: 2, h: 2 }, 0), null);                          // the gap is data
-  // placing touching it is refused (by the walkway, unless that ground is taken or off the map anyway)
+  assert.equal(walkwayHit(o, { x: sp.x + 2, y: sp.y, w: 2, h: 2 }), null);                             // edge to edge
+  assert.equal(walkwayHit(o, { x: sp.x + 2, y: sp.y + 2, w: 2, h: 2 }), null);                         // corner to corner
+  assert.deepEqual(walkwayHit(o, { x: sp.x + 2, y: sp.y, w: 2, h: 2 }, 1), { what: 'plot ' + id });    // a gap of 1 still works
+  // placing touching it is never refused for crowding (only taken ground, the map's cells or the map's edge)
+  let touched = 0;
   for (const [dx, dy] of [[2, 0], [-2, 0], [0, 2], [0, -2]]) {
     const r = placePlot(o, { x: sp.x + dx, y: sp.y + dy }, { map, now: T0 });
-    assert.match(r.error || '', /walkway|taken|off the map/, `touching at ${dx},${dy}`);
+    assert.doesNotMatch(r.error || '', /walkway/, `touching at ${dx},${dy}`);
+    if (!r.error) touched++;
   }
+  assert.ok(touched > 0, 'a plot can be placed flush against another');
 });
