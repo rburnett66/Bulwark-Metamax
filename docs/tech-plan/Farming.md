@@ -47,6 +47,9 @@ Repo copy (canonical): `docs/tech-plan/Farming.md` in rburnett66/Bulwark-Metamax
    walkway so the agrobots can help manage the crops when they are added."* Plots and farm buildings keep
    `Plot_Walkway_Cells` (= 1, Farm_Params) of clear ground from every other farm thing, corners included
    (`walkwayHit` in `src/farm/model.js`, used by placement, the FARM tab's targets and `packPlots`).
+   **Superseded 2026-11-14** [MM-task_mwh840qo_1w] (owner: *"Farm plots should side by side without gaps"*; farm
+   buildings flush too): `Plot_Walkway_Cells` = 0, so plots and farm buildings pack edge to edge. The rule stays as a
+   data dial; the 1-cell yard round the outpost's own buildings (`canPlacePlot`) is unchanged.
 9. **Crop levels come from the tech tree; seed pods have no level** (owner, 2026-11-10 [MM-story_mwai5f8t_1g]):
    *"The player will only grow their most upgraded crop — so a player who has corn leveled to 3 will always grow level
    3 corn. But the game needs to remember the level with each crop, because I might have a plot of level 2 and I upgrade
