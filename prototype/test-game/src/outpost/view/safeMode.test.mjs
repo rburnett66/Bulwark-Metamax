@@ -87,3 +87,21 @@ test('safe mode: a late open goes through a fresh page, once, and only in safe m
   const log = readFileSync(new URL('../../diag/errorLog.js', import.meta.url), 'utf8');
   assert.match(log, /'page hidden'/); assert.match(log, /page visible · away /);
 });
+
+// Report v2026.11.13-p [MM-task_mwi7ypvg_1y]: fresh opens after a long absence died while the away report revealed. Safe
+// mode shows that report with no live blur over the 3D view, and the error log says when it is up.
+test('safe mode: the away report has no backdrop blur, and its showing is in the error log', async () => {
+  const { RESULTS_CSS } = await import('../../render/resultsScreen.js');
+  const lean = RESULTS_CSS.match(/\.rs\.rs-lean \.rs-scrim \{([^}]*)\}/);
+  assert.ok(lean, 'a lean scrim rule');
+  assert.match(lean[1], /(^|[^-])backdrop-filter:none/);
+  assert.match(lean[1], /-webkit-backdrop-filter:none/);
+  assert.match(lean[1], /background:/, 'a darker plain scrim instead');
+  const wr = readFileSync(new URL('../../render/waveReport.js', import.meta.url), 'utf8');
+  assert.match(wr, /root\.className = className \+ \(opts\.lean \? ' rs-lean' : ''\)/);
+  const hud = readFileSync(new URL('../../render/hud.js', import.meta.url), 'utf8');
+  assert.match(hud, /export function showAwayReport\(hud, model, opts = \{\}\)/);
+  assert.match(hud, /mountAwayReport\(hud\.resultEl, model, \(\) => \{[^}]*\}, opts\)/);
+  const sv = readFileSync(new URL('./sessionView.js', import.meta.url), 'utf8');
+  assert.match(sv, /crumb\('outpost: away report'\); void showAwayReport\(hud, away, \{ lean: safe \}\)\.then\(\(\) => crumb\('outpost: away report closed'\)\)/);
+});

@@ -126,7 +126,7 @@ function mountReport(host, className, html, onContinue, opts, play) {
   ensureAaaFonts(doc);
   host.innerHTML = '';
   const root = doc.createElement('div');
-  root.className = className;
+  root.className = className + (opts.lean ? ' rs-lean' : '');
   root.innerHTML = html;
   host.appendChild(root);
   const win = doc.defaultView;
