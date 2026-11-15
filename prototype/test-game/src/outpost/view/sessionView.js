@@ -653,7 +653,8 @@ async function openSession(opts, opening) {
     resolveClosed();
   }
   refreshPanel();
-  if (away.show) void showAwayReport(hud, away);   // once, on arrival, over the outpost; CONTINUE hands back
+  // once, on arrival, over the outpost; CONTINUE hands back. Safe mode: no live blur behind it [MM-task_mwi7ypvg_1y]
+  if (away.show) { crumb('outpost: away report'); void showAwayReport(hud, away, { lean: safe }).then(() => crumb('outpost: away report closed')); }
   const handle = { session, get sim() { return sim; }, get live() { return live; }, get ui() { return ui; }, get raids() { return raids; }, get scene() { return scene; }, panel: card.root, card, away, actOnSave,
     // the farm (S6; review pages and the headless check): its tab, the picture's counts, the crew, a farm action, a tap
     catalogue, get farm() { return farmLayer; }, get crew() { return crew ? crew.info() : null; }, farmAct, tapFarm, farmNow,

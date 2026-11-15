@@ -1519,11 +1519,11 @@ export function showWaveReport(hud, model) {
  * The outpost's AWAY REPORT (spec §6, D5) [MM-story_mwcuyrqr_3j]: the wave report's takeover in the same container, fed
  * by outpost/view/awayReport.js's model (render/waveReport.js mountAwayReport). Resolves on CONTINUE; the HUD comes back.
  */
-export function showAwayReport(hud, model) {
+export function showAwayReport(hud, model, opts = {}) {
   if (!hud || !hud.resultEl) return Promise.resolve();
   if (hud._results) hud._results.dispose();
   return new Promise((resolve) => {
-    hud._results = mountAwayReport(hud.resultEl, model, () => { hud.hideResult(); resolve(); });
+    hud._results = mountAwayReport(hud.resultEl, model, () => { hud.hideResult(); resolve(); }, opts);
     hud.root.classList.add('bw-results-open');
     hud.resultEl.style.display = 'flex';
     hud.resultEl.classList.add('bw-show');

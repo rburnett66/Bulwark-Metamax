@@ -43,6 +43,10 @@ export const RESULTS_CSS = `
 .rs-scrim { position:absolute; inset:0; background:radial-gradient(120% 90% at 50% 35%, rgba(10,14,22,.62), rgba(4,6,10,.94) 70%);
   -webkit-backdrop-filter:blur(7px) saturate(.7); backdrop-filter:blur(7px) saturate(.7); opacity:0; transition:opacity .45s ease-out; }
 .rs.on .rs-scrim { opacity:1; }
+/* lean (the outpost's safe mode): no live blur over the 3D view — on an iPhone a full-screen backdrop-filter over a
+   canvas that keeps drawing is re-blurred every frame at 3x; a darker plain scrim instead [MM-task_mwi7ypvg_1y] */
+.rs.rs-lean .rs-scrim { -webkit-backdrop-filter:none; backdrop-filter:none;
+  background:radial-gradient(120% 90% at 50% 35%, rgba(10,14,22,.82), rgba(4,6,10,.97) 70%); }
 .rs-body { position:relative; flex:0 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain;
   display:grid; grid-template-columns:1fr; gap:clamp(10px,2.4vmin,22px); align-content:start;
   padding:max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
