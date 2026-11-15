@@ -24,6 +24,8 @@ import { battlesOn } from '../save/battleLog.js';
 import { resourceId, resourceIconHtml } from '../data/resourceIcons.js';
 import { MAPDATA } from '../../content/maps/mapdata.js';
 import { errorReportsRow } from '../diag/reportPanel.js';
+import { crumb } from '../diag/errorLog.js';
+import { outpostSafeMode, needsFreshPage, requestFreshOpen, takeFreshOpen } from '../outpost/view/safeMode.js';
 import { qualityRow } from './qualityRow.js';
 import { planetNebula } from './planetNebula.js';
 import { loadSave, updateSave, buyTech, refundTech, takePendingRewards, markSeen, totalStars, bankOf } from '../save/save.js';
@@ -560,7 +562,22 @@ export function createMenu(mountEl, cbs) {
   // (no FARM button: owner 2026-11-11 "do we need outpost and farm on the planet view menu, I think the Build menu should
   // have build and Farm toggles" [MM-story_mwcgbd9q_2y] — the farm is the outpost's FARM tab on the battle rail; its
   // status (farmButton.js) joins the OUTPOST button's line and red dot. openOutpost(planet, 'farm') opens on that tab.)
-  async function openOutpost(planet, tab = 'outpost') {
+  // iPhone v2026.11.13-n [MM-task_mwh8pl3c_1x]: in safe mode, a visit opened long after the page loaded was killed at
+  // frame 1 while one opened just after a load ran — so a late open reloads the page first and opens once it is back
+  function freshPageFirst(planet, tab) {
+    const win = doc.defaultView;
+    if (!win || !win.location) return false;
+    let safe = false;
+    try { safe = outpostSafeMode(win); } catch (e) { /* no storage */ }
+    const since = win.performance && win.performance.now ? win.performance.now() : 0;
+    if (!needsFreshPage({ safe, sinceLoadMs: since })) return false;
+    if (!requestFreshOpen(win, { planet, tab }, Date.now())) return false;   // no sessionStorage: open here
+    crumb(`menu: a fresh page for the outpost · ${Math.round(since / 1000)} s since the page loaded`);
+    win.location.reload();
+    return true;
+  }
+  async function openOutpost(planet, tab = 'outpost', { fresh = false } = {}) {
+    if (!fresh && freshPageFirst(planet, tab)) return;
     outpostOpen = true;
     // the menu's own 3D views (the live globes and capital ship, the tech net) hold GPU contexts too: let them go while
     // the outpost is open (iOS killed the tab two seconds after the outpost opened, owner 2026-11-09 error report);
@@ -584,6 +601,7 @@ export function createMenu(mountEl, cbs) {
       outpostOpen = false;
       if (cbs.onOutpostClose) { try { cbs.onOutpostClose(); } catch (e) { console.warn('[outpost] restore', e); } }
       syncStage(); refreshOutpost(); missionsChanged();
+      crumb('menu: back from the outpost');
       if (cbs.onTechChanged) cbs.onTechChanged();   // the bank changed (sales, builds): the next battle sees it
     }
   }
@@ -1152,6 +1170,8 @@ export function createMenu(mountEl, cbs) {
   };
   show('main');
   setTimeout(playPendingRewards, 600);
+  // the outpost a fresh-page reload was for (freshPageFirst): open it now the page is new
+  try { const f = takeFreshOpen(doc.defaultView, Date.now()); if (f) setTimeout(() => openOutpost(f.planet, f.tab, { fresh: true }), 0); } catch (e) { /* no storage */ }
   // ?intro=1 plays the Collective intro straight away (review link) [MM-story_mw4d1bsw_q]
   try { if (new URLSearchParams(location.search).get('intro') === '1') setTimeout(openCollectiveIntro, 50); } catch (e) { /* no location */ }
   // a new save opens on the Collective intro; a reload after ACCEPT resumes at the Loading Bay [MM-story_mw47lq0l_7]
