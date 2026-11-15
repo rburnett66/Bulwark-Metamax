@@ -11,6 +11,8 @@
  *     idle or unpowered; Mk II sets timeScale 2 (design §8.4);
  *   - Mk II look: trim and the cyan lights turn hot amber, 2× tempo, 3× debris with bigger chunks;
  *   - three LODs switched by camera distance (THREE.LOD); the low tier skips LOD0;
+ *   - lean (the outpost on Low and in safe mode) [MM-task_mwiej4bg_1z]: no textures are decoded at all and the hull and
+ *     trim are Lambert, the battle's own building material — the textured PBR hull was the outpost's real cost on a phone;
  *   - states (structures/models.js lifecycleLook's language): building rises in steps with a cool tint, upgrading a
  *     warm tint, unpowered turns the emissive off.
  * Nodes are found by their `node` extra, never by name (lower LODs carry a `.001` suffix).
@@ -21,6 +23,9 @@ export const CYAN = Object.freeze([0.05, 0.42, 1.0]);
 export const AMBER = Object.freeze([1.0, 0.45, 0.08]);
 export const TRIM = Object.freeze({ verdance: 0xeb5c0d, mk2: 0xffb328 });
 const LOD_DIST = [0, 26, 52];
+/** The lean hull's flat colour (× bodyLift): matched on screen to the textured hull, which its metal/roughness maps
+ *  shade to a dark charcoal (≈ sRGB 75 in the low-tier outpost, 2026-11-15 before/after shots). */
+export const LEAN_HULL = 0.24;
 
 /**
  * The capacity gauge on a building's outside (owner 2026-11-12: "the storage facility should have a capacity level
@@ -123,9 +128,11 @@ export function modelSlug(kind, tier, rigHead) {
  * The model kit: loads the manifest once and each GLB once; make(slug) builds a placed instance (a THREE.LOD with
  * one clone per level). opts: { base (URL of content/outposts/), tier ('high' | 'standard' | 'low'), GLTFLoader }.
  */
-export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader, trim = TRIM.verdance, bodyLift = 1.5, lodLevels = null } = {}) {
+export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader, trim = TRIM.verdance, bodyLift = 1.5, lodLevels = null, lean = false } = {}) {
   const manifest = await (await fetch(base + 'outposts.json')).json();
   const loader = new GLTFLoader();
+  // lean: every GLB embeds the three 1024² hull maps; never decode them (each is ~4 MB in memory, more on the GPU)
+  if (lean) loader.register(() => ({ name: 'bulwark_lean_no_textures', loadTexture: () => Promise.resolve(null) }));
   const files = new Map();
   // Every GLB (every building, every LOD) carries the same three 1024² panel maps (normal, cavity, roughness). Kept
   // apart they cost about 236 MB of GPU memory for a full outpost and iOS kills the tab (owner 2026-11-09 error
@@ -169,7 +176,8 @@ export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader,
     const mats = { body: [], trim: [], glow: [] };
     root.traverse((o) => {
       if (!o.isMesh) return;
-      o.castShadow = true; o.receiveShadow = true;
+      // lean: the hull still casts its shadow on the ground but takes none (Lambert on these double-sided hulls stripes with acne)
+      o.castShadow = true; o.receiveShadow = !lean;
       const name = o.material && o.material.name;
       if (name === 'ship_glow') {
         o.material = glowBase.clone();
@@ -179,9 +187,14 @@ export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader,
         o.userData.baseColors = col ? col.array.slice() : null;
         mats.glow.push(o);
       } else if (name === 'outpost_trim') {
-        o.material = o.material.clone();
+        o.material = lean ? new THREE.MeshLambertMaterial({ color: o.material.color.clone(), side: o.material.side, name }) : o.material.clone();
         o.material.vertexColors = false;
         mats.trim.push(o.material);
+      } else if (o.material && lean) {
+        // lean: the battle's building material — one Lambert, no maps — at the textured hull's lightness
+        o.material = new THREE.MeshLambertMaterial({ color: new THREE.Color().setScalar((bodyLift || 1) * LEAN_HULL), side: o.material.side, name: o.material.name });
+        o.userData.baseColor = o.material.color.clone();
+        mats.body.push(o);
       } else if (o.material) {
         o.material = o.material.clone();
         // the battle view has no environment map and writes linear colour (its own models are vertex-coloured for
@@ -290,7 +303,7 @@ export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader,
     api.setLook({});
     return api;
   }
-  return { manifest, preload, make, levels };
+  return { manifest, preload, make, levels, lean };
 }
 
 /**

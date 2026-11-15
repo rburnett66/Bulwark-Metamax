@@ -105,3 +105,19 @@ test('safe mode: the away report has no backdrop blur, and its showing is in the
   const sv = readFileSync(new URL('./sessionView.js', import.meta.url), 'utf8');
   assert.match(sv, /crumb\('outpost: away report'\); void showAwayReport\(hud, away, \{ lean: safe \}\)\.then\(\(\) => crumb\('outpost: away report closed'\)\)/);
 });
+
+// Owner 2026-11-15 "Combat works fine but outpost doesn't. In low quality are we flat shading the buildings?" — no: the
+// outpost drew a textured PBR hull on every tier. Low and safe mode now draw the battle's material [MM-task_mwiej4bg_1z].
+test('lean outpost buildings: Low and safe mode decode no textures and draw Lambert hulls; the shuttle preloads', () => {
+  const kit = readFileSync(new URL('../../render3d/outposts/outpostModels.js', import.meta.url), 'utf8');
+  assert.match(kit, /lodLevels = null, lean = false \} = \{\}\)/);
+  assert.match(kit, /if \(lean\) loader\.register\(\(\) => \(\{ name: 'bulwark_lean_no_textures', loadTexture: \(\) => Promise\.resolve\(null\) \}\)\)/);
+  assert.match(kit, /o\.material && lean\) \{[\s\S]{0,200}new THREE\.MeshLambertMaterial\(\{ color: new THREE\.Color\(\)\.setScalar\(\(bodyLift \|\| 1\) \* LEAN_HULL\)/);
+  assert.match(kit, /o\.material = lean \? new THREE\.MeshLambertMaterial\(\{ color: o\.material\.color\.clone\(\)/, 'the trim too');
+  assert.match(kit, /o\.castShadow = true; o\.receiveShadow = !lean;/, 'lean hulls cast, take none: no acne stripes');
+  assert.match(kit, /export const LEAN_HULL = 0\.24;/, 'matched on screen to the textured hull');
+  const sv = readFileSync(new URL('./sessionView.js', import.meta.url), 'utf8');
+  assert.match(sv, /const lean = safe \|\| r\.tier\.key === 'low';/);
+  assert.match(sv, /createOutpostKit\([^)]*lean \}\)/);
+  assert.match(sv, /if \(lean && kit\.manifest\.shuttle\) slugs\.add\('shuttle'\);/);
+});

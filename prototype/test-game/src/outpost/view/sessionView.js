@@ -306,13 +306,17 @@ async function openSession(opts, opening) {
     if (r.markers && r.markers.setBaseVisible) r.markers.setBaseVisible(false);   // the hub model stands on the base
     const { GLTFLoader } = await import(ROOT + 'vendor/three-addons/loaders/GLTFLoader.js');
     crumb('outpost: loading the building models');
-    const kit = await createOutpostKit(r.THREE, { base: ROOT + 'content/outposts/', tier: r.tier.key, GLTFLoader, lodLevels: safe ? SAFE_LODS : null });
+    // lean buildings on Low and in safe mode: no hull textures, the battle's Lambert [MM-task_mwiej4bg_1z]
+    const lean = safe || r.tier.key === 'low';
+    const kit = await createOutpostKit(r.THREE, { base: ROOT + 'content/outposts/', tier: r.tier.key, GLTFLoader, lodLevels: safe ? SAFE_LODS : null, lean });
     // the base's decor (decor.js): flat shaded on Low and in safe mode, textured otherwise
     const decorLod = safe || r.tier.key === 'low' ? 'flat' : 'tex';
     scene = createOutpostScene(r.THREE, r, { map, kit, tier: r.tier.key, reduced, decor: { base: ROOT + 'content/outposts/decor/', GLTFLoader, lod: decorLod } });
     const o = fromLiveSim(sim, live.link, nowOf()).outpost;
     const slugs = new Set(planBuildings(o, map, nowOf()).map((b) => modelSlug(b.kind, b.tier, b.rigHead)).filter(Boolean));
     if (farmed) for (const k of ['farmhouse', 'silo', 'pump']) if (kit.manifest[k]) slugs.add(k);
+    // lean: the sale's flying shuttle loads with the rest, never mid-sale (an iPhone lost the tab twice during a sale)
+    if (lean && kit.manifest.shuttle) slugs.add('shuttle');
     // the farm on this same scene (S6): its plots and plants, its buildings, the avatar and farmhands, the harvest embers
     if (farmed) {
       farmLayer = createFarmLayer(r.THREE, r, { map, kit, reduced });
