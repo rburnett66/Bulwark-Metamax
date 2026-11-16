@@ -75,6 +75,7 @@ async function fakeKit(slugs) {
   const prev = globalThis.fetch;
   globalThis.fetch = async () => ({ json: async () => manifest });
   class GLTFLoader {
+    register() { return this; }   // the kit's texture plugins (none of these stand-in scenes has a texture)
     load(url, ok) {
       const scene = new THREE.Group();
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
