@@ -108,16 +108,48 @@ test('safe mode: the away report has no backdrop blur, and its showing is in the
 
 // Owner 2026-11-15 "Combat works fine but outpost doesn't. In low quality are we flat shading the buildings?" — no: the
 // outpost drew a textured PBR hull on every tier. Low and safe mode now draw the battle's material [MM-task_mwiej4bg_1z].
-test('lean outpost buildings: Low and safe mode decode no textures and draw Lambert hulls; the shuttle preloads', () => {
+test('lean outpost buildings: Low and safe mode decode no textures; the shuttle preloads', () => {
   const kit = readFileSync(new URL('../../render3d/outposts/outpostModels.js', import.meta.url), 'utf8');
   assert.match(kit, /lodLevels = null, lean = false \} = \{\}\)/);
   assert.match(kit, /if \(lean\) loader\.register\(\(\) => \(\{ name: 'bulwark_lean_no_textures', loadTexture: \(\) => Promise\.resolve\(null\) \}\)\)/);
-  assert.match(kit, /o\.material && lean\) \{[\s\S]{0,200}new THREE\.MeshLambertMaterial\(\{ color: new THREE\.Color\(\)\.setScalar\(\(bodyLift \|\| 1\) \* LEAN_HULL\)/);
-  assert.match(kit, /o\.material = lean \? new THREE\.MeshLambertMaterial\(\{ color: o\.material\.color\.clone\(\)/, 'the trim too');
   assert.match(kit, /o\.castShadow = true; o\.receiveShadow = !lean;/, 'lean hulls cast, take none: no acne stripes');
-  assert.match(kit, /export const LEAN_HULL = 0\.24;/, 'matched on screen to the textured hull');
   const sv = readFileSync(new URL('./sessionView.js', import.meta.url), 'utf8');
   assert.match(sv, /const lean = safe \|\| r\.tier\.key === 'low';/);
   assert.match(sv, /createOutpostKit\([^)]*lean \}\)/);
   assert.match(sv, /if \(lean && kit\.manifest\.shuttle\) slugs\.add\('shuttle'\);/);
+});
+
+// Owner 2026-11-15 [MM-task_mwitpcqs_21]: "I was hoping for some flat shaded coloring [similar] to the previous building
+// look. Now the outpost is all brown." #338's lean hull dropped the hull's own vertex colours (COLOR_0: light panels,
+// dark sides); the lean hull now keeps them, flat-shaded, at the textured hull's lightness, with the trim in its colour.
+test('lean buildings are flat-shaded in their own vertex colours and trim colour, with no maps', async () => {
+  const THREE = await import('../../../vendor/three.module.js');
+  const { createOutpostKit, LEAN_HULL, TRIM } = await import('../../render3d/outposts/outpostModels.js');
+  const manifest = { hub: { kind: 'hub', lods: [0, 1, 2].map((l) => ({ file: `hub_lod${l}.glb` })) } };
+  const prev = globalThis.fetch;
+  globalThis.fetch = async () => ({ json: async () => manifest });
+  class GLTFLoader {
+    register() { return this; }
+    load(url, ok) {
+      const scene = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ name: 'ship_body_v2', vertexColors: true, side: THREE.DoubleSide }));
+      const trim = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ name: 'outpost_trim', vertexColors: true }));
+      scene.add(body, trim);
+      ok({ scene, animations: [] });
+    }
+  }
+  let kit;
+  try { kit = await createOutpostKit(THREE, { base: './', GLTFLoader, lean: true, tier: 'low', bodyLift: 1.5 }); } finally { globalThis.fetch = prev; }
+  const b = await kit.make('hub');
+  const mats = [];
+  b.lod.levels[0].object.traverse((o) => { if (o.isMesh) mats.push(o.material); });
+  const hull = mats.find((m) => m.name === 'ship_body_v2'), trim = mats.find((m) => m.name === 'outpost_trim');
+  assert.ok(hull.isMeshStandardMaterial && hull.flatShading, 'flat-shaded');
+  assert.equal(hull.vertexColors, true, "the hull's own panel colours, not one brown");
+  assert.equal(hull.map, null);
+  assert.equal(hull.side, THREE.DoubleSide);
+  assert.ok(Math.abs(hull.color.r - 1.5 * LEAN_HULL) < 1e-6);
+  assert.equal(LEAN_HULL, 0.7, 'the mean of the panel cavity map (linear), which the lean hull no longer samples');
+  assert.ok(trim.isMeshStandardMaterial && trim.flatShading && trim.vertexColors === false);
+  assert.equal(trim.color.getHex(), TRIM.verdance, 'faction trim');
 });

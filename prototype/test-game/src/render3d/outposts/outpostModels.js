@@ -11,8 +11,10 @@
  *     idle or unpowered; Mk II sets timeScale 2 (design §8.4);
  *   - Mk II look: trim and the cyan lights turn hot amber, 2× tempo, 3× debris with bigger chunks;
  *   - three LODs switched by camera distance (THREE.LOD); the low tier skips LOD0;
- *   - lean (the outpost on Low and in safe mode) [MM-task_mwiej4bg_1z]: no textures are decoded at all and the hull and
- *     trim are Lambert, the battle's own building material — the textured PBR hull was the outpost's real cost on a phone;
+ *   - lean (the outpost on Low and in safe mode) [MM-task_mwiej4bg_1z]: no textures are decoded at all — the textured PBR
+ *     hull was the outpost's real cost on a phone. The hull and trim are flat-shaded instead, one colour per face, in the
+ *     textured look's light grey panels and faction trim (owner 2026-11-15: "I was hoping for some flat shaded coloring
+ *     [similar] to the previous building look. Now the outpost is all brown." [MM-task_mwitpcqs_21]);
  *   - states (structures/models.js lifecycleLook's language): building rises in steps with a cool tint, upgrading a
  *     warm tint, unpowered turns the emissive off.
  * Nodes are found by their `node` extra, never by name (lower LODs carry a `.001` suffix).
@@ -23,9 +25,13 @@ export const CYAN = Object.freeze([0.05, 0.42, 1.0]);
 export const AMBER = Object.freeze([1.0, 0.45, 0.08]);
 export const TRIM = Object.freeze({ verdance: 0xeb5c0d, mk2: 0xffb328 });
 const LOD_DIST = [0, 26, 52];
-/** The lean hull's flat colour (× bodyLift): matched on screen to the textured hull, which its metal/roughness maps
- *  shade to a dark charcoal (≈ sRGB 75 in the low-tier outpost, 2026-11-15 before/after shots). */
-export const LEAN_HULL = 0.24;
+/** The lean hull's colour (× bodyLift × its own vertex colours): the mean of the panel cavity map it no longer samples
+ *  (linear 0.70, every GLB's ship_body_v2 baseColorTexture), so the panels keep the textured hull's lightness. The hull's
+ *  colours live in its COLOR_0 (light panels, dark sides); #338 dropped them, which turned every building one brown. */
+export const LEAN_HULL = 0.7;
+/** The lean materials: the scene's own MeshStandardMaterial program, faceted, no maps, nearly dielectric like the
+ *  textured hull in the battle light (bodyLift below). */
+const leanMat = (THREE, color, side, name, vertexColors = false) => new THREE.MeshStandardMaterial({ color, side, name, vertexColors, flatShading: true, metalness: 0.12, roughness: 0.62, envMapIntensity: 0 });
 
 /**
  * The capacity gauge on a building's outside (owner 2026-11-12: "the storage facility should have a capacity level
@@ -209,7 +215,7 @@ export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader,
     const mats = { body: [], trim: [], glow: [] };
     root.traverse((o) => {
       if (!o.isMesh) return;
-      // lean: the hull still casts its shadow on the ground but takes none (Lambert on these double-sided hulls stripes with acne)
+      // lean: the hull still casts its shadow on the ground but takes none (its double-sided faces stripe with acne)
       o.castShadow = true; o.receiveShadow = !lean;
       const name = o.material && o.material.name;
       if (name === 'ship_glow') {
@@ -220,12 +226,12 @@ export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader,
         o.userData.baseColors = col ? col.array.slice() : null;
         mats.glow.push(o);
       } else if (name === 'outpost_trim') {
-        o.material = lean ? new THREE.MeshLambertMaterial({ color: o.material.color.clone(), side: o.material.side, name }) : o.material.clone();
+        o.material = lean ? leanMat(THREE, o.material.color.clone(), o.material.side, name) : o.material.clone();
         o.material.vertexColors = false;
         mats.trim.push(o.material);
       } else if (o.material && lean) {
-        // lean: the battle's building material — one Lambert, no maps — at the textured hull's lightness
-        o.material = new THREE.MeshLambertMaterial({ color: new THREE.Color().setScalar((bodyLift || 1) * LEAN_HULL), side: o.material.side, name: o.material.name });
+        // lean: flat-shaded, no maps, in the hull's own vertex colours at the textured hull's lightness
+        o.material = leanMat(THREE, new THREE.Color().setScalar((bodyLift || 1) * LEAN_HULL), o.material.side, o.material.name, !!o.material.vertexColors);
         o.userData.baseColor = o.material.color.clone();
         mats.body.push(o);
       } else if (o.material) {
