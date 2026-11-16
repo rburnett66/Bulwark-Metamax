@@ -5,7 +5,7 @@ import * as THREE from '../../../vendor/three.module.js';
 import { POD_LEVELS } from '../../data/farm.js';
 import { createImpacts, K, EMBER_SHADE, LOW_IMPACT_CAPS } from '../../render3d/fx/impacts.js';
 import { createImpactsView, farmEmberLook } from '../../render3d/fx/impactsView.js';
-import { createFarmEmbers, emberParams, emberSeed, IDLE } from './embers.js';
+import { createFarmEmbers, emberParams, emberSeed, IDLE, SAFE_IDLE, BURST } from './embers.js';
 import { plantSpots, FARM_Y } from './farmLayer.js';
 
 // a farm: p1 Fruited (level from `lv`), p2 Dead, p3 growing — plotState reads progress / ripeAt against o.t
@@ -95,7 +95,7 @@ test('embers rise and wobble on value noise, then fade out at the top; no PRNG d
   assert.deepEqual(sparks(a), sparks(b));
 });
 
-test('idle embers drift off each Fruited plot only, capped a frame — and none in safe mode', () => {
+test('idle embers drift off each Fruited plot only, capped a frame — and fewer in safe mode', () => {
   const o = farmOf(3), fx = createImpacts(), F = createFarmEmbers();
   let n = 0;
   for (let i = 0; i < 30; i++) n += F.step(1 / 30, o, fx, K);
@@ -107,12 +107,12 @@ test('idle embers drift off each Fruited plot only, capped a frame — and none 
   const big = farmOf(5);
   for (let i = 0; i < 40; i++) big.farm.plots['q' + i] = { ...big.farm.plots.p1, id: 'q' + i, x: 20 + i * 4 };
   assert.ok(createFarmEmbers().step(0.2, big, createImpacts(), K) <= IDLE.maxPerFrame);
-  // safe mode: no idle embers at all
-  const S = createFarmEmbers({ safe: true }), fs = createImpacts();
-  let m = 0;
-  for (let i = 0; i < 60; i++) m += S.step(1 / 30, o, fs, K);
-  assert.equal(m, 0);
-  assert.equal(fs.particles.length, 0);
+  // safe mode (owner 2026-11-16: the embers were missing on the phone): still there, at a quarter the rate, few a tick
+  const S = createFarmEmbers({ safe: true }), fs = createImpacts(), N = createFarmEmbers(), fn = createImpacts();
+  let m = 0, full = 0;
+  for (let i = 0; i < 60; i++) { m += S.step(1 / 30, o, fs, K); full += N.step(1 / 30, o, fn, K); }
+  assert.ok(m > 0 && m <= full / 2, `safe ${m} vs ${full}`);
+  assert.ok(createFarmEmbers({ safe: true }).step(0.5, big, createImpacts(), K) <= SAFE_IDLE.maxPerFrame);
 });
 
 test('a dead plot\'s harvest puffs grey-brown dust, no embers', () => {
@@ -169,4 +169,11 @@ test('the view draws a farm ember in its colour; the battle\'s shades are byte-f
     if (a <= 0) continue;
     assert.ok(Math.abs(C[i * 4] / C[i * 4 + 2] - gold[0] / gold[2]) < 1e-3, 'gold, not the battle ember\'s orange');
   }
+});
+
+// Owner 2026-11-16 [MM-task_mwjs94o2_23]: since S6 the farm is seen from the outpost's whole-base camera, where the old
+// farm screen's ember sizes read as specks.
+test('embers are sized for the outpost camera', () => {
+  assert.ok(BURST.size[0] >= 0.12 && IDLE.size[0] >= 0.1, 'readable from the whole-base view');
+  assert.ok(BURST.size[1] <= 0.25 && IDLE.size[1] <= 0.2, 'still embers, not blobs');
 });
