@@ -130,6 +130,35 @@ export function modelSlug(kind, tier, rigHead) {
   return null;   // harvester: the battle's own miner model (harvestDrive.js)
 }
 
+/** FNV-1a over a texture's encoded bytes: the key that tells one GLB's embedded hull map from another's. Pure. */
+export function imageKey(bytes, mime = '') {
+  const u = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < u.length; i++) h = Math.imul(h ^ u[i], 0x01000193);
+  return `${mime}|${u.length}|${(h >>> 0).toString(16)}`;
+}
+
+/**
+ * A GLTFLoader plugin that decodes each distinct embedded image once for every GLB the loader reads: the first GLB to
+ * ask for an image decodes it (the loader's own path), and every later GLB with the same bytes and sampler gets that same
+ * texture. cache: a Map the kit owns, so the textures go when the kit does. Images by URI fall through to the loader.
+ */
+export function sharedTexturePlugin(cache) {
+  return (parser) => ({
+    name: 'bulwark_shared_textures',
+    loadTexture(textureIndex) {
+      const json = parser.json, def = json.textures[textureIndex], source = def && json.images[def.source];
+      if (!source || source.bufferView === undefined) return null;
+      const sampler = JSON.stringify((json.samplers || [])[def.sampler] || {});
+      return parser.getDependency('bufferView', source.bufferView).then((bv) => {
+        const key = imageKey(bv, source.mimeType) + '|' + sampler;
+        if (!cache.has(key)) cache.set(key, parser.loadTextureImage(textureIndex, source, parser.textureLoader));
+        return cache.get(key);
+      });
+    },
+  });
+}
+
 /**
  * The model kit: loads the manifest once and each GLB once; make(slug) builds a placed instance (a THREE.LOD with
  * one clone per level). opts: { base (URL of content/outposts/), tier ('high' | 'standard' | 'low'), GLTFLoader }.
@@ -139,6 +168,10 @@ export async function createOutpostKit(THREE, { base, tier = 'high', GLTFLoader,
   const loader = new GLTFLoader();
   // lean: every GLB embeds the three 1024² hull maps; never decode them (each is ~4 MB in memory, more on the GPU)
   if (lean) loader.register(() => ({ name: 'bulwark_lean_no_textures', loadTexture: () => Promise.resolve(null) }));
+  // High/Standard: every GLB's copy of a hull map is the same bytes; decode it once per kit and hand every GLB that one
+  // texture [MM-task_mwim8md7_20]. Without this each GLB decoded its own ImageBitmap and its parser kept it alive
+  // (25 bitmaps, 96 MB, in a safe-mode outpost before #338 — memory no JS heap or GL counter shows).
+  else loader.register(sharedTexturePlugin(new Map()));
   const files = new Map();
   // Every GLB (every building, every LOD) carries the same three 1024² panel maps (normal, cavity, roughness). Kept
   // apart they cost about 236 MB of GPU memory for a full outpost and iOS kills the tab (owner 2026-11-09 error
