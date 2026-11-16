@@ -53,7 +53,8 @@ export function createDecorLayer(THREE, parent, { base, GLTFLoader, lod = 'tex',
       const mine = (by.get(kind) || []).slice(0, cap);
       for (const im of k.meshes) {
         mine.forEach((d, i) => {
-          pos.set(d.x, y, d.y); q.setFromAxisAngle(up, d.rot || 0); scl.setScalar(d.scale || 1);
+          // d.z: a stacked cargo cube's lift (decor.js)
+          pos.set(d.x, y + (d.z || 0), d.y); q.setFromAxisAngle(up, d.rot || 0); scl.setScalar(d.scale || 1);
           im.setMatrixAt(i, mtx.compose(pos, q, scl));
         });
         im.count = mine.length;
@@ -67,7 +68,7 @@ export function createDecorLayer(THREE, parent, { base, GLTFLoader, lod = 'tex',
     group, ready,
     /** Draw these pieces (o.decor, less any the caller hides). Cheap when nothing changed. */
     sync(list) {
-      const s = (list || []).map((d) => d.id + d.kind).join('|');
+      const s = (list || []).map((d) => d.id + d.kind + d.x + ',' + d.y + ',' + (d.z || 0)).join('|');
       if (s === sig) return;
       sig = s; wanted = list || [];
       if (manifest) place(wanted);
