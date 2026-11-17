@@ -276,6 +276,7 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   };
   // wheel / tread marks behind ground vehicles: specs read from the models' part lists; never on water [MM-task_mvj0wz2d_1]
   const waterSet = new Set((map.waterCells || []).map((c) => c.x + ',' + c.y));
+  r.setCleared = (cells) => setCleared(r, cells);   // the ground cleared under placed things [MM-task_mwl50yxm_5]
   r.tracks = createTrackMarks(trackSpecs(UNIT_MODELS), { isWater: (x, z) => waterSet.has(Math.floor(x) + ',' + Math.floor(z)), cap: tier.trackCap || 1600 });
   r.tracksView = createTrackMarksView(THREE, scene, { cap: tier.trackCap || 1600 });
   // foam wakes behind water units moving over water [MM-task_mvj9o97b_7]; the domain comes from the sim unit
@@ -473,6 +474,51 @@ function disposeGroup(scene, group) {
   group.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); for (const t of (o.material.userData && o.material.userData.textures) || []) t.dispose(); o.material.dispose(); } });
 }
 
+/** The rocks, trees and ground cover in `world`'s colours, off the cleared cells; the flight floor over them. */
+function buildObstructions(r, world, palette = LOWPAL[world]) {
+  const { THREE, scene, map } = r, gm = r.groundMap || map;
+  if (r.obstructions) disposeGroup(scene, r.obstructions.group);
+  // the planet's prop kit — its trees, rock shapes and walkable ground cover [MM-story_mvk4auz0_n]; under ?world= with
+  // no battle planet, the kit of the planet that palette belongs to
+  const kit = foliageKitKey(r.planet, world, Object.fromEntries(Object.entries(PLANETS).map(([k, p]) => [k, p.palette])));
+  r.obstructions = buildLowPolyObstructions(THREE, gm, palette, { kit, roadAt: roadSampler(r.roadMask, gm.cols, gm.rows), plants: (r.groundTier || r.tier).tufts ? 1 : 0.5, cleared: r.cleared });
+  if (r.obstructions) scene.add(r.obstructions.group);
+  // per-cell obstruction tops — aircraft fly over them [MM-story_mvegnpxf_i]
+  r.heightField = r.obstructions ? buildHeightField(r.obstructions.group.children, gm.cols, gm.rows) : null;
+  r.flightFloor = flightFloor(r.heightField, [craftTop(r)]);   // the minimum flight level [MM-task_mvesj7tg_b]
+}
+/** The ground decals (the tiled ground only), off the cleared cells. */
+function buildGroundDecals(r, world) {
+  const { THREE, scene, map } = r, gm = r.groundMap || map;
+  if (r.decals) { disposeGroup(scene, r.decals.group); r.decals = null; }
+  if (r.tiledGround && r.ground && r.ground.colAt) {   // decals on every tier — they are a handful of instanced draws
+    r.decals = buildDecals(THREE, gm, r.ground.colAt, roadSampler(r.roadMask, gm.cols, gm.rows), { world, cleared: r.cleared });
+    scene.add(r.decals.group);
+  }
+}
+
+/**
+ * CLEAR THE GROUND under what was placed (owner 2026-11-17: "clear terrain when a building or farm plot are dropped ..
+ * removing rocks and foliage or decor" [MM-task_mwl50yxm_5]): `cells` (cell indices y * cols + x, any iterable) are the
+ * cells placed things stand on. Their walkable clutter (ground-cover plants, small stones, trees on open ground, grass
+ * tufts, decals) is dropped; a blocked cell keeps its rock or tree. Only those meshes are rebuilt (the ground mesh
+ * stays), and only when the set changed, so a mode may call this every frame. The clutter comes back when the thing goes.
+ * → true when it rebuilt.
+ */
+export function setCleared(r, cells) {
+  if (!r || r.destroyed) return false;
+  const next = new Set(cells || []);
+  const key = [...next].sort((a, b) => a - b).join(',');
+  if (key === (r.clearedKey || '')) return false;
+  r.cleared = next; r.clearedKey = key;
+  if (!r.world) return true;   // the ground is not built yet: setWorld reads r.cleared
+  buildObstructions(r, r.world);
+  if (r.lowpoly && r.ground && r.ground.retuft) r.ground.retuft(r.cleared);
+  if (r.lowpoly) buildGroundDecals(r, r.world);
+  r.lights.invalidateShadows();
+  return true;
+}
+
 /**
  * Switch the world palette: rebuilds the low-poly ground and the obstructions in `key`'s colours (same
  * seed → same geometry) and applies its lighting. Unknown keys fall back to Meadow. Returns the key used.
@@ -482,28 +528,16 @@ export function setWorld(r, key) {
   const { THREE, scene, map } = r;
   const world = resolveWorld(key);
   const palette = LOWPAL[world];
-  if (r.obstructions) disposeGroup(scene, r.obstructions.group);
   const gm = r.groundMap || map;
-  // the planet's prop kit — its trees, rock shapes and walkable ground cover [MM-story_mvk4auz0_n]; under ?world= with
-  // no battle planet, the kit of the planet that palette belongs to
-  const kit = foliageKitKey(r.planet, world, Object.fromEntries(Object.entries(PLANETS).map(([k, p]) => [k, p.palette])));
-  r.obstructions = buildLowPolyObstructions(THREE, gm, palette, { kit, roadAt: roadSampler(r.roadMask, gm.cols, gm.rows), plants: (r.groundTier || r.tier).tufts ? 1 : 0.5 });
-  if (r.obstructions) scene.add(r.obstructions.group);
-  // per-cell obstruction tops — aircraft fly over them [MM-story_mvegnpxf_i]
-  r.heightField = r.obstructions ? buildHeightField(r.obstructions.group.children, gm.cols, gm.rows) : null;
-  r.flightFloor = flightFloor(r.heightField, [craftTop(r)]);   // the minimum flight level [MM-task_mvesj7tg_b]
+  buildObstructions(r, world, palette);
   if (r.lowpoly) {
     if (r.ground) disposeGroup(scene, r.ground.group);
     // the tiled splat shader + decals on High / Standard; Low keeps the flat ground [MM-story_mw2qkmb1_2]
     const gt = r.groundTier || r.tier, tiled = r.tiledGround && !!gt.grassDetail;
     r.ground = buildLowPolyGround(THREE, gm, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron, grid: GROUND_GRID / gt.groundRes, tufts: gt.tufts, grassDetail: !!gt.grassDetail,
-      splat: tiled ? { world, taps: tapsForTier(gt.key) } : null });
+      splat: tiled ? { world, taps: tapsForTier(gt.key) } : null, cleared: r.cleared });
     scene.add(r.ground.group);
-    if (r.decals) { disposeGroup(scene, r.decals.group); r.decals = null; }
-    if (r.tiledGround) {   // decals on every tier — they are a handful of instanced draws
-      r.decals = buildDecals(THREE, gm, r.ground.colAt, roadSampler(r.roadMask, gm.cols, gm.rows), { world });
-      scene.add(r.decals.group);
-    }
+    buildGroundDecals(r, world);
     r.lights.setWorld(WORLD_LIGHT[world]);
     if (r.markers.setWorld) r.markers.setWorld(palette);
   }
