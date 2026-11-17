@@ -39,6 +39,24 @@ export function plantSpots(p) {
 export const FARM_Y = Y;
 
 /**
+ * Ripe crops move (owner 2026-11-16: "enhance the crops that are ready to harvest with a small animation"
+ * [MM-task_mwjs94o2_23]): every Fruited plant sways in a breeze that ripples across the field, bobs a little, and its
+ * glowing parts pulse — the plot reads "ready" from the whole-base camera. Only Fruited plants move; none under
+ * reduced motion. tilt: radians; bob: share of the plant's scale; pulse: glow brightness about 1; hz: cycles a second.
+ */
+export const RIPE_MOTION = Object.freeze({ tilt: 0.14, bob: 0.07, pulse: 0.35, swayHz: 0.45, bobHz: 0.9, pulseHz: 0.8, wave: 0.9 });
+/** A ripe plant's pose at time t (s) standing at (x, z). Pure. → { rx, rz, s: scale multiplier, glow } */
+export function ripePose(t, x, z) {
+  const M = RIPE_MOTION, ph = (x + z * 0.6) * M.wave, w = 2 * Math.PI;
+  const sway = Math.sin(t * w * M.swayHz - ph);
+  return {
+    rx: M.tilt * 0.35 * Math.sin(t * w * M.swayHz * 1.3 - ph * 0.7), rz: M.tilt * sway,
+    s: 1 + M.bob * Math.max(0, Math.sin(t * w * M.bobHz - ph)),
+    glow: 1 + M.pulse * Math.sin(t * w * M.pulseHz),
+  };
+}
+
+/**
  * A FRUITED plant is the crop's own battle model (owner 2026-11-12: "in the farm the fully grown fruit looks placeholder,
  * but our game already has full detail models") [MM-story_mwelxcb8_2]: every crop is one of the 36 harvestable
  * resources (data/farm.js: planetKey + tier), drawn in battle by render3d/resources (models.js, merged by
@@ -65,7 +83,12 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
     // the battle resources' own materials (resources3d.js): vertex-coloured lit body + unlit glow parts
     cropLit: new THREE.MeshLambertMaterial({ vertexColors: true }),
     cropGlow: new THREE.MeshBasicMaterial({ vertexColors: true }),
+    // a Fruited plant's glow parts: their own copies, so the ripe pulse never touches a planted pod's glow
+    ripeGlow: new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }),
+    ripeCropGlow: new THREE.MeshBasicMaterial({ vertexColors: true }),
   };
+  // the Fruited plants' instances, posed each frame (RIPE_MOTION): [{ mesh, list: [{ x, y, z, ry, s }] }]
+  let ripe = [];
   // the crop models, merged once per crop and kept (the plant meshes are rebuilt; these geometries are not)
   const cropGeo = new Map(), keepGeo = new Set();
   let prims = null;
@@ -129,6 +152,7 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
   /** The plants, instanced by state for every plot. */
   function buildPlants(plots, o) {
     clear(groups.plants);
+    ripe = [];
     const by = new Map();   // key → [{ x, z, colour, s }]
     const push = (key, x, z, colour, s = 1) => { if (!by.has(key)) by.set(key, []); by.get(key).push({ x, z, colour, s }); };
     let n = 0;
@@ -152,26 +176,30 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
     for (const [key, list] of by) {
       if (key.startsWith('crop:')) {   // the crop's battle model: its lit body and its glow parts, one instanced mesh each
         const g = cropGeometry(key.slice(5));
-        for (const [geo, mat, glowPart] of [[g.lit, mats.cropLit, false], [g.glow, mats.cropGlow, true]]) {
+        for (const [geo, mat, glowPart] of [[g.lit, mats.cropLit, false], [g.glow, mats.ripeCropGlow, true]]) {
           if (!geo) continue;
           const mesh = new THREE.InstancedMesh(geo, mat, list.length);
-          list.forEach((q, i) => {
-            tmp.position.set(q.x, Y, q.z); tmp.rotation.set(0, (i * 2.399) % (Math.PI * 2), 0); tmp.scale.setScalar(q.s); tmp.updateMatrix();
+          const poses = list.map((q, i) => ({ x: q.x, y: Y, z: q.z, ry: (i * 2.399) % (Math.PI * 2), s: q.s }));
+          poses.forEach((q, i) => {
+            tmp.position.set(q.x, q.y, q.z); tmp.rotation.set(0, q.ry, 0); tmp.scale.setScalar(q.s); tmp.updateMatrix();
             mesh.setMatrixAt(i, tmp.matrix); mesh.setColorAt(i, col.setHex(0xffffff));
           });
           mesh.name = 'farm-' + key + (glowPart ? '-glow' : ''); mesh.castShadow = !glowPart;
           groups.plants.add(mesh);
+          ripe.push({ mesh, list: poses });   // crop models are only drawn Fruited
         }
         continue;
       }
       const glow = key === 'pod' || key === 'head';
-      const mesh = new THREE.InstancedMesh(G[key], glow ? mats.glow : mats.plant, list.length);
-      list.forEach((q, i) => {
-        tmp.position.set(q.x, Y + 0.1, q.z); tmp.rotation.set(0, key === 'dead' ? 0.4 + (i % 5) * 0.5 : 0, 0); tmp.scale.setScalar(q.s); tmp.updateMatrix();
-        mesh.setMatrixAt(i, tmp.matrix); mesh.setColorAt(i, col.setHex(q.colour));
+      const mesh = new THREE.InstancedMesh(G[key], key === 'head' ? mats.ripeGlow : glow ? mats.glow : mats.plant, list.length);
+      const poses = list.map((q, i) => ({ x: q.x, y: Y + 0.1, z: q.z, ry: key === 'dead' ? 0.4 + (i % 5) * 0.5 : 0, s: q.s }));
+      poses.forEach((q, i) => {
+        tmp.position.set(q.x, q.y, q.z); tmp.rotation.set(0, q.ry, 0); tmp.scale.setScalar(q.s); tmp.updateMatrix();
+        mesh.setMatrixAt(i, tmp.matrix); mesh.setColorAt(i, col.setHex(list[i].colour));
       });
       mesh.name = 'farm-' + key; mesh.castShadow = !glow;
       groups.plants.add(mesh);
+      if (key === 'ripe' || key === 'head') ripe.push({ mesh, list: poses });   // a Fruited plant with no crop model
     }
     counts = { ...counts, plants: n };
   }
@@ -220,6 +248,21 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
     syncBuildings(o, now);
   }
 
+  /** Pose every Fruited plant for this frame (RIPE_MOTION); the glow parts pulse together. */
+  function poseRipe() {
+    if (reduced || !ripe.length) return;
+    for (const { mesh, list } of ripe) {
+      list.forEach((q, i) => {
+        const p = ripePose(clock, q.x, q.z);
+        tmp.position.set(q.x, q.y, q.z); tmp.rotation.set(p.rx, q.ry, p.rz, 'YXZ'); tmp.scale.set(q.s, q.s * p.s, q.s); tmp.updateMatrix();
+        mesh.setMatrixAt(i, tmp.matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+    const g = ripePose(clock, 0, 0).glow;
+    mats.ripeGlow.color.setScalar(g); mats.ripeCropGlow.color.setScalar(g);
+  }
+
   // the selection outline (placement and its ghost are the battle's own: render3d/overlays/placement.js, S6)
   let selMesh = null;
   function select(rect) {
@@ -236,7 +279,9 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
 
   return {
     group: root, sync, select,
-    update(dt) { clock += dt; },
+    update(dt) { clock += dt; poseRipe(); },
+    /** How many Fruited instances move (tests / review). */
+    get ripeMoving() { return reduced ? 0 : ripe.reduce((n, e) => n + e.list.length, 0); },
     counts: () => ({ ...counts }),
     setVisible(v) { root.visible = v; },
     dispose() {

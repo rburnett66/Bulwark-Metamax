@@ -27,9 +27,13 @@ import { plantSpots, FARM_Y } from './farmLayer.js';
 import { EMBER_SHADE } from '../../render3d/fx/impacts.js';
 
 /** The harvest burst (scale.html harvest(): y .3 + rand·.2, sideways ±.15, rise × (.7 … 1.5), life × (.6 … 1.4)). */
-export const BURST = Object.freeze({ y: 0.3, yJit: 0.2, side: 0.3, riseJit: [0.7, 1.5], lifeJit: [0.6, 1.4], size: [0.05, 0.08], poolShare: 0.85 });
+// Sizes are for the outpost's whole-base camera (S6 put the farm there): the old farm screen's close camera drew them at
+// 0.05 … 0.08, which reads as specks from the outpost's (owner 2026-11-16 [MM-task_mwjs94o2_23]).
+export const BURST = Object.freeze({ y: 0.3, yJit: 0.2, side: 0.4, riseJit: [0.7, 1.5], lifeJit: [0.6, 1.4], size: [0.13, 0.2], poolShare: 0.85 });
 /** The idle embers over a waiting Fruited plot (scale.html: every .12 s, 1 or 2 from Rare up, rise .45, life 1.4). */
-export const IDLE = Object.freeze({ every: 0.12, n: 1, nRare: 2, y: 0.45, rise: 0.45, life: 1.4, size: [0.045, 0.065], maxPerFrame: 16, poolShare: 0.4 });
+export const IDLE = Object.freeze({ every: 0.12, n: 1, nRare: 2, y: 0.45, rise: 0.6, life: 1.5, size: [0.1, 0.15], maxPerFrame: 16, poolShare: 0.4 });
+/** Safe mode (the phone that lost the tab): the idle embers still show, at a quarter the rate and a few a tick. */
+export const SAFE_IDLE = Object.freeze({ every: 0.3, maxPerFrame: 4 });
 /** A dead plot's harvest: a small puff of dry dust (alpha batch) and a little grit, grey-brown, no embers. */
 export const DUST = Object.freeze({ puffs: 12, minPuffs: 6, dusty: 1.5, grit: 6, shade: 0.42, life: [1.0, 1.6], size: [0.12, 0.2], rise: [0.25, 0.55] });
 
@@ -111,13 +115,13 @@ export function createFarmEmbers({ safe = false } = {}) {
       stats.burst += nE; stats.dust += nD;
       return { embers: nE, dust: nD };
     },
-    /** Idle embers over every Fruited plot (none in safe mode), at most IDLE.maxPerFrame a frame. → embers emitted */
+    /** Idle embers over every Fruited plot, at most IDLE.maxPerFrame a frame (SAFE_IDLE in safe mode). → embers emitted */
     step(dt, o, impacts, K) {
-      if (safe || !impacts || !o || !o.farm) { idle.clear(); return 0; }
+      if (!impacts || !o || !o.farm) { idle.clear(); return 0; }
       acc += dt;
-      if (acc < IDLE.every) return 0;
+      if (acc < (safe ? SAFE_IDLE.every : IDLE.every)) return 0;
       acc = 0;   // one tick a frame at most: a stalled frame never floods the pool
-      let left = Math.min(IDLE.maxPerFrame, room(impacts, IDLE.poolShare)), n = 0;
+      let left = Math.min(safe ? SAFE_IDLE.maxPerFrame : IDLE.maxPerFrame, room(impacts, IDLE.poolShare)), n = 0;
       const seen = new Set();
       const ids = Object.keys(o.farm.plots).sort((a, b) => +a.slice(1) - +b.slice(1));
       for (const id of ids) {
