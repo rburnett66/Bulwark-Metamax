@@ -87,5 +87,6 @@ export function createCatalogue(list = battleCatalogueIds(), locks = {}) {
 
 /** A placement rule (sim/structures.js state.placementRules) that refuses a locked item with its reason. */
 export function lockRule(cat) {
-  return (state, def, cell, structId) => (cat ? cat.isLocked(structId) : null);
+  // a MOVE of something already built is not a purchase: its rail lock does not apply [MM-story_mwlcdc2p_7]
+  return (state, def, cell, structId) => (cat && !state.isMove ? cat.isLocked(structId) : null);
 }

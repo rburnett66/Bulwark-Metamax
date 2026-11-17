@@ -19,8 +19,22 @@ export function createUiState() {
     showFieldRings: false,     // white rings on the harvester's assigned field — debug aid, off by default
     pendingHint: null,         // {text, atBase} — set by input, consumed + flashed by the main ticker
     placingPointer: null,      // touch placement: the finger steering the build slot (the camera won't pan with it)
+    moving: null,              // a MOVE in hand: { structId, structureId } | { structId, plot } | { structId, farm } [MM-story_mwlcdc2p_7]
   };
 }
+
+/**
+ * The move in hand, or null [MM-story_mwlcdc2p_7]. A move IS an armed placement tool (ui.buildSelection = the thing's own
+ * structId: the battle's ghost, its pointer and touch steering, its cancels) with ui.moving saying what is carried.
+ * Anything that disarms or swaps the tool (Esc, right-click, a rail button, a tap on empty ground) ends the move too.
+ */
+export function activeMove(ui) {
+  if (!ui || !ui.moving) return null;
+  if (ui.moving.structId !== ui.buildSelection) { ui.moving = null; return null; }
+  return ui.moving;
+}
+/** validatePlacement's options for the tool in hand: a move excludes the thing itself and asks no gold. */
+const moveOpts = (ui) => { const m = activeMove(ui); return m ? { move: true, exclude: m.structureId ?? null, free: true } : null; };
 
 function buildOrder(catalogue) {
   // Deterministic ordered list of structure ids for the number-key shortcuts — the mode's catalogue, the SAME list the
@@ -119,7 +133,7 @@ function refreshHoverValidity(handle) {
     return;
   }
   try {
-    const res = validatePlacement(state, ui.buildSelection, ui.hoverCell);
+    const res = validatePlacement(state, ui.buildSelection, ui.hoverCell, moveOpts(ui));
     ui.hoverValid = !!(res && res.ok);
     // valid but warned (a mode's state.placementWarnings, e.g. the outpost's 'no power in reach'): the ghost goes amber
     ui.hoverWarn = (res && res.ok && res.warn) || null;
@@ -174,6 +188,25 @@ function onPointerDown(handle, ev) {
   handle.ui.hoverCell = { x: cell.x, y: cell.y };
   const ui = handle.ui;
   const state = handle.getState();
+
+  const move = activeMove(ui);
+  if (move) {
+    // a MOVE: put the carried thing down here (its own cells count as free); the sim / the farm refuse with a reason
+    const hit = findStructureAtCell(state, cell);
+    if (hit !== null && hit !== move.structureId) {   // SUBJECT beats TOOL, as below
+      ui.buildSelection = null; ui.moving = null; ui.hoverValid = false;
+      ui.selectedStructureId = hit; ui.selectedUnitId = null;
+      return;
+    }
+    const result = handle.submit(move.structureId != null
+      ? { type: 'move', id: move.structureId, cell: { x: cell.x, y: cell.y } }
+      : { type: 'farmMove', what: move.plot != null ? { plot: move.plot } : { farm: move.farm }, cell: { x: cell.x, y: cell.y } });
+    if (result && result.ok) {
+      ui.buildSelection = null; ui.moving = null; ui.hoverValid = false;
+      if (move.structureId != null) ui.selectedStructureId = move.structureId;   // it stays selected where it now stands
+    } else refreshHoverValidity(handle);
+    return;
+  }
 
   if (ui.buildSelection) {
     // SUBJECT beats TOOL (owner): clicking an already-BUILT structure while a build tool is armed
@@ -469,6 +502,7 @@ export function createInput(canvas, renderer, getState, submit, ui, opts = {}) {
   // Expose a helper the HUD build palette can drive (same code path as keys).
   handle.setBuildSelection = (structId) => {
     if (handle.destroyed) return;
+    ui.moving = null;   // a rail button swaps a move for a build
     if (structId === null || structId === undefined) {
       ui.buildSelection = null;
       ui.hoverValid = false;
@@ -476,6 +510,15 @@ export function createInput(canvas, renderer, getState, submit, ui, opts = {}) {
     }
     ui.buildSelection = structId;
     ui.selectedStructureId = null;
+    refreshHoverValidity(handle);
+  };
+  /** Pick a thing up to MOVE it (the selection panel's MOVE): move = { structId, structureId } | { structId, plot } |
+   *  { structId, farm }. The battle's placement ghost then carries it; a tap puts it down [MM-story_mwlcdc2p_7]. */
+  handle.startMove = (move) => {
+    if (handle.destroyed || !move || !move.structId) return;
+    ui.buildSelection = move.structId;
+    ui.moving = { ...move };
+    ui.selectedStructureId = null; ui.selectedUnitId = null;
     refreshHoverValidity(handle);
   };
 

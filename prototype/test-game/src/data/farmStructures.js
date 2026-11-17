@@ -50,7 +50,7 @@ export function buildFarmStructures(methods = METHODS, buildings = FARM_BUILDING
       cost: Object.freeze([plotCost().gold]), footprint: Object.freeze({ w: m.w, h: m.h }) });
   }
   for (const b of buildings) {
-    if (b.kind === 'farmhouse') continue;
+    // the Farmhouse is granted, never on the rail (FARM_RAIL_BUILDINGS): its def is only what a MOVE carries [MM-story_mwlcdc2p_7]
     out[farmStructId(b.kind)] = farmDef({ farmItem: 'building', farmId: b.kind, name: b.name, label: RAIL_SHORT_NAME[b.kind] || b.name.toUpperCase(),
       cost: Object.freeze([b.cost]), footprint: Object.freeze({ w: b.w, h: b.h }) });
   }

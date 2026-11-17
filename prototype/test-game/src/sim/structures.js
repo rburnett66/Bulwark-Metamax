@@ -89,7 +89,18 @@ function groundCells(map) {
   return g;
 }
 
-export function validatePlacement(state, structId, slotOrCell) {
+/**
+ * opts (a MOVE, [MM-story_mwlcdc2p_7]): { move: true — the mode rules see state.isMove (a rail lock is about buying one,
+ * not moving one); exclude: a structure id — the one being moved, so it neither occupies, crowds nor counts against
+ * its own new spot (every rule sees the sim without it); free: true — no gold asked (a move is free) }.
+ */
+export function validatePlacement(state, structId, slotOrCell, opts = null) {
+  if (opts && opts.move && !state.isMove) {
+    const view = Object.create(state);   // a read-only view: the same sim, marked as a move, minus the thing being moved
+    view.isMove = true;
+    if (opts.exclude != null && state.structures) view.structures = new Map([...state.structures].filter(([id]) => id !== opts.exclude));
+    return validatePlacement(view, structId, slotOrCell, opts);
+  }
   let def;
   try {
     def = getStructureDef(structId);
@@ -167,7 +178,7 @@ export function validatePlacement(state, structId, slotOrCell) {
       if (why) return { ok: false, reason: why };
     }
   }
-  if (!canAfford(state, def.cost[0])) return { ok: false, reason: 'cost' };
+  if (!(opts && opts.free) && !canAfford(state, def.cost[0])) return { ok: false, reason: 'cost' };
 
   // MINE (Land-Mine rev 2): a LAND mine — never in water — capped, and it never blocks (mines live
   // in state.mines, not structures), so the seal-off ghost check below doesn't apply to it.
@@ -271,6 +282,56 @@ export function placeStructure(state, structId, slotOrCell) {
 
   recomputeUnitPaths(state);   // any structure now changes the nav grid → reroute walkers around it
   return s;
+}
+
+/**
+ * MOVE (owner 2026-11-17 [MM-story_mwlcdc2p_7]: "A player should also be able to select a building or plot and rearrange
+ * their base"). A mode opts in with state.allowMove (the outpost does; a battle never moves a tower). The new spot is
+ * checked by THIS file's validatePlacement — the same ghost and the same refusals as building it — with the structure
+ * itself excluded and no gold asked. A mode adds its own move checks as state.moveRules: [(state, s, cell) → reason |
+ * null], and reacts to a move with state.moveHooks: [(state, s, from)]. Free and instant; never during a wave (a raid).
+ * A structure that is upgrading, being sold or wrecked stays put; one still being built moves with its progress.
+ * → a refusal reason, or null.
+ */
+export function moveRefusal(state, structureId, cell) {
+  const blocked = moveBlocked(state, structureId);
+  if (blocked) return blocked;
+  const s = state.structures.get(structureId);
+  if (!cell || typeof cell.x !== 'number' || typeof cell.y !== 'number') return 'badCommand';
+  const to = { x: Math.round(cell.x), y: Math.round(cell.y) };
+  if (to.x === s.pos.x && to.y === s.pos.y) return 'it is already there';
+  const v = validatePlacement(state, s.structId, to, { move: true, exclude: s.id, free: true });
+  if (!v.ok) return v.reason || 'invalid';
+  for (const rule of state.moveRules || []) {
+    const why = rule(state, s, to);
+    if (why) return why;
+  }
+  return null;
+}
+
+/** Why this structure cannot be picked up to move now, wherever it would go (the MOVE button's lock), or null. */
+export function moveBlocked(state, structureId) {
+  if (!state.allowMove) return 'nothing moves here';
+  const s = state.structures.get(structureId);
+  if (!s) return 'noStructure';
+  if (state.waves && state.waves.active) return 'not during a raid';
+  if (s.lifecycle === 'Upgrading') return 'it is upgrading';
+  if (s.lifecycle === 'Selling') return 'it is being sold';
+  if (s.lifecycle === 'Wrecked' || s.lifecycle === 'Destroyed' || !(s.hp > 0)) return 'repair it first';
+  return null;
+}
+
+/** Move a structure to `cell` (moveRefusal's rules). → { ok, reason }. Walkers re-route round its new spot. */
+export function moveStructure(state, structureId, cell) {
+  const why = moveRefusal(state, structureId, cell);
+  if (why) return { ok: false, reason: why };
+  const s = state.structures.get(structureId);
+  const from = { x: s.pos.x, y: s.pos.y };
+  s.pos = { x: Math.round(cell.x), y: Math.round(cell.y) };
+  recomputeUnitPaths(state);
+  for (const hook of state.moveHooks || []) hook(state, s, from);
+  emitEvent(state, { type: 'move', tick: state.tick, structureId: s.id, structId: s.structId, from, pos: { x: s.pos.x, y: s.pos.y } });
+  return { ok: true, reason: '' };
 }
 
 /**

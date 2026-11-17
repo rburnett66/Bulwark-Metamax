@@ -21,7 +21,7 @@
  */
 import { METHODS, CROPS, cropOf, methodOf, farmContractOf } from '../data/farm.js';
 import { farmStructId, cropStructId, FARM_RAIL_BUILDINGS } from '../data/farmStructures.js';
-import { groundRefusal, plotState } from './model.js';
+import { groundRefusal, plotState, liftedFarm } from './model.js';
 import { growFarm } from './grow.js';
 import { powerGrids } from '../outpost/model.js';
 import { podCount } from './pods.js';
@@ -122,6 +122,7 @@ export function farmThingAt(o, x, y) {
  */
 export function farmRefusal(o, map, def, cell, ctx = {}) {
   if (!o || !def || !cell) return null;
+  o = liftedFarm(o, ctx.moving);   // a plot or farm building being MOVED is not in its own way [MM-story_mwlcdc2p_7]
   const fp = def.footprint || { w: 1, h: 1 };
   const rect = { x: cell.x, y: cell.y, w: fp.w || 1, h: fp.h || 1 };
   if (def.farmItem === 'crop') {
@@ -146,9 +147,10 @@ export function farmGroundRule(getOutpost, map, getCtx = () => ({})) {
   return (state, def, cell, structId) => {
     const o = getOutpost();
     if (!o) return null;
-    if (last && last.o === o && last.id === structId && last.x === cell.x && last.y === cell.y) return last.why;
-    const why = farmRefusal(o, map, def, cell, getCtx() || {});
-    last = { o, id: structId, x: cell.x, y: cell.y, why };
+    const c = getCtx() || {}, mv = c.moving ? `${c.moving.plot ?? ''}/${c.moving.farm ?? ''}` : '';
+    if (last && last.o === o && last.id === structId && last.x === cell.x && last.y === cell.y && last.mv === mv) return last.why;
+    const why = farmRefusal(o, map, def, cell, c);
+    last = { o, id: structId, x: cell.x, y: cell.y, mv, why };
     return why;
   };
 }

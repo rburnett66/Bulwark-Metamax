@@ -82,6 +82,10 @@ export function sellable(held = {}) {
   return { gold, units };
 }
 
+/** MOVE (owner 2026-11-17 [MM-story_mwlcdc2p_7]): pick the plot or building up and put it down elsewhere, free; a plot
+ *  keeps its crop. Not during a raid (ctx.raid). */
+const moveAction = (ctx) => ({ act: 'move', label: 'MOVE', enabled: !ctx.raid, why: ctx.raid ? 'Move: not during a raid' : 'Pick it up and tap where it goes (free)' });
+
 /**
  * The panel for a plot or a farm building, in hud.panel's shape: { title, sub, status, tone, stats, bay?, warnings?,
  * actions: [{ act, arg?, label, enabled, why? }], note? }. sel: { plot } | { farm }.
@@ -134,6 +138,7 @@ export function farmPanelModel(o, map, sel, ctx = {}) {
       const c = prepCost(p.method);
       out.actions.push({ act: 'prep', arg: p.id, label: c.gold > 0 ? `PREP · ${fmt(c.gold)}g` : 'PREP · free', enabled: c.gold <= gold, why: c.gold > gold ? `Costs ${fmt(c.gold)} gold` : null });
     } else if (st === 'prepping') out.stats.push(['Ready in', clock((p.prepDone - now) / 1000)]);
+    out.actions.push(moveAction(ctx));
     return out;
   }
   const b = o.farm.buildings[sel.farm];
@@ -159,5 +164,6 @@ export function farmPanelModel(o, map, sel, ctx = {}) {
     out.note = 'The farm\'s hub. Crop levels are researched in the Tech Tree (OUTPOST & FARM › SEED PODS); seed pods are bought at STORES › Seed pods.';
   }
   if (b.kind === 'pump') out.stats.push(['Water reach', `${def.waterReach} cells`]);
+  out.actions.push(moveAction(ctx));
   return out;
 }

@@ -366,6 +366,8 @@ export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0,
     get use3D() { return USE_3D; },
     // the board and input
     setBoard, bindInput, unbindInput, rebindInput,
+    /** The live input handle (input/input.js): a mode's MOVE picks a thing up through it (startMove) [MM-story_mwlcdc2p_7]. */
+    get input() { return inputHandle; },
     // the clock
     start,
     /** Forget the time owed to the sim (a fresh battle, or resuming from a freeze: no time-jump). */

@@ -234,6 +234,8 @@ export function createFarmLayer(THREE, r, { map, kit = null, reduced = false } =
           }).catch(() => {});
         }
       }
+      // a building MOVED (farm/model.js moveFarmThing [MM-story_mwlcdc2p_7]) stands where it now is
+      e.holder.position.set(b.x + b.w / 2, Y + 0.07, b.y + b.h / 2);
       const rise = b.done > now ? 0.2 + 0.8 * Math.max(0, 1 - (b.done - now) / 60000) : 1;
       e.inst.setLook && e.inst.setLook({ rise });
     }

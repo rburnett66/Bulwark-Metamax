@@ -6,7 +6,7 @@ import { createUnit, createBase, createStructure } from './entities.js';
 import { acquireTarget, applyDamage, stepCombat, inBaseReach } from './combat.js';
 import { buildSightGrid, attackerSees } from './sight.js';
 import { initEconomy, stepEconomy, canAfford, spend, grantKillIncome } from './economy.js';
-import { validatePlacement, placeStructure, startUpgrade, upgradeRuleRefusal, startSell, requestRepair, stepStructures } from './structures.js';
+import { validatePlacement, placeStructure, startUpgrade, upgradeRuleRefusal, startSell, requestRepair, stepStructures, moveStructure } from './structures.js';
 import { initWaves, startNextWave, stepWaves } from './waves.js';
 import { initHarvest, cmdHarvest, stepHarvest, cmdBuyHarvester, resetFleetForWave, initContract } from './harvest.js';
 import { deployMine, stepMines } from './mines.js';
@@ -431,6 +431,9 @@ export function applyCommand(state, cmd) {
     case 'sell':
       result = cmdSell(state, cmd);
       break;
+    case 'move':   // rearrange the base: a mode that allows it (the outpost) [MM-story_mwlcdc2p_7]
+      result = cmdMove(state, cmd);
+      break;
     case 'repair':
       result = cmdRepair(state, cmd);
       break;
@@ -499,6 +502,13 @@ function cmdUpgrade(state, cmd) {
   }
   emitEvent(state, { type: 'upgradeStart', tick: state.tick, structureId: sid });
   return { ok: true, reason: '' };
+}
+
+function cmdMove(state, cmd) {
+  const sid = typeof cmd.id === 'number' ? cmd.id : cmd.structureId;
+  const cell = cmd.cell || cmd.pos;
+  if (typeof sid !== 'number' || !cell) return { ok: false, reason: 'badCommand' };
+  return moveStructure(state, sid, cell);
 }
 
 function cmdSell(state, cmd) {
