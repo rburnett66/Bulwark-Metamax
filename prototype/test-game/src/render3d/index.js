@@ -45,7 +45,7 @@
  */
 import { CAMERA, createCameraState, clampCamera, cameraPose, panByPixels, zoomBy, screenToGroundCell, groundCellToScreen, stepYaw, twistBy, wrapYaw, YAW_PER_PX, touchSlotPoint, cellToWorld, fitCameraToRect, clearBox } from './camera.js';
 import { createFogTracker, fogWindow, newAreaFocus } from './overlays/fogModel.js';
-import { resolveTier, probeEnv, pixelRatioFor } from './quality.js';
+import { resolveTier, probeEnv, pixelRatioFor, TIERS } from './quality.js';
 import { createFogView, flightParallax } from './overlays/fog.js';
 import { createContacts, createContactsView } from './overlays/contacts.js';
 import { createPlacementGhost } from './overlays/placement.js';
@@ -247,6 +247,9 @@ export async function createRenderer3D(mountEl, map, opts = {}) {
   const r = {
     THREE, renderer, canvas, scene, camera, lights, markers, units3d, craft, landing, mounts, resources, landingHeld: !!(landing && opts.landingHeld), obstructions: null, ground: null, pathLines, pathLinesView, ghost, fx, fxView, impacts, impactsView, fog: createFogTracker(), fogView, contacts: createContacts(), contactsView, inBattle: false, host, banner, map, groundMap, system, cannonFx, cannonFxView, baseStyle, coverageView, abilityFx, abilityFxView, healthBars, gold, goldView, unloads, unloadView, repairFx: createRepairFx(), buildFx: createBuildFx({ seed: ((map.seed | 0) || 1) + 23 }), structureFx: createStructureFx({ seed: ((map.seed | 0) || 1) + 41 }), flight: createFlightPaths(), airLift: createAirLift(), unitBarrels: createUnitBarrels(), heightField: null, dust: createDustTrails(), tracks: null, tracksView: null, wakes: null, wakesView: null, casings: null, casingsView: null, wading: null, killCam: null, baseBlast: null, flashGlows: null,
     quality, tier,
+    // opts.groundTier: the tier the ground and its cover are built at, when it differs from the rest (the outpost's safe
+    // mode draws a Standard battle's textured ground on its Low budget — owner 2026-11-17 [MM-task_mwl50y0t_4])
+    groundTier: (opts.groundTier && TIERS[opts.groundTier]) || tier,
     clock: 0,
     cam: createCameraState(map), viewInsets: typeof opts.viewInsets === 'function' ? opts.viewInsets : null,
     // a MODE'S FRAMING (spec Outpost-AAA-UX §9, D7) [MM-story_mwcuyrqr_3j]: () → { x0, y0, x1, y1 } inclusive cells, or
@@ -484,7 +487,7 @@ export function setWorld(r, key) {
   // the planet's prop kit — its trees, rock shapes and walkable ground cover [MM-story_mvk4auz0_n]; under ?world= with
   // no battle planet, the kit of the planet that palette belongs to
   const kit = foliageKitKey(r.planet, world, Object.fromEntries(Object.entries(PLANETS).map(([k, p]) => [k, p.palette])));
-  r.obstructions = buildLowPolyObstructions(THREE, gm, palette, { kit, roadAt: roadSampler(r.roadMask, gm.cols, gm.rows), plants: r.tier.tufts ? 1 : 0.5 });
+  r.obstructions = buildLowPolyObstructions(THREE, gm, palette, { kit, roadAt: roadSampler(r.roadMask, gm.cols, gm.rows), plants: (r.groundTier || r.tier).tufts ? 1 : 0.5 });
   if (r.obstructions) scene.add(r.obstructions.group);
   // per-cell obstruction tops — aircraft fly over them [MM-story_mvegnpxf_i]
   r.heightField = r.obstructions ? buildHeightField(r.obstructions.group.children, gm.cols, gm.rows) : null;
@@ -492,9 +495,9 @@ export function setWorld(r, key) {
   if (r.lowpoly) {
     if (r.ground) disposeGroup(scene, r.ground.group);
     // the tiled splat shader + decals on High / Standard; Low keeps the flat ground [MM-story_mw2qkmb1_2]
-    const tiled = r.tiledGround && !!r.tier.grassDetail;
-    r.ground = buildLowPolyGround(THREE, gm, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron, grid: GROUND_GRID / r.tier.groundRes, tufts: r.tier.tufts, grassDetail: !!r.tier.grassDetail,
-      splat: tiled ? { world, taps: tapsForTier(r.tier.key) } : null });
+    const gt = r.groundTier || r.tier, tiled = r.tiledGround && !!gt.grassDetail;
+    r.ground = buildLowPolyGround(THREE, gm, palette, { roadMask: r.roadMask, apron: WORLD_LIGHT[world].apron, grid: GROUND_GRID / gt.groundRes, tufts: gt.tufts, grassDetail: !!gt.grassDetail,
+      splat: tiled ? { world, taps: tapsForTier(gt.key) } : null });
     scene.add(r.ground.group);
     if (r.decals) { disposeGroup(scene, r.decals.group); r.decals = null; }
     if (r.tiledGround) {   // decals on every tier — they are a handful of instanced draws
