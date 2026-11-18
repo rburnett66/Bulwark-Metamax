@@ -133,7 +133,9 @@ export function planObstructions(map, { seed = 1234, kit = DEFAULT_KIT, roadAt =
   }
   const plants = planPlants(map, K, blocked, { seed, roadAt, mul: plantMul });
   if (cleared && cleared.size) {   // clutter on a cleared cell goes; a blocked cell keeps its piece (no invisible walls)
-    const gone = (x, z) => onCleared(cleared, cols, x, z) && !blocked.has(Math.floor(z) * cols + Math.floor(x));
+    // a cleared cell loses its clutter; a BLOCKED cleared cell (trees or rocks the outpost built on, outpost/clearing.js)
+    // loses its tree / rock too — the caller clears only what may go [MM-story_mwlcxqzo_8]
+    const gone = (x, z) => onCleared(cleared, cols, x, z);
     return { rocks: rocks.filter((r) => !gone(r.x, r.z)), trees: trees.filter((t) => !gone(t.x, t.z)), cover,
       plants: plants.filter((p) => !gone(p.x, p.z)), kit: K };
   }

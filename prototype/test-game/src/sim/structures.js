@@ -145,7 +145,9 @@ export function validatePlacement(state, structId, slotOrCell) {
   for (const c of cells) {
     if (c.x < 0 || c.y < 0 || c.x >= map.cols || c.y >= map.rows) return { ok: false, reason: 'terrain' };
     const g = ground.get(cellKey(c));
-    if (g) return { ok: false, reason: g };
+    // a mode's CLEARABLE ground (the outpost: trees and rocks on level ground, outpost/clearing.js) takes a building,
+    // which clears it [MM-story_mwlcxqzo_8]; water and cliffs never do
+    if (g && !(state.clearable && state.clearable.has(cellKey(c)))) return { ok: false, reason: g };
     // the SAFE BORDER is approach terrain — enemies march through it, nobody builds on it
     if (map.playArea && (c.x < map.playArea.x0 || c.x > map.playArea.x1 || c.y < map.playArea.y0 || c.y > map.playArea.y1)) {
       return { ok: false, reason: 'outside the battlefield' };
