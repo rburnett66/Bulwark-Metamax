@@ -11,6 +11,8 @@ import { lastSessionCrashed } from '../../diag/errorLog.js';
 export const SAFE_KEY = 'bulwark.outpostSafe';
 /** The building LODs safe mode loads (the lightest only). */
 export const SAFE_LODS = Object.freeze([2]);
+/** The tier safe mode builds the ground at: a phone battle's (quality.js autoTier gives phones Standard). */
+export const SAFE_GROUND_TIER = 'standard';
 
 /** Is the outpost in safe mode on this device? A visit cut short turns it on for good. */
 export function outpostSafeMode(win, crashed = lastSessionCrashed) {
@@ -30,8 +32,10 @@ export function outpostSafeMode(win, crashed = lastSessionCrashed) {
 export function outpostQuality({ tier = null, safe = false, query = null } = {}) {
   if (tier) return { qualityQuery: tier };
   if (query) return {};                       // ?quality= wins over safe mode (the headless checks force a tier)
-  // safe mode: Low, and lean drawing buffers (no MSAA, 1× pixels, 512 shadow map) — iPhone 2026-11-14 [MM-task_mwfvyhev_1o]
-  return safe ? { qualityQuery: 'low', lean: true } : {};
+  // safe mode: Low, and lean drawing buffers (no MSAA, 1× pixels, 512 shadow map) — iPhone 2026-11-14 [MM-task_mwfvyhev_1o];
+  // the ground as a phone's battle draws it (Standard: the tiled terrain texture, one tap, and the grass tufts) — owner
+  // 2026-11-17 "the outpost terrain should look identical to the combat terrain" [MM-task_mwl50y0t_4]
+  return safe ? { qualityQuery: 'low', lean: true, groundTier: SAFE_GROUND_TIER } : {};
 }
 
 /** The renderer's load for a crumb: tier, pixel ratio, drawing buffer, live textures / geometries / shader programs. */

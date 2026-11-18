@@ -66,8 +66,8 @@ function createMerge(THREE, { unlit = false } = {}) {
  * [MM-story_mvk4auz0_n]; opts.roadAt keeps cover off the roads; opts.plants scales cover (0 = none).
  * Meshes: obstructions-rocks, obstructions-trees, then obstructions-glow (unlit) and obstructions-plants when non-empty.
  */
-export function buildLowPolyObstructions(THREE, map, palette = MEADOW, { kit = DEFAULT_KIT, roadAt = null, plants = 1 } = {}) {
-  const plan = planObstructions(map, { kit, roadAt, plants });
+export function buildLowPolyObstructions(THREE, map, palette = MEADOW, { kit = DEFAULT_KIT, roadAt = null, plants = 1, cleared = null } = {}) {
+  const plan = planObstructions(map, { kit, roadAt, plants, cleared });
   const K = plan.kit, kc = K.colors || {};
   const C = (h) => new THREE.Color(h);
   const merges = { rocks: createMerge(THREE), trees: createMerge(THREE), glow: createMerge(THREE, { unlit: true }), plants: createMerge(THREE) };

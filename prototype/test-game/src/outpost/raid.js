@@ -232,6 +232,8 @@ export function raidSimMap(outpost, map, opts = {}) {
   const { cols, rows } = m;
   // finished buildings are solid (the hub is the base: its 3 × 3 core stays clear, as in a battle)
   const blocked = new Set(m.blockedCells.filter((c) => !inBase(c.x, c.y)).map((c) => c.y * cols + c.x));
+  // trees and rocks the player built on are gone: open ground from then on (outpost/clearing.js) [MM-story_mwlcxqzo_8]
+  for (const i of outpost.cleared || []) blocked.delete(i);
   for (const id of Object.keys(outpost.pads)) {
     const p = outpost.pads[id].kind === 'hub' ? null : buildingRect(outpost, map, id);
     if (!p) continue;

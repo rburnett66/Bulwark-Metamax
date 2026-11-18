@@ -48,7 +48,15 @@ export function rng(seed) {
  * `style` on every rock = the kit's rock style. `plants`: [{ kind, x, z, s, ry, variant, a, b }] walkable cover.
  * opts: kit (a FOLIAGE entry or key), roadAt(x, z) → 0..1 (no cover where > 0.35), plants (cover multiplier, 0 = none).
  */
-export function planObstructions(map, { seed = 1234, kit = DEFAULT_KIT, roadAt = null, plants: plantMul = 1 } = {}) {
+/**
+ * Is world point (x, z) on a CLEARED cell? `cleared`: a Set of cell indices (y * cols + x) that something placed stands
+ * on — an outpost building, a defense, a farm plot (owner 2026-11-17: "clear terrain when a building or farm plot are
+ * dropped" [MM-task_mwl50yxm_5]). The planners still draw every random number for a cleared cell and only drop the
+ * record, so clearing one cell never moves a plant, a stone or a tuft anywhere else.
+ */
+export const onCleared = (cleared, cols, x, z) => !!(cleared && cleared.size) && cleared.has(Math.floor(z) * cols + Math.floor(x));
+
+export function planObstructions(map, { seed = 1234, kit = DEFAULT_KIT, roadAt = null, plants: plantMul = 1, cleared = null } = {}) {
   const K = typeof kit === 'string' ? (FOLIAGE[kit] || FOLIAGE[DEFAULT_KIT]) : (kit || FOLIAGE[DEFAULT_KIT]);
   const style = K.rocks || 'boulder';
   const { cols, rows } = map;
@@ -123,7 +131,15 @@ export function planObstructions(map, { seed = 1234, kit = DEFAULT_KIT, roadAt =
     tree((i % cols) + 0.2 + R() * 0.6, ((i / cols) | 0) + 0.2 + R() * 0.6, 0.85 + R() * 0.3);
     cover.add(i);
   }
-  return { rocks, trees, cover, plants: planPlants(map, K, blocked, { seed, roadAt, mul: plantMul }), kit: K };
+  const plants = planPlants(map, K, blocked, { seed, roadAt, mul: plantMul });
+  if (cleared && cleared.size) {   // clutter on a cleared cell goes; a blocked cell keeps its piece (no invisible walls)
+    // a cleared cell loses its clutter; a BLOCKED cleared cell (trees or rocks the outpost built on, outpost/clearing.js)
+    // loses its tree / rock too — the caller clears only what may go [MM-story_mwlcxqzo_8]
+    const gone = (x, z) => onCleared(cleared, cols, x, z);
+    return { rocks: rocks.filter((r) => !gone(r.x, r.z)), trees: trees.filter((t) => !gone(t.x, t.z)), cover,
+      plants: plants.filter((p) => !gone(p.x, p.z)), kit: K };
+  }
+  return { rocks, trees, cover, plants, kit: K };
 }
 
 /** Cells a plant must never stand on: the base footprint (+1 ring), every resource field, the spawn points. */

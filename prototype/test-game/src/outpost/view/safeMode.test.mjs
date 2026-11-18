@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { outpostSafeMode, outpostQuality, gpuLine, SAFE_KEY, SAFE_LODS } from './safeMode.js';
+import { outpostSafeMode, outpostQuality, gpuLine, SAFE_KEY, SAFE_LODS, SAFE_GROUND_TIER } from './safeMode.js';
 
 const store = (init = {}) => {
   const m = new Map(Object.entries(init));
@@ -28,7 +28,7 @@ test('blocked storage never throws', () => {
 test('quality: a forced tier, else ?quality=, else Low in safe mode, else the battle rules', () => {
   assert.deepEqual(outpostQuality({ tier: 'high', safe: true }), { qualityQuery: 'high' });
   assert.deepEqual(outpostQuality({ safe: true, query: 'high' }), {}, '?quality= is left to the battle mount');
-  assert.deepEqual(outpostQuality({ safe: true }), { qualityQuery: 'low', lean: true }, 'safe mode: Low with lean drawing buffers');
+  assert.deepEqual(outpostQuality({ safe: true }), { qualityQuery: 'low', lean: true, groundTier: 'standard' }, 'safe mode: Low with lean drawing buffers, the ground a phone battle draws');
   assert.deepEqual(outpostQuality({ safe: false }), {}, 'no null override of the page query or Settings');
   assert.deepEqual([...SAFE_LODS], [2]);
 });
@@ -152,4 +152,17 @@ test('lean buildings are flat-shaded in their own vertex colours and trim colour
   assert.equal(LEAN_HULL, 0.7, 'the mean of the panel cavity map (linear), which the lean hull no longer samples');
   assert.ok(trim.isMeshStandardMaterial && trim.flatShading && trim.vertexColors === false);
   assert.equal(trim.color.getHex(), TRIM.verdance, 'faction trim');
+});
+
+test('safe mode draws the ground a phone battle draws: Standard, the tiled terrain texture and tufts [MM-task_mwl50y0t_4]', async () => {
+  const { autoTier, TIERS } = await import('../../render3d/quality.js');
+  assert.equal(SAFE_GROUND_TIER, autoTier({ mobile: true }), 'the tier a phone battle auto-picks');
+  const g = TIERS[SAFE_GROUND_TIER];
+  assert.ok(g.grassDetail && g.tufts && g.groundRes === 1, 'that tier has the splat ground, the tufts and the full grid');
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../../render3d/index.js', import.meta.url), 'utf8');
+  assert.match(src, /groundTier: \(opts\.groundTier && TIERS\[opts\.groundTier\]\) \|\| tier/, 'render3d takes opts.groundTier');
+  assert.match(src, /const gt = r\.groundTier \|\| r\.tier, tiled = r\.tiledGround && !!gt\.grassDetail;/, 'the ground is built at the ground tier');
+  assert.match(src, /grid: GROUND_GRID \/ gt\.groundRes, tufts: gt\.tufts/);
+  assert.match(src, /taps: tapsForTier\(gt\.key\)/);
 });
