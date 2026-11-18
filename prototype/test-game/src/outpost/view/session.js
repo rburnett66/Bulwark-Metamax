@@ -36,6 +36,7 @@ import { podsUnlocked, recordDelivered } from '../../farm/unlock.js';
 import { addToStore, takeFromStore } from '../../save/stores.js';
 import { farmContractOf, cropOf } from '../../data/farm.js';
 import { sellable } from '../../farm/view/farmUi.js';
+import { withClearing } from '../clearing.js';
 
 const goldAdd = (s, n) => {
   s.carry = s.carry || { gold: 0, structures: [] };
@@ -219,6 +220,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         advanceSaved(s, now);
         const o = s.outposts[planet], ctx = ctxFor(s, now);
         const r = apply(o, action, ctx, now, s);
+        if (r && r.outpost) r.outpost = withClearing(r.outpost, map);   // a plot or building on trees clears them [MM-story_mwlcxqzo_8]
         if (!r || r.error) { out = { ok: false, error: (r && r.error) || 'nothing to do' }; s.outposts[planet] = o; settle(s, now); return; }
         s.outposts[planet] = r.outpost;
         if (r.after) r.after(s);   // the farm's side of an action: pods, the farm store, deliveries (story A7)

@@ -38,6 +38,7 @@ import { buildingRect, surfaceFieldGroups, fieldStock, harvestPlan, resourceBayP
 import { resourceNode, spawnHarvester, initContract, rehomeHarvester } from '../sim/harvest.js';
 import { raidSimMap } from './raid.js';
 import { outpostPlacementRules } from './placementRules.js';
+import { clearableKeys, withClearing } from './clearing.js';
 
 const clone = (o) => (typeof structuredClone === 'function' ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
 const clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -161,6 +162,8 @@ export function toLiveSim(outpost, { map, now, gold = 0, unlocks = null, techOwn
   state.allowMove = true;
   state.moveRules = [defensesAreNotMoved, rigKeepsItsOre(map)];
   state.moveHooks = [redockTrucks];
+  // trees and rocks on level ground take a building and are cleared by it (outpost/clearing.js) [MM-story_mwlcxqzo_8]
+  state.clearable = clearableKeys(map);
   // rigs: what the rigs have mined during this visit (stepLiveOutpost), per sim structure id → { item: units }, and the
   // sim-clock moment (ms) it was last stepped to
   const link = { outpost, map, ids: null, wrecks: null, now, harvest: null, rigs: { at: now, got: new Map() } };
@@ -496,5 +499,10 @@ export function fromLiveSim(state, link, now, where = new Map()) {
   if (link.harvest) saveHarvest(o, state, link, now);
   // the visit's stretch ran live — the rigs on its clock, the trucks on the sim — so the away closed form skips it
   if (now > link.now) markLive(o, link.now, now);
-  return { outpost: o, gold: state.economy.money };
+  // what now stands on trees or rocks has cleared them, for good (outpost/clearing.js) [MM-story_mwlcxqzo_8] — kept on
+  // the link too, so a building put up and sold within one visit still leaves its ground cleared
+  if (link.cleared && link.cleared.length) o.cleared = [...new Set([...(o.cleared || []), ...link.cleared])].sort((a, b) => a - b);
+  const done = withClearing(o, map);
+  link.cleared = done.cleared || null;
+  return { outpost: done, gold: state.economy.money };
 }
