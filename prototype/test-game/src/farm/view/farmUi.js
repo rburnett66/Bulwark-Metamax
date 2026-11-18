@@ -10,9 +10,9 @@
  * room, delivered, f1 } — pods: the save's s.pods ({ cropId: count }; pods have no level, owner rule 9); levels: every
  * crop's tech-tree level ({ cropId: 1–5 }, src/farm/levels.js cropLevels); held: the farm store for this planet.
  */
-import { methodOf, farmBuildingOf, cropOf, podLevel, prepCost, CROPS } from '../../data/farm.js';
+import { methodOf, farmBuildingOf, cropOf, podLevel, prepCost, growSec, CROPS } from '../../data/farm.js';
 import { plotState, storeCapacity, farmStatus, plantLevel, plotPlants, plotFull, plotYield } from '../model.js';
-import { podRowCount } from '../pods.js';
+import { podRowCount, podPrice } from '../pods.js';
 import { windowSec } from '../grow.js';
 import { OUTPOST_GLYPHS } from '../../outpost/view/menuIcons.js';
 
@@ -63,6 +63,18 @@ const sellValue = (cropId) => {
   const c = cropOf(cropId);
   return c && (c.tier === 'common' ? 1 : c.tier === 'uncommon' ? 2 : 0);
 };
+/**
+ * A crop's details for the panel (owner 2026-11-17): name, the planet it comes from, a seed pod's price, what the farm
+ * store pays for one unit, and its grow time on this plot's method. → [[key, value]]
+ */
+export function cropDetails(cropId, method = 'traditional') {
+  const c = cropOf(cropId);
+  if (!c) return [];
+  const v = sellValue(cropId);
+  return [['Crop', c.name], ['Planet', c.planet], ['Seed pod', `${fmt(podPrice(1))}g each`],
+    ['Sells for', v ? `${fmt(v)}g each` : 'Kept (not sold)'], ['Grows in', clock(growSec(c, method))]];
+}
+
 /** Crops the farm store can sell now (the battle's price per unit: common 1, uncommon 2; rare and epic are kept). */
 export function sellable(held = {}) {
   let gold = 0, units = 0;
@@ -102,13 +114,21 @@ export function farmPanelModel(o, map, sel, ctx = {}) {
         if (full) out.warnings = [{ text: 'Silo full: the crop waits, and dies at the end of its window' }];
       }
     } else if (st === 'prepped') {
-      const choices = plantChoices(o, map, p, ctx.pods, ctx.levels);
-      for (const ch of choices.slice(0, 6)) {
-        out.actions.push({ act: 'plant', arg: ch.crop, level: ch.level, colour: ch.colour, enabled: true, why: ch.capped ? `Level ${ch.level}: ${ch.why}` : null,
+      // owner 2026-11-17 [MM-task_mwlc3c6b_6]: a crop is SELECTED first (sel.crop; the first held crop by default) and
+      // the panel shows its details; PLANT plants the selected crop. With more than one crop, a button per crop picks.
+      const choices = plantChoices(o, map, p, ctx.pods, ctx.levels).slice(0, 6);
+      const ch = choices.find((x) => x.crop === sel.crop) || choices[0];
+      if (ch) {
+        out.crop = ch.crop;
+        out.stats.push(...cropDetails(ch.crop, p.method));
+        out.levelColour = ch.colour;
+        out.actions.push({ act: 'plant', arg: ch.crop, level: ch.level, colour: ch.colour, enabled: true, primary: true, why: ch.capped ? `Level ${ch.level}: ${ch.why}` : null,
           label: `PLANT ${ch.name} · L${ch.level} ${ch.levelName}${ch.capped ? ` (L5 ${capShort(ch.why)})` : ''} · ${ch.n} pod${ch.n === 1 ? '' : 's'}` });
+        if (choices.length > 1) for (const x of choices) {
+          out.actions.push({ act: 'pickCrop', arg: x.crop, selected: x === ch, enabled: true, label: `${x === ch ? '✓ ' : ''}${x.name} · ${x.n} pod${x.n === 1 ? '' : 's'}` });
+        }
+        if (ch.capped) out.note = `Level ${ch.level} — ${ch.why}.`;
       }
-      const capped = choices.find((ch) => ch.capped);
-      if (capped) out.note = `Level ${capped.level} — ${capped.why}.`;
       if (!choices.length) out.note = `No seed pods: each pod plants one plant, up to ${m.pods} a plot. Buy them at STORES › Seed pods; a won map's Pod Reward Chest brings them; F1 grants a crate.`;
     } else if (st === 'harvested') {
       const c = prepCost(p.method);

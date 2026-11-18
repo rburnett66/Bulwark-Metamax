@@ -11,7 +11,8 @@ import { FARM, growSec, yieldOf } from '../../data/farm.js';
 import { podCount } from '../pods.js';
 import { acceptFarmContract, measureCropDelivered } from '../contract.js';
 import { cellRule } from '../cells.js';
-import { farmPanelModel, plantChoices, sellable, farmRailGlyph } from './farmUi.js';
+import { farmPanelModel, plantChoices, sellable, farmRailGlyph, cropDetails } from './farmUi.js';
+import { farmCardModel } from '../../outpost/view/outpostCard.js';
 import { farmRailIds, farmRailLocks, farmRefusal, farmThingAt, farmRailLabel } from '../farmRail.js';
 import { getStructureDef } from '../../data/tables.js';
 
@@ -227,4 +228,33 @@ test('the shared rail count hook is generic and optional: battles set none, so t
   const main = readFileSync(new URL('../../main.js', import.meta.url), 'utf8');
   assert.doesNotMatch(main, /railLabel/, 'the battle never sets it');
   assert.match(readFileSync(new URL('../../outpost/view/sessionView.js', import.meta.url), 'utf8'), /railLabel: \(id\) => farmRailLabel\(id, ctxNow\(\)\.pods\),/);
+});
+
+// owner 2026-11-17 [MM-task_mwlc3c6b_6]: "When you select a crop for planting you should see the crop details in the
+// info panel: seed pod price, sell price, grow time, name, planet source."
+test("a prepped plot: the selected crop's details show; a crop button selects, PLANT plants the selected crop", () => {
+  const s0 = farmSave();
+  s0.pods = { ...s0.pods, 'rootsong-seeds': 5 };
+  const store = memStore(s0), ses = createSession({ store, planet: 'ground', map, catalog: CATALOG, raidHook: noRaid });
+  const spot = farmSpots(ses.outpost(), ses.ctx(T0))[0];
+  const id = ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: spot.cell }, T0).farm.placed;
+  const t1 = T0 + FARM.Prep_Sec * 1000;
+  const o = ses.live(t1).outpost, ctx = ses.ctx(t1);
+  const first = farmPanelModel(o, map, { plot: id }, ctx);
+  assert.equal(first.crop, 'loam-grain', 'the first held crop is selected by default');
+  const row = (p, k) => (p.stats.find((x) => x[0] === k) || [])[1];
+  assert.deepEqual([row(first, 'Crop'), row(first, 'Planet'), row(first, 'Seed pod'), row(first, 'Sells for'), row(first, 'Grows in')],
+    ['Loam Grain', 'Verdance', `${FARM.Pod_Price}g each`, '1g each', '2h 00m']);
+  assert.deepEqual(first.actions.map((a) => [a.act, a.arg]), [['plant', 'loam-grain'], ['pickCrop', 'loam-grain'], ['pickCrop', 'rootsong-seeds']]);
+  assert.match(first.actions[1].label, /^✓ Loam Grain/, 'the selected crop is ticked');
+  const picked = farmPanelModel(o, map, { plot: id, crop: 'rootsong-seeds' }, ctx);
+  assert.equal(picked.crop, 'rootsong-seeds');
+  assert.deepEqual([row(picked, 'Crop'), row(picked, 'Sells for'), row(picked, 'Grows in')], ['Rootsong Seeds', 'Kept (not sold)', '7h 30m']);
+  assert.match(picked.actions[0].label, /^PLANT Rootsong Seeds/);
+  assert.equal(farmPanelModel(o, map, { plot: id, crop: 'elder-bloom' }, ctx).crop, 'loam-grain', 'a crop with no pods falls back');
+  const card = farmCardModel(first);
+  assert.ok(card.actions[0].primary && card.actions[0].wide, "PLANT is the card's wide primary button");
+  assert.deepEqual(cropDetails('heartwood-amber', 'traditional').find((x) => x[0] === 'Sells for'), ['Sells for', '2g each']);
+  const view = readFileSync(new URL('../../outpost/view/sessionView.js', import.meta.url), 'utf8');
+  assert.match(view, /if \(a === 'pickCrop'\) \{ if \(farmSel\) farmSel = \{ \.\.\.farmSel, crop: arg \}; panelSince = 1; return; \}/, 'a crop button selects, it does not plant');
 });

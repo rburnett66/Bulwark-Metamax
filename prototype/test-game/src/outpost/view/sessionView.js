@@ -484,6 +484,8 @@ async function openSession(opts, opening) {
   // Fruited and Dead plot. DELIVER and SELL CROPS are the Farmhouse's: at once.
   const AVATAR_WORK = new Set(['prep', 'plant', 'harvest']);
   function farmAct(a, arg, plot = farmSel && farmSel.plot) {
+    // a crop button SELECTS the crop (its details show in the panel; PLANT plants it) [MM-task_mwlc3c6b_6]
+    if (a === 'pickCrop') { if (farmSel) farmSel = { ...farmSel, crop: arg }; panelSince = 1; return; }
     const action = a === 'plant' ? { type: 'plant', plot, pick: arg } : a === 'prep' || a === 'harvest' ? { type: a, plot: arg }
       : a === 'deliver' ? { type: 'deliver', crop: arg } : { type: a };
     if (AVATAR_WORK.has(action.type) && action.plot && crew) {

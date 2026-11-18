@@ -160,7 +160,7 @@ export function threatInfo(o, map, now = o.t) {
 export function farmCardModel(fm, { run = () => {}, close = () => {} } = {}) {
   const TONE = { ok: 'ok', warn: 'warn', off: 'warn', busy: 'info' };
   const lines = [...(fm.warnings || []).map((w) => ({ text: w.text, tone: 'warn' })), ...(fm.note ? [{ text: fm.note, tone: 'dim' }] : [])];
-  const actions = (fm.actions || []).map((a) => ({ label: a.label, enabled: a.enabled !== false, title: a.why || '', wide: (fm.actions || []).length % 2 === 1 && a === fm.actions[0], run: () => run(a.act, a.arg) }));
+  const actions = (fm.actions || []).map((a) => ({ label: a.label, enabled: a.enabled !== false, title: a.why || '', primary: !!a.primary, wide: !!a.primary || ((fm.actions || []).length % 2 === 1 && a === fm.actions[0]), run: () => run(a.act, a.arg) }));
   actions.push({ label: 'Close', run: close });
   return { title: fm.title, status: fm.status ? { text: fm.status, tone: TONE[fm.tone] || null } : null,
     sections: [{ rows: (fm.stats || []).map(([k, v]) => [k, v]) }, { lines }], actions };
