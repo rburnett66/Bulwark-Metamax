@@ -119,7 +119,7 @@ test('the panels: a prepped plot offers the pods held; a Fruited plot HARVEST; t
   const fhId = Object.keys(o.farm.buildings)[0];
   const fh = farmPanelModel(o, map, { farm: fhId }, { now: T0, held: { 'loam-grain': 30 }, heldTotal: 30, f1: { crop: 'loam-grain', deliver: 40 }, delivered: 16 });
   assert.equal(fh.title, 'Farmhouse');
-  assert.deepEqual(fh.actions.map((a) => a.act), ['harvestAll', 'farmSell', 'deliver']);
+  assert.deepEqual(fh.actions.map((a) => a.act), ['harvestAll', 'farmSell', 'deliver', 'move']);
   assert.match(fh.actions[2].label, /24\/24/);
   assert.equal(sellable({ 'loam-grain': 30, 'rootsong-seeds': 5 }).gold, 30, 'common sells at 1; rare is kept');
   const b = Object.values(o.farm.buildings)[0];
@@ -245,7 +245,7 @@ test("a prepped plot: the selected crop's details show; a crop button selects, P
   const row = (p, k) => (p.stats.find((x) => x[0] === k) || [])[1];
   assert.deepEqual([row(first, 'Crop'), row(first, 'Planet'), row(first, 'Seed pod'), row(first, 'Sells for'), row(first, 'Grows in')],
     ['Loam Grain', 'Verdance', `${FARM.Pod_Price}g each`, '1g each', '2h 00m']);
-  assert.deepEqual(first.actions.map((a) => [a.act, a.arg]), [['plant', 'loam-grain'], ['pickCrop', 'loam-grain'], ['pickCrop', 'rootsong-seeds']]);
+  assert.deepEqual(first.actions.map((a) => [a.act, a.arg]), [['plant', 'loam-grain'], ['pickCrop', 'loam-grain'], ['pickCrop', 'rootsong-seeds'], ['move', undefined]]);
   assert.match(first.actions[1].label, /^✓ Loam Grain/, 'the selected crop is ticked');
   const picked = farmPanelModel(o, map, { plot: id, crop: 'rootsong-seeds' }, ctx);
   assert.equal(picked.crop, 'rootsong-seeds');

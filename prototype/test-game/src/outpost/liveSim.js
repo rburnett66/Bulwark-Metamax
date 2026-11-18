@@ -35,7 +35,7 @@ import { getStructureDef } from '../data/tables.js';
 import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../data/outpostStructures.js';
 import { structureDef, surfaceResource, surfaceStock, OUTPOST } from '../data/outpost.js';
 import { buildingRect, surfaceFieldGroups, fieldStock, harvestPlan, resourceBayPad, powerGrids, hopperUnits, hopperCap, upgradeRefusal, rigExtraction } from './model.js';
-import { resourceNode, spawnHarvester, initContract } from '../sim/harvest.js';
+import { resourceNode, spawnHarvester, initContract, rehomeHarvester } from '../sim/harvest.js';
 import { raidSimMap } from './raid.js';
 import { outpostPlacementRules } from './placementRules.js';
 import { clearableKeys, withClearing } from './clearing.js';
@@ -97,6 +97,51 @@ function addStructure(state, kind, cell, tier) {
   return s;
 }
 
+/** A defense is never moved (owner 2026-11-17): it is sold and bought again. Only the outpost's buildings move. */
+function defensesAreNotMoved(state, s) {
+  let def = null;
+  try { def = getStructureDef(s.structId); } catch (e) { return null; }
+  return def.outpostKind && !isBuilding(def.outpostKind) ? 'a defense is sold and bought again, not moved' : null;
+}
+
+/** A Mining Rig moves only to a deposit of the ore it mines (its bay holds that ore; another ore is unlocked apart). */
+function rigKeepsItsOre(map) {
+  const tierAt = (c) => ((map.deposits || []).find((d) => d.x === c.x && d.y === c.y) || {}).tier || null;
+  return (state, s, cell) => {
+    let def = null;
+    try { def = getStructureDef(s.structId); } catch (e) { return null; }
+    if (def.outpostKind !== 'rig') return null;
+    const was = tierAt(s.pos), to = tierAt(cell);
+    return to && was && to !== was ? `a rig moves only to a ${was} deposit` : null;
+  };
+}
+
+/** The Resource Bay moved: its trucks' docks move with it (the same shift, or the nearest open cell round the bay). */
+function redockTrucks(state, s, from) {
+  let def = null;
+  try { def = getStructureDef(s.structId); } catch (e) { return; }
+  if (def.outpostKind !== 'resourceBay') return;
+  const dx = s.pos.x - from.x, dy = s.pos.y - from.y, w = (s.footprint && s.footprint.w) || 2, h = (s.footprint && s.footprint.h) || 2;
+  const nav = buildNavGrid(state.map, Array.from(state.structures.values()), state.base.cells || []);
+  const open = (c) => c.x >= 0 && c.y >= 0 && c.x < nav.cols && c.y < nav.rows && !!nav.passable[c.y * nav.cols + c.x];
+  const ring = [];
+  for (let y = s.pos.y - 1; y <= s.pos.y + h; y++) for (let x = s.pos.x - 1; x <= s.pos.x + w; x++) {
+    const inside = x >= s.pos.x && x < s.pos.x + w && y >= s.pos.y && y < s.pos.y + h;
+    if (!inside && open({ x, y })) ring.push({ x, y });
+  }
+  const taken = new Set();
+  for (const id of state.harvesterIds || []) {
+    const u = state.units.get(id);
+    if (!u || !(u.hp > 0) || !u.homePos) continue;
+    const shifted = { x: u.homePos.x + dx, y: u.homePos.y + dy };
+    const d = (c) => Math.hypot(c.x - shifted.x, c.y - shifted.y);
+    const dock = (open(shifted) && !taken.has(`${shifted.x},${shifted.y}`)) ? shifted
+      : ring.filter((c) => !taken.has(`${c.x},${c.y}`)).sort((a, b) => d(a) - d(b) || a.y - b.y || a.x - b.x)[0] || shifted;
+    taken.add(`${dock.x},${dock.y}`);
+    rehomeHarvester(state, u, dock);
+  }
+}
+
 /**
  * The outpost as a live SimState. outpost: save.outposts[planet] (already advanced to `now`). ctx: { map (the outpost
  * map), now (ms), gold (the player's gold), unlocks, techOwned (the save's owned Outpost tech and tree ids, as the
@@ -112,6 +157,11 @@ export function toLiveSim(outpost, { map, now, gold = 0, unlocks = null, techOwn
   state.economy.money = gold;
   state.economy.incomePerSec = 0;            // an outpost earns by mining and kills, not a battle's passive income
   state.placementRules = outpostPlacementRules(map, getStructureDef);
+  // REARRANGING the base (owner 2026-11-17 [MM-story_mwlcdc2p_7]): the battle's move command (sim/structures.js
+  // moveStructure) is on here, with the outpost's own move rule and the Resource Bay's trucks following it
+  state.allowMove = true;
+  state.moveRules = [defensesAreNotMoved, rigKeepsItsOre(map)];
+  state.moveHooks = [redockTrucks];
   // trees and rocks on level ground take a building and are cleared by it (outpost/clearing.js) [MM-story_mwlcxqzo_8]
   state.clearable = clearableKeys(map);
   // rigs: what the rigs have mined during this visit (stepLiveOutpost), per sim structure id → { item: units }, and the
@@ -365,6 +415,15 @@ export function fromLiveSim(state, link, now, where = new Map()) {
     return { pad: id, extra };
   };
   let nextDefense = Math.max(0, ...before.defenses.map((d) => +String(d.id).slice(1) || 0)) + 1;
+  // a building MOVED this visit (sim/structures.js moveStructure) stands where the sim has it: its own `at` rectangle,
+  // and a rig the deposit it now mines [MM-story_mwlcdc2p_7]. Unmoved, its extra is what was loaded.
+  const movedExtra = (e, s, def) => {
+    const was = buildingRect(before, map, e.pad);
+    if (was && was.x === s.pos.x && was.y === s.pos.y) return e.extra;
+    const extra = { ...e.extra, at: { x: s.pos.x, y: s.pos.y, w: def.footprint.w, h: def.footprint.h } };
+    if (def.outpostKind === 'rig') { const dep = (map.deposits || []).find((d) => d.x === s.pos.x && d.y === s.pos.y); if (dep) extra.deposit = dep.tier; }
+    return extra;
+  };
 
   for (const s of state.structures.values()) {
     const def = getStructureDef(s.structId), kind = def.outpostKind;
@@ -384,7 +443,7 @@ export function fromLiveSim(state, link, now, where = new Map()) {
     }
     if (isBuilding(kind)) {
       if (s.lifecycle === 'Selling') continue;  // buildings sell at once
-      const at = e ? { pad: e.pad, extra: e.extra } : placeOf(s, def);
+      const at = e ? { pad: e.pad, extra: movedExtra(e, s, def) } : placeOf(s, def);
       const pad = at.pad, extra = at.extra;
       where.set(s.id, { pad });
       if (s.lifecycle === 'Building') {

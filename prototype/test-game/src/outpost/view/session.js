@@ -26,7 +26,7 @@ import { raidHookFor } from './raidSeam.js';
 import { migrateOutpostLayout, LAYOUT_VERSION } from '../siting.js';
 import { accrueDecor } from '../decor.js';
 import { awayReportModel } from './awayReport.js';
-import { trample, placePlot, placeFarmBuilding, prep, plant, harvest, harvestAll, applyFarmLoss } from '../../farm/model.js';
+import { trample, placePlot, placeFarmBuilding, prep, plant, harvest, harvestAll, applyFarmLoss, moveFarmThing } from '../../farm/model.js';
 // the FARM tab (story A7): the farm's actions run through this same session, on the same save and settle (owner rule 7)
 import { cellRule } from '../../farm/cells.js';
 import { farmUnlocks, recordDelivery, measureCropDelivered } from '../../farm/contract.js';
@@ -243,6 +243,11 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         const [x, y] = a.cell;
         const r = a.what === 'plot' ? placePlot(o, { x, y, method: a.id }, ctx) : placeFarmBuilding(o, { kind: a.id, x, y }, ctx);
         return r.error ? r : { outpost: r.outpost, cost: r.cost, farm: { placed: r.plot || r.id } };
+      }
+      // rearrange the base: a plot or farm building to a new spot, free (owner 2026-11-17 [MM-story_mwlcdc2p_7])
+      case 'farmMove': {
+        const r = moveFarmThing(o, a.what, a.cell, { ...ctx, raid: !!a.raid });
+        return r.error ? r : { outpost: r.outpost, farm: { moved: a.what } };
       }
       case 'prep': return prep(o, a.plot, ctx);
       case 'plant': {

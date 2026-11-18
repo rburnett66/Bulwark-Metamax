@@ -312,6 +312,12 @@ function routeTo(state, u, target) {
   u.resType = target.type; u.resColor = target.color;   // remember the resource — auto-continue matches it
   u.state = 'harvestGo';
 }
+/** A truck's dock moved (its Resource Bay was moved, outpost/liveSim.js [MM-story_mwlcdc2p_7]): its new home cell; a
+ *  truck parked at the old dock drives to the new one, one out on a trip goes there when it comes back. */
+export function rehomeHarvester(state, u, cell) {
+  u.homePos = { x: cell.x, y: cell.y };
+  if (u.state === 'harvestIdle' || u.state === 'harvestReturn') routeHome(state, u);
+}
 function routeHome(state, u) {
   const nav = buildNavGrid(state.map, liveStructs(state), baseCells(state));
   const from = { x: Math.round(u.pos.x), y: Math.round(u.pos.y) };

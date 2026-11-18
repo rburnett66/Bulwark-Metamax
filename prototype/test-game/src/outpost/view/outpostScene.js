@@ -302,6 +302,11 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
       const slug = modelSlug(item.kind, item.tier, item.rigHead) || item.kind;
       if (!e || (e.slug !== slug && e.loading !== slug)) { ensureBuilding(item); continue; }
       if (!e.inst) continue;
+      // a building MOVED (sim/structures.js moveStructure [MM-story_mwlcdc2p_7]) stands where its rectangle now is
+      if (e.holder) {
+        const [cx, cz] = centre(rectOf(item.pad));
+        if (e.holder.position.x !== cx || e.holder.position.z !== cz) { e.holder.position.set(cx, PAD_Y + 0.07, cz); r.lights.invalidateShadows(); }
+      }
       const lk = `${item.rise.toFixed(2)}:${item.tint.join()}:${item.mk2}`;
       if (lastLook.get(item.pad) !== lk) { lastLook.set(item.pad, lk); r.lights.invalidateShadows(); }
       e.inst.setLook({ tint: item.tint, rise: item.rise, mk2: item.mk2, glow: item.glow * (item.kind === 'power' && item.working ? 0.88 + 0.22 * Math.sin(clock * 2.6) : 1) });

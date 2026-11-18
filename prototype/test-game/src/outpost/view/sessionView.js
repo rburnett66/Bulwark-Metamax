@@ -49,7 +49,7 @@
  */
 import { createBattleSession, createModeHost } from '../../battle/session.js';
 import { createCatalogue, lockRule } from '../../battle/catalogue.js';
-import { createUiState } from '../../input/input.js';
+import { createUiState, activeMove } from '../../input/input.js';
 import { flashMessage, showAwayReport } from '../../render/hud.js';
 import { applyCommand } from '../../sim/core.js';
 import { outpostStructId, OUTPOST_BUILDING_KINDS } from '../../data/outpostStructures.js';
@@ -59,9 +59,9 @@ import { PLANETS } from '../../data/planets.js';
 import { toLiveSim, fromLiveSim, stepLiveOutpost, repairPriceOf } from '../liveSim.js';
 import { ghostPowerOf, powerWarning } from '../placementRules.js';
 import { createVisitRaids } from '../visitRaids.js';
-import { validatePlacement } from '../../sim/structures.js';
-import { isFarmStructId } from '../../data/farmStructures.js';
-import { cropOf } from '../../data/farm.js';
+import { validatePlacement, moveBlocked } from '../../sim/structures.js';
+import { isFarmStructId, farmStructId } from '../../data/farmStructures.js';
+import { cropOf, methodOf, farmBuildingOf } from '../../data/farm.js';
 import { hasFarm } from '../../farm/contract.js';
 import { farmRailTab, farmGateReason, farmRailLocks, farmGroundRule, farmThingAt, grownFarm, farmRailLabel } from '../../farm/farmRail.js';
 import { farmPanelModel, farmRailGlyph } from '../../farm/view/farmUi.js';
@@ -110,7 +110,7 @@ const HOLDS_ORE = new Set(['rig', 'storage', 'resourceBay']);
  *   - SELL RESOURCES on a building that holds ore (the bottom SELL's sale, in the same state);
  *   - DEEP SEAM / SHALLOW SEAM on a Mining Station (needs Deep Drilling I).
  */
-export function outpostSelectionExtras(s, { ids, outpost, map, ctx = {}, now, gold = 0, act = () => {} }) {
+export function outpostSelectionExtras(s, { ids, outpost, map, ctx = {}, now, gold = 0, act = () => {}, move = null, moveWhy = null }) {
   const e = s && ids ? ids.get(s.id) : null;
   if (!e || (!e.pad && !e.defense)) return null;
   const m = panelModel(outpost, map, e.pad ? { pad: e.pad } : { defense: e.defense }, { ...ctx, now, gold });
@@ -131,6 +131,11 @@ export function outpostSelectionExtras(s, { ids, outpost, map, ctx = {}, now, go
     const on = !m.deep.on;
     actions.push({ label: on ? 'DEEP SEAM' : 'SHALLOW SEAM', enabled: m.deep.enabled, title: m.deep.note,
       run: () => act({ type: 'deep', pad: e.pad, on }) });
+  }
+  // MOVE (owner 2026-11-17 [MM-story_mwlcdc2p_7]): pick a building up and put it down elsewhere, free — the hub stays
+  // put, and a defense is never moved: it is sold and bought again (owner 2026-11-17)
+  if (move && e.pad && m.kind !== 'hub') {
+    actions.push({ label: 'MOVE', enabled: !moveWhy, title: moveWhy ? 'Move: ' + moveWhy : 'Pick it up and tap where it goes (free)', run: move });
   }
   return { lines, actions };
 }
@@ -234,7 +239,7 @@ async function openSession(opts, opening) {
     sim.placementWarnings = [...(sim.placementWarnings || []), powerWarning(() => view, map, ghostOf)];
     // the farm's ground (S6): a farm item goes only where the farm model allows it, a crop only on a prepped plot, and an
     // outpost structure never on a plot (the sim does not hold the farm as structures) — farm/farmRail.js
-    sim.placementRules.push(farmGroundRule(() => farmNow(), map, () => ({ now: nowOf(), cellOk: ctxNow().cellOk })));
+    sim.placementRules.push(farmGroundRule(() => farmNow(), map, () => ({ now: nowOf(), cellOk: ctxNow().cellOk, moving: farmMoving() })));
     // small raids come while the player is here, once the outpost is online (owner rules §5b) — waves of the live sim
     raids = outpost.online ? createVisitRaids(sim, { planet, seed: outpost.seed, ...carry }) : null;
   }
@@ -245,16 +250,20 @@ async function openSession(opts, opening) {
   // the clock the save sees: the arrival time plus the sim's own time (the sim never reads the wall clock)
   const nowOf = () => t0 + Math.round(sim.time * 1000);
   let ui = createUiState();
+  // removing a structure asks twice (SELL, then Confirm sell); SELL RESOURCES and the card's SELL stay one tap [MM-task_mwlcxrsv_9]
+  ui.confirmSell = true;
   // the planet's names for its resources (data/planets.js), as the resource card names them: the selected truck's Target
   ui.resourceNames = Object.fromEntries(Object.entries((PLANETS[planet] || {}).resources || {}).map(([t, r]) => [t, r.name]));
   let closed = false;
   let hud = null;
   const submit = (cmd) => {
     if (cmd && cmd.type === 'place' && isFarmStructId(cmd.structId)) return placeFarmItem(cmd);
+    if (cmd && cmd.type === 'farmMove') return moveFarmItem(cmd);
     const warn = cmd && cmd.type === 'place' ? ui.hoverWarn : null;
     const res = applyCommand(sim, cmd);
     if (!res.ok && res.reason && hud) flashMessage(hud, res.reason);
     else if (res.ok && warn && hud) flashMessage(hud, 'Built unpowered · ' + warn, 'info');
+    else if (res.ok && cmd && cmd.type === 'move' && hud) flashMessage(hud, 'Moved', 'ok');
     return res;
   };
 
@@ -406,6 +415,7 @@ async function openSession(opts, opening) {
     // ids know only what was there on arrival — without this a new building's panel had no status line at all)
     const where = new Map(), v = fromLiveSim(sim, live.link, nowOf(), where).outpost;
     return outpostSelectionExtras(s, { ids: where, outpost: v, map, ctx: ctxNow(), now: nowOf(), gold: sim.economy.money,
+      moveWhy: moveBlocked(sim, s.id), move: () => pickUp({ structId: s.structId, structureId: s.id }, getStructureDef(s.structId).name),
       act: (action) => {
         const r = actOnSave(action);
         if (!r.ok) return;
@@ -435,6 +445,43 @@ async function openSession(opts, opening) {
     }
     const res = actOnSave({ type: 'farmPlace', what: def.farmItem, id: def.farmId, cell: [cmd.cell.x, cmd.cell.y] }, { keepTool: true });
     if (res.ok && hud) flashMessage(hud, def.farmItem === 'plot' ? `${def.name} placed · prepping` : `${def.name} under construction`, 'ok');
+    return { ok: !!res.ok, reason: res.error };
+  }
+  /**
+   * MOVE [MM-story_mwlcdc2p_7]: pick a thing up — the battle input arms its own placement ghost with the thing's structId
+   * (input.js startMove), so the ghost, the steering finger and every refusal are the battle's. A tap puts it down: a
+   * structure through the sim's move command, a plot or farm building through the save session (moveFarmItem).
+   */
+  /** The plot or farm building being moved, as the farm's ground rule reads it ({ plot } | { farm }), or null. */
+  function farmMoving() {
+    const m = activeMove(ui);
+    return m && m.structureId == null ? (m.plot != null ? { plot: m.plot } : { farm: m.farm }) : null;
+  }
+  /** MOVE on a farm panel: the plot's method or the building's kind is the def its ghost carries (data/farmStructures.js). */
+  function farmPickUp(sel) {
+    const o = farmNow(), p = sel && sel.plot != null && o.farm.plots[sel.plot], b = sel && sel.farm != null && o.farm.buildings[sel.farm];
+    if (p) pickUp({ structId: farmStructId(p.method), plot: sel.plot }, methodOf(p.method).name);
+    else if (b) pickUp({ structId: farmStructId(b.kind), farm: sel.farm }, farmBuildingOf(b.kind).name);
+  }
+  function pickUp(move, name) {
+    const inp = session.input;
+    if (!inp || !inp.startMove) return;
+    farmSel = null; if (farmLayer) farmLayer.select(null);
+    inp.startMove(move);
+    panelSince = 1;
+    if (hud) flashMessage(hud, `Moving ${name}: tap where it goes`, 'info');
+  }
+  /** A plot or farm building put down: the sim's ground check (the ghost's answer), then the farm's own rule. */
+  function moveFarmItem(cmd) {
+    const chk = validatePlacement(sim, ui.buildSelection, cmd.cell, { move: true, free: true });
+    if (!chk.ok) { if (hud) flashMessage(hud, String(chk.reason || 'not here').replace(/^./, (c) => c.toUpperCase())); return { ok: false, reason: chk.reason }; }
+    const res = actOnSave({ type: 'farmMove', what: cmd.what, cell: [cmd.cell.x, cmd.cell.y], raid: !!(sim.waves && sim.waves.active) });
+    if (res.ok) {
+      if (hud) flashMessage(hud, 'Moved', 'ok');
+      farmSel = { ...cmd.what };   // its panel stays open where it now stands
+      if (farmLayer) farmLayer.select(farmRect(farmSel));
+      panelSince = 1;
+    }
     return { ok: !!res.ok, reason: res.error };
   }
   /** The battle input's tap on open ground: a plot or a farm building there opens its panel. → whether it took the tap. */
@@ -486,6 +533,7 @@ async function openSession(opts, opening) {
   function farmAct(a, arg, plot = farmSel && farmSel.plot) {
     // a crop button SELECTS the crop (its details show in the panel; PLANT plants it) [MM-task_mwlc3c6b_6]
     if (a === 'pickCrop') { if (farmSel) farmSel = { ...farmSel, crop: arg }; panelSince = 1; return; }
+    if (a === 'move') { farmPickUp(farmSel); return; }
     const action = a === 'plant' ? { type: 'plant', plot, pick: arg } : a === 'prep' || a === 'harvest' ? { type: a, plot: arg }
       : a === 'deliver' ? { type: 'deliver', crop: arg } : { type: a };
     if (AVATAR_WORK.has(action.type) && action.plot && crew) {
@@ -551,7 +599,7 @@ async function openSession(opts, opening) {
     let fm = null;
     if (farmSel) {
       const fo = farmNow(), c = ctxNow();
-      fm = farmPanelModel(fo, map, farmSel, { ...c, now: nowOf(), gold: sim.economy.money, room: Math.max(0, storeCapacity(fo, map) - (c.heldTotal || 0)) });
+      fm = farmPanelModel(fo, map, farmSel, { ...c, now: nowOf(), gold: sim.economy.money, room: Math.max(0, storeCapacity(fo, map) - (c.heldTotal || 0)), raid: !!(sim.waves && sim.waves.active) });
       if (!fm) farmSel = null;
     }
     const v = view || fromLiveSim(sim, live.link, nowOf()).outpost;

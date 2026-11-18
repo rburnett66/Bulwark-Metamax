@@ -297,6 +297,39 @@ export function placeFarmBuilding(outpost, what, ctx) {
   return { outpost: o, cost, id };
 }
 
+/**
+ * MOVE a plot or a farm building (owner 2026-11-17 [MM-story_mwlcdc2p_7]: "select a building or plot and rearrange
+ * their base"). what: { plot: id } | { farm: id }; cell: [x, y] or { x, y }, its new top-left. The new spot is the farm's
+ * own ground rule (groundRefusal: the map, everything standing, the walkway, ctx.cellOk) with the thing itself lifted
+ * off first. Free and instant: a plot keeps its crop, growth and level; a building under construction keeps its clock.
+ * ctx: { map, cellOk?, raid? }. → { outpost } or { error }.
+ */
+export function moveFarmThing(outpost, what, cell, ctx = {}) {
+  if (!outpost.farm) return { error: 'no farm here' };
+  if (ctx.raid) return { error: 'not during a raid' };
+  const [x, y] = Array.isArray(cell) ? cell : [cell && cell.x, cell && cell.y];
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return { error: 'badCommand' };
+  const o = clone(outpost), f = ensureFarm(o);
+  const bag = what && what.plot != null ? f.plots : f.buildings, id = what && (what.plot != null ? what.plot : what.farm);
+  const thing = id != null ? bag[id] : null;
+  if (!thing) return { error: 'nothing to move' };
+  if (thing.x === x && thing.y === y) return { error: 'it is already there' };
+  const lifted = liftedFarm(o, what);
+  const why = groundRefusal(lifted, ctx.map, { x, y, w: thing.w, h: thing.h }, ctx);
+  if (why) return { error: why };
+  thing.x = x; thing.y = y;   // in place: the farm's order (and so its picture's) is kept
+  return { outpost: o };
+}
+
+/** The outpost with one plot or farm building lifted off its farm (a shallow copy; `o` is not changed): what a moving
+ *  thing's new spot is checked against. what: { plot: id } | { farm: id } | null (→ o itself). */
+export function liftedFarm(o, what) {
+  if (!o || !o.farm || !what || (what.plot == null && what.farm == null)) return o;
+  const drop = (bag, id) => Object.fromEntries(Object.entries(bag).filter(([k]) => k !== id));
+  const farm = what.plot != null ? { ...o.farm, plots: drop(o.farm.plots, what.plot) } : { ...o.farm, buildings: drop(o.farm.buildings, what.farm) };
+  return { ...o, farm };
+}
+
 // ── what the player sees (the FARM button's status line, the panels) ─────────────────────────────────────────────
 /**
  * The farm's warnings and counts at the outpost's time: { fruited, dead, growing, prepped, siloFull, unpowered: [id] }.

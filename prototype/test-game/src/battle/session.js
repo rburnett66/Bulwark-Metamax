@@ -23,7 +23,7 @@ import { MAP, fxScaleForMap, projScaleForMap } from '../data/tables.js';
 import { stepSim, FIXED_DT } from '../sim/core.js';
 import { createRenderer, renderFrame, destroyRenderer } from '../render/renderer.js';
 import { createHud, updateHud, flashMessage, injectHudStyle } from '../render/hud.js';
-import { createInput, destroyInput } from '../input/input.js';
+import { createInput, destroyInput, sellGate, SELL_CONFIRM_HINT, uiNow } from '../input/input.js';
 import { createCatalogue } from './catalogue.js';
 
 /**
@@ -292,7 +292,12 @@ export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0,
         if (structId !== null) ui.selectedStructureId = null;
       },
       onDeselect: () => { const ui = getUi(); ui.selectedUnitId = null; ui.selectedStructureId = null; },
-      onUpgrade: act('upgrade', 'Upgrade'), onSell: act('sell', 'Sell'), onRepair: act('repair', 'Repair'),
+      onUpgrade: act('upgrade', 'Upgrade'), onRepair: act('repair', 'Repair'),
+      // a mode with ui.confirmSell (the outpost) asks twice before a structure is sold (input.js sellGate) [MM-task_mwlcxrsv_9]
+      onSell: (id) => {
+        if (!sellGate(getUi(), id, uiNow())) { flashMessage(hud, SELL_CONFIRM_HINT, 'info'); return; }
+        act('sell', 'Sell')(id);
+      },
     };
   }
 
@@ -366,6 +371,8 @@ export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0,
     get use3D() { return USE_3D; },
     // the board and input
     setBoard, bindInput, unbindInput, rebindInput,
+    /** The live input handle (input/input.js): a mode's MOVE picks a thing up through it (startMove) [MM-story_mwlcdc2p_7]. */
+    get input() { return inputHandle; },
     // the clock
     start,
     /** Forget the time owed to the sim (a fresh battle, or resuming from a freeze: no time-jump). */
