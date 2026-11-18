@@ -23,7 +23,7 @@ import { MAP, fxScaleForMap, projScaleForMap } from '../data/tables.js';
 import { stepSim, FIXED_DT } from '../sim/core.js';
 import { createRenderer, renderFrame, destroyRenderer } from '../render/renderer.js';
 import { createHud, updateHud, flashMessage, injectHudStyle } from '../render/hud.js';
-import { createInput, destroyInput } from '../input/input.js';
+import { createInput, destroyInput, sellGate, SELL_CONFIRM_HINT, uiNow } from '../input/input.js';
 import { createCatalogue } from './catalogue.js';
 
 /**
@@ -292,7 +292,12 @@ export function createBattleSession(mountEl, { getSim, getUi, submit, mapId = 0,
         if (structId !== null) ui.selectedStructureId = null;
       },
       onDeselect: () => { const ui = getUi(); ui.selectedUnitId = null; ui.selectedStructureId = null; },
-      onUpgrade: act('upgrade', 'Upgrade'), onSell: act('sell', 'Sell'), onRepair: act('repair', 'Repair'),
+      onUpgrade: act('upgrade', 'Upgrade'), onRepair: act('repair', 'Repair'),
+      // a mode with ui.confirmSell (the outpost) asks twice before a structure is sold (input.js sellGate) [MM-task_mwlcxrsv_9]
+      onSell: (id) => {
+        if (!sellGate(getUi(), id, uiNow())) { flashMessage(hud, SELL_CONFIRM_HINT, 'info'); return; }
+        act('sell', 'Sell')(id);
+      },
     };
   }
 

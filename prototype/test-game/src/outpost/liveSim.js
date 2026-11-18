@@ -96,6 +96,13 @@ function addStructure(state, kind, cell, tier) {
   return s;
 }
 
+/** A defense is never moved (owner 2026-11-17): it is sold and bought again. Only the outpost's buildings move. */
+function defensesAreNotMoved(state, s) {
+  let def = null;
+  try { def = getStructureDef(s.structId); } catch (e) { return null; }
+  return def.outpostKind && !isBuilding(def.outpostKind) ? 'a defense is sold and bought again, not moved' : null;
+}
+
 /** A Mining Rig moves only to a deposit of the ore it mines (its bay holds that ore; another ore is unlocked apart). */
 function rigKeepsItsOre(map) {
   const tierAt = (c) => ((map.deposits || []).find((d) => d.x === c.x && d.y === c.y) || {}).tier || null;
@@ -152,7 +159,7 @@ export function toLiveSim(outpost, { map, now, gold = 0, unlocks = null, techOwn
   // REARRANGING the base (owner 2026-11-17 [MM-story_mwlcdc2p_7]): the battle's move command (sim/structures.js
   // moveStructure) is on here, with the outpost's own move rule and the Resource Bay's trucks following it
   state.allowMove = true;
-  state.moveRules = [rigKeepsItsOre(map)];
+  state.moveRules = [defensesAreNotMoved, rigKeepsItsOre(map)];
   state.moveHooks = [redockTrucks];
   // rigs: what the rigs have mined during this visit (stepLiveOutpost), per sim structure id → { item: units }, and the
   // sim-clock moment (ms) it was last stepped to

@@ -24,6 +24,27 @@ export function createUiState() {
 }
 
 /**
+ * SELL CONFIRM (owner 2026-11-17 [MM-task_mwlcxrsv_9]: "Add a confirm for selling structures, there is confusion between
+ * selling resources which should be 1 click and removing the structure which will have an extra step"). A mode turns it
+ * on with ui.confirmSell (the outpost; a battle sells at one tap as before). The first SELL (button or X) only arms it
+ * for SELL_CONFIRM_MS — the button reads "Confirm" — and a second SELL on the same structure sells.
+ * sellGate(ui, id, nowMs) → true when this press should sell now, false when it only armed the confirm.
+ */
+export const SELL_CONFIRM_MS = 4000;
+export function sellGate(ui, id, nowMs) {
+  if (!ui || !ui.confirmSell) return true;
+  const a = ui.sellArm;
+  if (a && a.id === id && nowMs < a.until) { ui.sellArm = null; return true; }
+  ui.sellArm = { id, until: nowMs + SELL_CONFIRM_MS };
+  return false;
+}
+/** Is a sell confirm waiting on structure `id`? (the button's "Confirm" label) */
+export const sellArmed = (ui, id, nowMs) => !!(ui && ui.sellArm && ui.sellArm.id === id && nowMs < ui.sellArm.until);
+export const uiNow = () => ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now());   // UI only: never the sim's clock
+/** The hint an armed sell shows. */
+export const SELL_CONFIRM_HINT = 'Sell the structure? Press SELL again to confirm';
+
+/**
  * The move in hand, or null [MM-story_mwlcdc2p_7]. A move IS an armed placement tool (ui.buildSelection = the thing's own
  * structId: the battle's ghost, its pointer and touch steering, its cancels) with ui.moving saying what is carried.
  * Anything that disarms or swaps the tool (Esc, right-click, a rail button, a tap on empty ground) ends the move too.
@@ -396,6 +417,7 @@ function onKeyDown(handle, ev) {
   }
 
   if (lower === 'x') {
+    if (ui.selectedStructureId !== null && !sellGate(ui, ui.selectedStructureId, uiNow())) { ui.pendingHint = { text: SELL_CONFIRM_HINT }; ev.preventDefault(); return; }
     structAction('sell', 'Sell');
     ev.preventDefault();
     return;

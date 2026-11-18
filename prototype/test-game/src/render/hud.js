@@ -1314,7 +1314,10 @@ export function updateHud(hud, state, ui) {
     let sellVal = 0;
     try { sellVal = getSellValue(s, STRUCTURES, ASSUMPTIONS); } catch (e) { sellVal = 0; }
     hud.sellBtn.disabled = busy;
-    setCardLabel(hud.sellBtn, ' Sell (+' + Math.floor(sellVal) + 'g)');   // keep bold X
+    // a mode's sell confirm waiting on this structure (input.js sellGate, the outpost) [MM-task_mwlcxrsv_9]
+    const armed = !!(ui && ui.sellArm && ui.sellArm.id === s.id && ((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now()) < ui.sellArm.until);
+    hud.sellBtn.classList.toggle('primary', armed);
+    setCardLabel(hud.sellBtn, armed ? ' Confirm' : ' Sell (+' + Math.floor(sellVal) + 'g)');   // keep bold X
     hud.repairBtn.disabled = busy || s.hp >= s.maxHp;
   }
 

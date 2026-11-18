@@ -28,28 +28,27 @@ function spotFor(state, s, ok = () => true) {
   return null;
 }
 
-test('a defense moves to an open cell for free; the save has it there', () => {
-  const { state, link } = live();
-  const gun = byKind(state, 'mg') || byKind(state, 'cannon');
-  const was = { ...gun.pos }, to = spotFor(state, gun);
-  assert.ok(to, 'somewhere to go');
-  const r = applyCommand(state, { type: 'move', id: gun.id, cell: to });
-  assert.deepEqual(r, { ok: true, reason: '' });
-  assert.deepEqual(gun.pos, to);
-  assert.equal(state.economy.money, 0, 'free: the sim has no gold and the move still went');
-  const back = fromLiveSim(state, link, T0).outpost;
-  const saved = back.defenses.find((d) => d.kind === kindOf(gun) && d.cell[0] === to.x && d.cell[1] === to.y);
-  assert.ok(saved, 'saved at its new cell');
-  assert.ok(!back.defenses.some((d) => d.id === saved.id && d.cell[0] === was.x && d.cell[1] === was.y));
-  assert.ok(state.log.commands.some((c) => c.cmd.type === 'move'), 'a replayable battle command');
+test('a defense is never moved: it is sold and bought again (owner 2026-11-17)', () => {
+  const { state } = live();
+  for (const gun of [...state.structures.values()].filter((s) => ['mg', 'cannon', 'wall'].includes(kindOf(s)))) {
+    const was = { ...gun.pos };
+    let open = null;   // open ground a new one could stand on
+    for (let r = 2; r < 20 && !open; r++) for (let dx = -r; dx <= r && !open; dx++) { const c = { x: gun.pos.x + dx, y: gun.pos.y + r }; if (validatePlacement(state, gun.structId, c, { move: true, exclude: gun.id, free: true }).ok) open = c; }
+    assert.ok(open);
+    assert.equal(moveRefusal(state, gun.id, open), 'a defense is sold and bought again, not moved');
+    assert.equal(applyCommand(state, { type: 'move', id: gun.id, cell: open }).ok, false);
+    assert.deepEqual(gun.pos, was);
+  }
 });
 
-test('a building moves with its own rectangle; the next visit loads it there', () => {
+test('a building moves for free; the save has it there, with its own rectangle; the next visit loads it there', () => {
   const { o, state, link } = live();
   const st = byKind(state, 'storage');
   const pad = [...link.ids].find(([sid]) => sid === st.id)[1].pad;
   const to = spotFor(state, st);
-  assert.ok(applyCommand(state, { type: 'move', id: st.id, cell: to }).ok);
+  assert.deepEqual(applyCommand(state, { type: 'move', id: st.id, cell: to }), { ok: true, reason: '' });
+  assert.equal(state.economy.money, 0, 'free: the sim has no gold and the move still went');
+  assert.ok(state.log.commands.some((c) => c.cmd.type === 'move'), 'a replayable battle command');
   const back = fromLiveSim(state, link, T0).outpost;
   assert.deepEqual(buildingRect(back, map, pad), { id: pad, x: to.x, y: to.y, w: st.footprint.w, h: st.footprint.h });
   assert.equal(back.pads[pad].kind, 'storage');
@@ -112,10 +111,33 @@ test('a plot moves with its crop; the farm checks its new ground without it; a f
 
 test('the MOVE buttons: the outpost panel (not the hub) and the farm panels arm the battle placement', () => {
   const view = readFileSync(new URL('./view/sessionView.js', import.meta.url), 'utf8');
-  assert.match(view, /if \(move && m\.kind !== 'hub'\)/, 'the hub stays put');
+  assert.match(view, /if \(move && e\.pad && m\.kind !== 'hub'\)/, 'the hub stays put; a defense has no MOVE');
   assert.match(view, /inp\.startMove\(move\)/);
   assert.match(view, /if \(cmd && cmd\.type === 'farmMove'\) return moveFarmItem\(cmd\);/);
   const input = readFileSync(new URL('../input/input.js', import.meta.url), 'utf8');
   assert.match(input, /type: 'move', id: move\.structureId/);
   assert.match(input, /validatePlacement\(state, ui\.buildSelection, ui\.hoverCell, moveOpts\(ui\)\)/, 'the ghost shows the move\'s answer');
+});
+
+// Owner 2026-11-17 [MM-task_mwlcxrsv_9]: "Add a confirm for selling structures, there is confusion between selling
+// resources which should be 1 click and removing the structure which will have an extra step."
+test('selling a structure at the outpost asks twice; a battle and SELL RESOURCES stay one tap', async () => {
+  const { sellGate, sellArmed, SELL_CONFIRM_MS } = await import('../input/input.js');
+  const battle = {};
+  assert.equal(sellGate(battle, 4, 0), true, 'a battle sells at once');
+  const ui = { confirmSell: true };
+  assert.equal(sellGate(ui, 4, 1000), false, 'the first SELL only arms');
+  assert.equal(sellArmed(ui, 4, 1500), true, 'the button reads Confirm sell');
+  assert.equal(sellGate(ui, 4, 1500), true, 'the second sells');
+  assert.equal(sellArmed(ui, 4, 1600), false);
+  assert.equal(sellGate(ui, 4, 2000), false);
+  assert.equal(sellGate(ui, 5, 2100), false, 'another structure starts its own confirm');
+  assert.equal(sellGate(ui, 5, 2100 + SELL_CONFIRM_MS + 1), false, 'a stale confirm runs out');
+  const view = readFileSync(new URL('./view/sessionView.js', import.meta.url), 'utf8');
+  assert.match(view, /ui\.confirmSell = true;/);
+  const session = readFileSync(new URL('../battle/session.js', import.meta.url), 'utf8');
+  assert.match(session, /if \(!sellGate\(getUi\(\), id, uiNow\(\)\)\)/, 'the panel button');
+  const input = readFileSync(new URL('../input/input.js', import.meta.url), 'utf8');
+  assert.match(input, /!sellGate\(ui, ui\.selectedStructureId, uiNow\(\)\)/, 'the X key');
+  assert.doesNotMatch(view.split('function outpostSelectionExtras')[1].split('return { lines, actions };')[0], /sellGate/, 'SELL RESOURCES: one tap');
 });

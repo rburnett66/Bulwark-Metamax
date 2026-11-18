@@ -132,8 +132,9 @@ export function outpostSelectionExtras(s, { ids, outpost, map, ctx = {}, now, go
     actions.push({ label: on ? 'DEEP SEAM' : 'SHALLOW SEAM', enabled: m.deep.enabled, title: m.deep.note,
       run: () => act({ type: 'deep', pad: e.pad, on }) });
   }
-  // MOVE (owner 2026-11-17 [MM-story_mwlcdc2p_7]): pick it up and put it down elsewhere, free — the hub stays put
-  if (move && m.kind !== 'hub') {
+  // MOVE (owner 2026-11-17 [MM-story_mwlcdc2p_7]): pick a building up and put it down elsewhere, free — the hub stays
+  // put, and a defense is never moved: it is sold and bought again (owner 2026-11-17)
+  if (move && e.pad && m.kind !== 'hub') {
     actions.push({ label: 'MOVE', enabled: !moveWhy, title: moveWhy ? 'Move: ' + moveWhy : 'Pick it up and tap where it goes (free)', run: move });
   }
   return { lines, actions };
@@ -249,6 +250,8 @@ async function openSession(opts, opening) {
   // the clock the save sees: the arrival time plus the sim's own time (the sim never reads the wall clock)
   const nowOf = () => t0 + Math.round(sim.time * 1000);
   let ui = createUiState();
+  // removing a structure asks twice (SELL, then Confirm sell); SELL RESOURCES and the card's SELL stay one tap [MM-task_mwlcxrsv_9]
+  ui.confirmSell = true;
   // the planet's names for its resources (data/planets.js), as the resource card names them: the selected truck's Target
   ui.resourceNames = Object.fromEntries(Object.entries((PLANETS[planet] || {}).resources || {}).map(([t, r]) => [t, r.name]));
   let closed = false;
