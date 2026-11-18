@@ -15,7 +15,7 @@
  *
  * Everything above buildDecals is pure (node-tested); THREE is injected.
  */
-import { rng } from '../obstructions/placement.js';
+import { rng, onCleared } from '../obstructions/placement.js';
 import { CAMERA } from '../camera.js';
 
 export const DECALS = Object.freeze({
@@ -189,7 +189,7 @@ export const WORLD_DECALS = Object.freeze({
  * Where the decals go: [{ x, z, rot, size, kind, tint: [r,g,b] }], deterministic for the map. `colAt` is the ground
  * colour sampler (lowpoly.js createGroundColour — it carries layersAt), `roadAt` the road mask sampler.
  */
-export function planDecals(map, colAt, roadAt = () => 0, { seed = 7717, tries = 2, world = null } = {}) {
+export function planDecals(map, colAt, roadAt = () => 0, { seed = 7717, tries = 2, world = null, cleared = null } = {}) {
   const W = (world && WORLD_DECALS[world]) || null;
   const rules = W ? RULES.filter((r) => W.allow.includes(r[0])).map((r) => (W.scale && W.scale[r[0]] ? [r[0], r[1], r[2] * W.scale[r[0]], r[3], r[4]] : r)) : RULES;
   const { cols, rows } = map;
@@ -213,7 +213,9 @@ export function planDecals(map, colAt, roadAt = () => 0, { seed = 7717, tries = 
         if (Math.hypot(gx, gz) > 1e-3) rot = Math.atan2(gz, gx) + Math.PI / 2;
       }
       const g = colAt(x, z), k = tint === 'own' ? null : tint;
-      out.push({ x, z, rot, size: s0 + R() * (s1 - s0), kind: K[kind], tint: k == null ? [1, 1, 1] : g.map((v) => Math.min(1, v * k)) });
+      const size = s0 + R() * (s1 - s0);
+      if (onCleared(cleared, cols, x, z)) continue;   // under a placed building / plot [MM-task_mwl50yxm_5]
+      out.push({ x, z, rot, size, kind: K[kind], tint: k == null ? [1, 1, 1] : g.map((v) => Math.min(1, v * k)) });
     }
   }
   return out;
@@ -247,8 +249,8 @@ export function decalFade(cam, aspect, cols, rows, F = DECALS.fade) {
 /**
  * Build the decal group for a map. Returns { group, update(cam, aspect), stats: { decals, chunks } }.
  */
-export function buildDecals(THREE, map, colAt, roadAt, { seed, world = null } = {}) {
-  const list = planDecals(map, colAt, roadAt, { ...(seed != null ? { seed } : {}), world });
+export function buildDecals(THREE, map, colAt, roadAt, { seed, world = null, cleared = null } = {}) {
+  const list = planDecals(map, colAt, roadAt, { ...(seed != null ? { seed } : {}), world, cleared });
   const A = decalAtlasData();
   const tex = new THREE.DataTexture(A.data, A.size, A.size, THREE.RGBAFormat);
   tex.magFilter = THREE.LinearFilter; tex.minFilter = THREE.LinearMipmapLinearFilter;

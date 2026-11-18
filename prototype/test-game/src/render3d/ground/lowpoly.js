@@ -21,7 +21,7 @@
  *
  * THREE is injected (no import) — see render3d/index.js. Everything above buildLowPolyGround is pure.
  */
-import { rng } from '../obstructions/placement.js';
+import { rng, onCleared } from '../obstructions/placement.js';
 import { GRASS, createGrassGroundMaterial } from './grassDetail.js';
 import { SPLAT, createSplatGroundMaterial } from './splat.js';
 
@@ -215,7 +215,7 @@ export function buildGroundArrays(map, palette, roadAt = () => 0, grid = GRID, {
  * Where the grass tufts go: [{ x, z, base: [r,g,b], blades: [{ h, a, k }] }]. Open grass gets one tuft
  * 45% of the time, brush one or two; never on blocked cells, the base's 3×3, or a road.
  */
-export function planTufts(map, palette, roadAt = () => 0, colAt = createGroundColour(map, palette, roadAt), { seed = 4321 } = {}) {
+export function planTufts(map, palette, roadAt = () => 0, colAt = createGroundColour(map, palette, roadAt), { seed = 4321, cleared = null } = {}) {
   const { cols, rows } = map;
   const terrain = map.terrain || [];
   const blocked = new Set((map.blockedCells || []).map((c) => c.y * cols + c.x));
@@ -231,6 +231,7 @@ export function planTufts(map, palette, roadAt = () => 0, colAt = createGroundCo
       const x = cx + 0.1 + R() * 0.8, z = cz + 0.1 + R() * 0.8;
       const blades = [0, 1, 2].map(() => ({ h: 0.16 + R() * 0.14, a: R() * Math.PI * 2, k: 0.9 + R() * 0.3 }));
       if (roadAt(x, z) > 0.12) continue;
+      if (onCleared(cleared, cols, x, z)) continue;   // under a placed building / plot [MM-task_mwl50yxm_5]
       const b = lerp3(colAt(x, z), tuft, 0.35).map((v) => v * 1.05);
       out.push({ x, z, base: b, blades });
     }
@@ -243,7 +244,7 @@ export function planTufts(map, palette, roadAt = () => 0, colAt = createGroundCo
  * ({ width, height, data }). `apron` = the off-map colour. `grid` (vertex spacing) and `tufts` are the quality
  * tier's ground resolution (render3d/quality.js — Low builds a 1-cell grid without tufts). Returns { group, stats }.
  */
-export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron = 0x5cbf6c, grid = GRID, tufts: withTufts = true, grassDetail = false, splat = null } = {}) {
+export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron = 0x5cbf6c, grid = GRID, tufts: withTufts = true, grassDetail = false, splat = null, cleared = null } = {}) {
   const roadAt = roadSampler(roadMask, map.cols, map.rows);
   // splat = { world, taps } → the tiled terrain shader instead of the grass / sand detail [MM-story_mw2qkmb1_2]
   const G = buildGroundArrays(map, palette, roadAt, grid, { grass: grassDetail && !splat, splat: !!splat });
@@ -269,8 +270,37 @@ export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron
   ground.renderOrder = 0;
   group.add(ground);
 
-  // Grass tufts: 3-sided open cones, merged; normals forced up so blades light like the grass they grow from.
-  const plan = withTufts && !palette.bare ? planTufts(map, palette, roadAt, G.colAt) : [];   // Low tier / a bare world: no grass tufts
+  // Grass tufts (their own mesh, rebuilt alone when the cleared cells change — retuft below)
+  const tuftsOf = (clr) => buildTuftsMesh(THREE, withTufts && !palette.bare ? planTufts(map, palette, roadAt, G.colAt, { cleared: clr }) : []);   // Low tier / a bare world: no grass tufts
+  let tufts = tuftsOf(cleared);
+  group.add(tufts.mesh);
+
+  // The off-map apron in the world's colour (the outside world — hills, cliffs — is story SUR).
+  const ap = new THREE.PlaneGeometry(map.cols + 200, map.rows + 200);
+  ap.rotateX(-Math.PI / 2);
+  const apronMesh = new THREE.Mesh(ap, new THREE.MeshLambertMaterial({ color: apron, depthWrite: false }));
+  apronMesh.name = 'ground-apron';
+  apronMesh.position.set(map.cols / 2, -0.02, map.rows / 2);
+  apronMesh.receiveShadow = true;
+  apronMesh.renderOrder = -1;
+  group.add(apronMesh);
+
+  const stats = { triangles: G.triangles, tufts: tufts.count, bladeTriangles: tufts.triangles, grassCover: G.aGrass ? G.aGrass.reduce((a, b) => a + b, 0) / G.aGrass.length : 0, splat: !!G.aSplat };
+  return {
+    group, colAt: G.colAt, stats,
+    /** Rebuild only the tufts for a new set of cleared cells (the ground mesh stays). */
+    retuft(clr) {
+      const next = tuftsOf(clr);
+      group.remove(tufts.mesh); tufts.mesh.geometry.dispose(); tufts.mesh.material.dispose();
+      tufts = next; group.add(tufts.mesh);
+      stats.tufts = tufts.count; stats.bladeTriangles = tufts.triangles;
+    },
+  };
+}
+
+/** The grass tufts of `plan` (planTufts) as one merged mesh: 3-sided open cones, normals forced up so blades light
+ *  like the grass they grow from. → { mesh, count, triangles } */
+function buildTuftsMesh(THREE, plan) {
   // three's open cone emits two triangles per side, one of them zero-area at the tip: keep only the real ones
   const blade = new THREE.ConeGeometry(1, 1, 3, 1, true).toNonIndexed();
   const bp = [], src = blade.attributes.position.array;
@@ -303,17 +333,5 @@ export function buildLowPolyGround(THREE, map, palette, { roadMask = null, apron
   const tufts = new THREE.Mesh(tg, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }));
   tufts.name = 'ground-tufts';
   tufts.receiveShadow = true;
-  group.add(tufts);
-
-  // The off-map apron in the world's colour (the outside world — hills, cliffs — is story SUR).
-  const ap = new THREE.PlaneGeometry(map.cols + 200, map.rows + 200);
-  ap.rotateX(-Math.PI / 2);
-  const apronMesh = new THREE.Mesh(ap, new THREE.MeshLambertMaterial({ color: apron, depthWrite: false }));
-  apronMesh.name = 'ground-apron';
-  apronMesh.position.set(map.cols / 2, -0.02, map.rows / 2);
-  apronMesh.receiveShadow = true;
-  apronMesh.renderOrder = -1;
-  group.add(apronMesh);
-
-  return { group, colAt: G.colAt, stats: { triangles: G.triangles, tufts: plan.length, bladeTriangles: (pos.length / 9) | 0, grassCover: G.aGrass ? G.aGrass.reduce((a, b) => a + b, 0) / G.aGrass.length : 0, splat: !!G.aSplat } };
+  return { mesh: tufts, count: plan.length, triangles: (pos.length / 9) | 0 };
 }

@@ -28,6 +28,7 @@ import { popColour, FLIGHT, RETURN } from './sellTimeline.js';
 import { padModelScale } from '../../terrain/outpostPads.js';
 import { createDecorLayer } from '../../render3d/outposts/decorModels.js';
 import { conduitCells } from '../decor.js';
+import { occupied } from '../../farm/model.js';
 
 const PAD_Y = 0.05;
 const C = { plate: 0x3b4047, plateTop: 0x4a5058, edge: 0x24282d, trim: 0xeb5c0d, cyan: 0x3fd0ff, rock: 0x8a8076, rockDark: 0x6a625b };
@@ -648,11 +649,30 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
     } catch (e) { /* the scene tidy-up must never keep the sale open */ }
   }
 
+  // CLEARED GROUND [MM-task_mwl50yxm_5] (owner 2026-11-17: "clear terrain when a building or farm plot are dropped ..
+  // removing rocks and foliage or decor"): the cells every building (a build site from its drop), defense, plot, farm
+  // building, the landing pad and the deposits stand on lose their grass tufts, ground cover, small stones and decals;
+  // the renderer rebuilds that clutter only when the set changes. The outpost's own decor already moves off them (decor.js).
+  let clearedSig = null;
+  function syncCleared(o) {
+    if (!r.setCleared) return;
+    const rects = occupied(o, map), cols = map.width;
+    const sig = rects.map((q) => q.x + ',' + q.y + ',' + q.w + ',' + q.h).sort().join('|');
+    if (sig === clearedSig) return;
+    clearedSig = sig;
+    const cells = [];
+    for (const q of rects) for (let y = q.y; y < q.y + q.h; y++) for (let x = q.x; x < q.x + q.w; x++) {
+      if (x >= 0 && y >= 0 && x < cols && y < map.height) cells.push(y * cols + x);
+    }
+    r.setCleared(cells);
+  }
+
   return {
     root, debris,
     /** Bring the scene to the outpost's state (call each frame; cheap when nothing changed). */
     sync(o, now, { unlockedTiers } = {}) {
       syncFrames(o);
+      syncCleared(o);
       conduitPlan = syncConduits(o) || conduitPlan;
       if (decor) {   // a piece a newer conduit now runs over is left undrawn (it stays in the save)
         const under = conduitCells(conduitPlan);
