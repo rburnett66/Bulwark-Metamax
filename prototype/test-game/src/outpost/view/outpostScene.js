@@ -29,6 +29,7 @@ import { padModelScale } from '../../terrain/outpostPads.js';
 import { createDecorLayer } from '../../render3d/outposts/decorModels.js';
 import { conduitCells } from '../decor.js';
 import { occupied } from '../../farm/model.js';
+import { clearableIndex } from '../clearing.js';
 
 const PAD_Y = 0.05;
 const C = { plate: 0x3b4047, plateTop: 0x4a5058, edge: 0x24282d, trim: 0xeb5c0d, cyan: 0x3fd0ff, rock: 0x8a8076, rockDark: 0x6a625b };
@@ -657,12 +658,16 @@ export function createOutpostScene(THREE, r, { map, kit, tier = 'high', reduced 
   function syncCleared(o) {
     if (!r.setCleared) return;
     const rects = occupied(o, map), cols = map.width;
-    const sig = rects.map((q) => q.x + ',' + q.y + ',' + q.w + ',' + q.h).sort().join('|');
+    const sig = rects.map((q) => q.x + ',' + q.y + ',' + q.w + ',' + q.h).sort().join('|') + '#' + (o.cleared || []).length;
     if (sig === clearedSig) return;
     clearedSig = sig;
-    const cells = [];
+    // the trees and rocks built on are cut down for good (o.cleared, outpost/clearing.js) [MM-story_mwlcxqzo_8]; water
+    // and cliffs under nothing never clear (a blocked cell that is not clearable keeps its piece)
+    const cells = [...(o.cleared || [])];
     for (const q of rects) for (let y = q.y; y < q.y + q.h; y++) for (let x = q.x; x < q.x + q.w; x++) {
-      if (x >= 0 && y >= 0 && x < cols && y < map.height) cells.push(y * cols + x);
+      if (x < 0 || y < 0 || x >= cols || y >= map.height) continue;
+      const i = y * cols + x;
+      if (!(map.blocking && map.blocking[i]) || clearableIndex(map, i)) cells.push(i);
     }
     r.setCleared(cells);
   }
