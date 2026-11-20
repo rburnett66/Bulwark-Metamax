@@ -423,7 +423,7 @@ character uses them. Each `magic` and `sense` secret gains:
 - `depth`: 0–3, where 3 is extreme and must carry its cost;
 - `stage`: which step of the discovery storyline the secret supports.
 
-Rules and checks are in `Magic-System.md` §8.
+Rules and checks are in `Magic-System.md` §9; the player's own magic skills are its §7.
 
 ## 9. The consistency test (the gate)
 
