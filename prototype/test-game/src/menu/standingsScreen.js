@@ -16,6 +16,9 @@ import { alignWord } from '../save/contracts.js';
 import { ensureMissionStyle } from './missionLog.js';
 import { esc, fsvg, factionColor } from './missionView.js';
 import { portraitImg } from '../comm/commCard.js';
+import { revealSecrets, PERSONALITIES } from '../save/secrets.js';
+import { characterRelations, factionRelationRow } from '../data/factionRelations.js';
+import { loadCharacterFiles, characterEntry } from '../comm/mapCast.js';
 
 export const STANDING_TABS = Object.freeze([['characters', 'Characters'], ['factions', 'Factions']]);
 const PORTRAITS = new URL('../../content/dialog/portraits/', import.meta.url).href;   // right from any page (game or review)
@@ -41,6 +44,18 @@ const STYLE = String.raw`
 .bwm-ml .stand .rdet .rdn{color:var(--rc)}
 .bwm-ml .stand .rdet .band{display:inline-block;margin-top:6px;font-size:11px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--rc)}
 .bwm-ml .stand .rdet .dprog{margin:14px 0 2px}
+.bwm-ml .stand .rdet h3{margin:16px 0 6px;font-size:11px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--fc)}
+.bwm-ml .stand .rdet h3 small{margin-left:8px;color:var(--mute,#8a94a3);letter-spacing:.08em}
+.bwm-ml .stand .secs{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.bwm-ml .stand .secs li{padding:7px 9px;background:#12161d;border-left:2px solid var(--line2);font-size:13px;line-height:1.35}
+.bwm-ml .stand .secs li.out{border-left-color:var(--fc)}
+.bwm-ml .stand .secs li b{display:block;font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--fc)}
+.bwm-ml .stand .secs li.held,.bwm-ml .stand .secs li.locked{opacity:.6;font-style:italic}
+.bwm-ml .stand .secs li small{display:block;margin-top:3px;color:var(--cyan2)}
+.bwm-ml .stand .secs li em{color:var(--s-failed);font-style:normal;font-weight:800}
+.bwm-ml .stand .rels{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0;font-size:12px}
+.bwm-ml .stand .rels dd{margin:0;color:var(--rl)}
+.bwm-ml .stand .rels dd small{display:block;color:var(--mute,#8a94a3)}
 @media (max-width:1180px){.bwm-ml .stand .rts{grid-template-columns:repeat(2,1fr)}}
 @media (max-height:500px){.bwm-ml .log.stand{grid-template-columns:1fr 230px}.bwm-ml .stand .rts{grid-template-columns:repeat(2,1fr)}.bwm-ml .stand .rdet .bigpt{width:56px;height:56px}}
 @media (max-width:700px){.bwm-ml .log.stand{grid-template-columns:1fr}.bwm-ml .stand .rts{grid-template-columns:1fr}}
@@ -70,10 +85,51 @@ export function factionListHtml(rows, selected) {
     <small class="num">${f.next == null ? 'Highest tier' : `${(f.next - f.loyalty).toLocaleString('en-US')} to Tier ${f.tier + 1}`}</small>${loyaltyBar(f)}</button></section>`).join('');
 }
 
-export function characterDetailHtml(groups, selected) {
+/* ── the character's fiction (owner 2026-11-17..19) [MM-story_mwohml6o_2w]: personality, relations, nine secrets ── */
+const FACTION_NAME = (k) => ((globalThis.BulwarkFactions && globalThis.BulwarkFactions.find(k)) || {}).name || k;
+const itemName = (id) => String(id || '').split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+/** A secret mission's reward in words. */
+export function rewardWords(r) {
+  if (!r) return '';
+  const n = r.amount || 0;
+  switch (r.kind) {
+    case 'gold': return `${n.toLocaleString('en-US')} gold`;
+    case 'xp': return `${n.toLocaleString('en-US')} XP`;
+    case 'loyalty': return `${signed(n)} loyalty`;
+    case 'alignment': return `${signed(n)} alignment`;
+    case 'resource': return `${n} ${itemName(r.item)}`;
+    default: return `${r.kind} ${n}`;
+  }
+}
+/** The SECRETS list: revealed (lies marked once uncovered), held back, locked. view: secrets.js revealSecrets. */
+export function secretsHtml(view) {
+  if (!view.met) return `<p class="inote">Meet this character to learn their secrets.</p>`;
+  return `<ol class="secs">${view.secrets.map((x) => {
+    if (x.state === 'locked') return `<li class="locked"><b>???</b>Rapport ${x.step} to learn more.</li>`;
+    if (x.state === 'held') return `<li class="held"><b>${esc(x.label)}</b>Keeping something back. ${esc(x.hint || '')}.</li>`;
+    const extra = x.mission ? `<small>Mission: ${esc(x.mission.task)} · Reward: ${esc(rewardWords(x.mission.reward))}</small>`
+      : x.item ? `<small>Wants: ${esc(itemName(x.item))}</small>` : '';
+    return `<li class="out"><b>${esc(x.label)}</b>${esc(x.text)}${x.wasLie ? ' <em>They lied before.</em>' : ''}${extra}</li>`;
+  }).join('')}</ol>`;
+}
+/** RELATIONS rows: the faction's (or a character's bent) view of the other factions. */
+export function relationsHtml(rows) {
+  return `<dl class="rels">${rows.map((r) => `<dt>${fsvg(r.key)}${esc(FACTION_NAME(r.key))}</dt><dd style="--rl:var(${BAND_VAR[r.relation]})">${r.label}${r.bent && r.why ? `<small>${esc(r.why)}</small>` : ''}</dd>`).join('')}</dl>`;
+}
+/** The fiction block of a character's detail. entry: the characters-file entry (null: not written yet). */
+export function fictionHtml(factionKey, entry, view) {
+  if (!entry) return '';
+  const p = PERSONALITIES[entry.personality];
+  return `<h3>Personality</h3><p class="inote"><b>${esc(entry.personality.replace(/^./, (m) => m.toUpperCase()))}.</b> ${esc(p || '')}</p>
+   <h3>Secrets <small class="num">${view.met ? `${view.out} of ${view.secrets.length}` : ''}</small></h3>${secretsHtml(view)}
+   <h3>Relations</h3>${relationsHtml(characterRelations(factionKey, entry))}`;
+}
+
+export function characterDetailHtml(groups, selected, fiction = null) {
   const g = groups.find((x) => x.characters.some((c) => c.name === selected)) || groups[0];
   if (!g) return '';
   const c = g.characters.find((x) => x.name === selected) || g.characters[0];
+  const fx = fiction && fiction(g, c);
   return `<button class="dback" data-sback>All characters</button>
   <div class="rdet" style="--rc:var(${BAND_VAR[c.band.key]});--fc:${factionColor(g.key)}">
    ${portrait(c.name, 'bigpt', c.met ? c.mood : null)}<div class="rdn num">${c.met ? signed(c.score) : '—'}</div><span class="band">${c.band.label}</span>
@@ -81,8 +137,9 @@ export function characterDetailHtml(groups, selected) {
    <dl><dt>Faction</dt><dd>${fsvg(g.key)}${esc(g.name)}</dd>
     <dt>Missions kept</dt><dd class="num">${c.kept}</dd><dt>Missions broken</dt><dd class="num">${c.broken}</dd>
     <dt>Visits</dt><dd class="num">${c.greets}</dd><dt>Trades</dt><dd class="num">${c.sales + c.purchases + (c.contracts || 0)}</dd>
-    <dt>Wants</dt><dd>${esc(c.motivation) || '—'}</dd></dl>
-   <p class="inote">${c.met ? 'Keeping the missions this character gives, visiting their ship and trading with them raise your rating; breaking or abandoning their missions lowers it.' : 'You have not dealt with this character yet.'}</p>
+    <dt>Motivation</dt><dd>${esc(c.motivation) || '—'}</dd></dl>
+   <p class="inote">${c.met ? 'Keeping the missions this character gives, visiting their ship and trading with them raise your rating; breaking or abandoning their missions lowers it. Their secrets come out as it rises.' : 'You have not dealt with this character yet.'}</p>
+   ${fx || ''}
   </div>`;
 }
 
@@ -99,11 +156,14 @@ export function factionDetailHtml(rows, selected, alignment) {
     <dt>Rival</dt><dd>${esc(f.rival || '—')}</dd><dt>Characters met</dt><dd class="num">${f.metCount} of ${f.castCount}</dd>
     <dt>Your alignment</dt><dd>${alignWord(alignment || 0)}</dd></dl>
    <p class="inote">Loyalty rises when you keep this faction's missions and contracts, and falls when you break or decline them, or help its rival. Each tier opens more of its tech.</p>
+   <h3>Relations</h3>${relationsHtml(factionRelationRow(f.key))}
   </div>`;
 }
 
 let packsP = null;
 const loadPacks = () => packsP || (packsP = fetch(new URL('../../content/dialog/voicepacks.json', import.meta.url)).then((r) => r.json()).catch((e) => { packsP = null; throw e; }));
+let filesP = null;   // content/characters/<faction>.json — personality, relations and secrets (a faction may not have one yet)
+const loadFiles = () => filesP || (filesP = loadCharacterFiles(new URL('../../content/characters/', import.meta.url).href));
 
 /** The STANDINGS screen in host (the ship view's root). → { open(), close(), isOpen(), dispose() } */
 export function createStandingsScreen({ doc, host, onClose, faction = null }) {
@@ -116,7 +176,7 @@ export function createStandingsScreen({ doc, host, onClose, faction = null }) {
    <div class="tabs" role="tablist" data-tabs></div><div class="list" data-list></div></div><div class="dp" data-dp></div>`;
   wrap.appendChild(el); host.appendChild(wrap);
   const $ = (q) => el.querySelector(q);
-  let packs = null, loadError = null, tab = 'characters', selChar = null, selFac = null;
+  let packs = null, files = {}, loadError = null, tab = 'characters', selChar = null, selFac = null;
 
   function render() {
     $('[data-tabs]').innerHTML = STANDING_TABS.map(([k, n]) => `<button class="tab" role="tab" aria-selected="${k === tab}" data-stab="${k}">${n}</button>`).join('');
@@ -131,7 +191,8 @@ export function createStandingsScreen({ doc, host, onClose, faction = null }) {
       if (!groups.length) { $('[data-list]').innerHTML = `<div class="stale">No ratings are kept with this ship's crew.</div>`; $('[data-dp]').innerHTML = ''; return; }
       if (!selChar) selChar = (groups.flatMap((g) => g.characters).find((c) => c.met) || (groups[0] && groups[0].characters[0]) || {}).name;
       $('[data-list]').innerHTML = characterListHtml(groups, selChar);
-      $('[data-dp]').innerHTML = characterDetailHtml(groups, selChar);
+      const fiction = (g, c) => { const e = characterEntry(files, g.key, c.name); return e ? fictionHtml(g.key, e, revealSecrets(e, s, g.name)) : ''; };
+      $('[data-dp]').innerHTML = characterDetailHtml(groups, selChar, fiction);
     } else {
       if (!selFac) selFac = (rows.slice().sort((a, b) => Math.abs(b.loyalty) - Math.abs(a.loyalty))[0] || {}).key;
       $('[data-list]').innerHTML = factionListHtml(rows, selFac);
@@ -156,7 +217,7 @@ export function createStandingsScreen({ doc, host, onClose, faction = null }) {
     updateSave((s) => { ensureRapport(s); });
     el.classList.add('on');
     render();
-    return loadPacks().then((p) => { packs = p; loadError = null; }, (e) => { loadError = e; console.error('[standings] voice packs failed to load', e); }).then(() => { if (isOpen()) render(); });
+    return Promise.all([loadPacks(), loadFiles().then((f) => { files = f || {}; })]).then(([p]) => { packs = p; loadError = null; }, (e) => { loadError = e; console.error('[standings] voice packs failed to load', e); }).then(() => { if (isOpen()) render(); });
   }
   function close() { el.classList.remove('on', 'detail'); }
   function dispose() { doc.removeEventListener('keydown', onKey); wrap.remove(); }
