@@ -1,0 +1,241 @@
+{
+  "_source": "Hand-authored, canonical (docs/tech-plan/Character-Secrets.md). Written to the owner-approved Powder sample (ground.json).",
+  "faction": "artillery",
+  "status": "draft",
+  "characters": [
+    {
+      "name": "Logistician Bo Farrell",
+      "personality": "schemer",
+      "relations": { "hightech": { "to": "neutral", "why": "Julian Vance pays his invoices on time." } },
+      "lines": {
+        "start": "So many rounds allocated, one base. Let's settle it.",
+        "win": "Fewer shells than logged. I'll find a use.",
+        "lose": "Shells in, targets out. That's the cost, logged."
+      },
+      "secrets": [
+        { "key": "share", "text": "The cheap shells are skimmed from your own depot.", "line": "Those cheap shells? They came from your depot.",
+          "lie": { "text": "He'll sell you spare shells at cost.", "line": "Spare shells at cost. Friend's price.", "until": 42 },
+          "mission": { "task": "Buy his shells: finish an Artillery mission for him.", "reward": { "kind": "gold", "amount": 300 } } },
+        { "key": "want", "item": "mesa-copper", "text": "He wants Mesa Copper, for casings he can sell twice.", "line": "Mesa Copper. Casings sell twice if you're careful." },
+        { "key": "hate", "text": "He hates Colonel Hargreave, who fires twice what he signs for.", "line": "Hargreave fires double what he signs for." },
+        { "key": "sense", "text": "He hears an empty crate ring false, sealed and a mile away.", "line": "Hear that? Somebody's crate is empty." },
+        { "key": "love", "who": "CFO Julian Vance", "text": "He loves CFO Julian Vance of High Tech, the one man who pays on time.", "line": "Vance pays on time. I could marry a man like that." },
+        { "key": "magic", "text": "Whatever he logs exists. Whatever he crosses off vanishes.", "line": "I cross it off, and it's gone. Really gone.",
+          "mission": { "task": "Deliver 20 Slag Iron to the Kessra depot.", "reward": { "kind": "resource", "item": "ghost-brass", "amount": 1 } } },
+        { "key": "desire", "guard": "control", "text": "He wants the depot to himself when the war ends.", "line": "After the war, the depot's mine. Paperwork's done." },
+        { "key": "treasure", "guard": "control", "text": "A second ledger of every shell he ever skimmed.", "line": "There's a second ledger. You're in it too.",
+          "mission": { "task": "Find the ledger in the old depot on Kessra map 1.", "reward": { "kind": "xp", "amount": 200 } } },
+        { "key": "sorrow", "text": "He logged his son's unit as 'expended'. In his own hand.", "line": "I logged my boy's unit. 'Expended.' My handwriting." }
+      ]
+    },
+    {
+      "name": "Spotter \"Ricochet\" Deacon",
+      "personality": "whimsical",
+      "relations": { "air": { "to": "friendly", "why": "He keeps missing Kaito \"Rogue\" Minami, on purpose." } },
+      "lines": {
+        "start": "Alright, let's dance. I call 'em where I feel 'em!",
+        "win": "Felt that one before I called it. Ha!",
+        "lose": "Huh. Didn't feel that coming. Rare."
+      },
+      "secrets": [
+        { "key": "magic", "text": "His shots bounce home. A ricochet he calls always finds its mark.", "line": "Bounce it off anything. It still finds them.",
+          "mission": { "task": "Call it by feel: win Kessra map 2 at three stars.", "reward": { "kind": "gold", "amount": 250 } } },
+        { "key": "sense", "text": "His teeth itch a second before any shot is fired.", "line": "Teeth itching. Somebody's about to shoot." },
+        { "key": "love", "who": "Kaito \"Rogue\" Minami", "text": "He loves Kaito \"Rogue\" Minami, the Air pilot he keeps missing.", "line": "Kaito flies right through my flak. I let him." },
+        { "key": "share", "text": "He'll spot for anyone who keeps the guns fed.", "line": "Keep the guns fed, and I'll spot for you.",
+          "mission": { "task": "Deliver 20 Slag Iron to the gun line.", "reward": { "kind": "resource", "item": "mesa-copper", "amount": 8 } } },
+        { "key": "want", "item": "dawnpollen", "text": "He wants Dawnpollen. Kaito smells of it.", "line": "Dawnpollen. No reason. Stop looking at me." },
+        { "key": "hate", "text": "He hates The Siegemaster, which never feels a single shot.", "line": "The Siegemaster never feels a shot. Creepy." },
+        { "key": "desire", "text": "He wants to call the one shot that ends the war.", "line": "One shot ends it. I'll feel it coming." },
+        { "key": "treasure", "text": "A dented lucky coin that stopped a bullet, lost in a crater.", "line": "My lucky coin's in a crater. Help me dig?",
+          "mission": { "task": "Find the coin's crater on Kessra map 2.", "reward": { "kind": "xp", "amount": 150 } } },
+        { "key": "sorrow", "text": "Once a shot felt wrong. He called it anyway.", "line": "One shot felt wrong. I called it anyway." }
+      ]
+    },
+    {
+      "name": "Chaplain-Gunner Ruth Bellamy",
+      "personality": "open-hearted",
+      "relations": { "water": { "to": "friendly", "why": "She writes to Tide-Priestess Marena about the reef." } },
+      "lines": {
+        "start": "Step onto my map. I'll pray before I fire.",
+        "win": "The arc was judged, and it spared you. Go.",
+        "lose": "I grieve each coordinate. Yours too."
+      },
+      "secrets": [
+        { "key": "love", "who": "Tide-Priestess Marena", "text": "She loves Tide-Priestess Marena of the Water. They pray for the same reef.", "line": "Marena and I pray for the same reef." },
+        { "key": "sorrow", "text": "She blessed the barrage that flattened the reef. She didn't know.", "line": "I blessed the guns that killed the reef." },
+        { "key": "sense", "text": "She feels who lives under a coordinate before she fires. Her palms hum.", "line": "My hands are humming. Someone's under that mark." },
+        { "key": "share", "text": "She opens the chapel stores to any crew that fires clean.", "line": "Fire clean, and the chapel stores are yours.",
+          "mission": { "task": "Win a Kessra map without losing a tower.", "reward": { "kind": "loyalty", "amount": 30 } } },
+        { "key": "want", "item": "phoenix-glass", "text": "She wants Phoenix Glass, for a chapel window shells can't break.", "line": "Phoenix Glass. A window the guns can't break." },
+        { "key": "hate", "text": "She hates Warlord-Gunner Vex Marrow, who laughs while he fires.", "line": "Marrow laughs when he fires. God forgive me." },
+        { "key": "magic", "text": "A shell she prays over spares the innocent beneath it.", "line": "I prayed over that shell. The innocent walk away.",
+          "mission": { "task": "Bless the guns: win Kessra map 3 at three stars.", "reward": { "kind": "alignment", "amount": 2 } } },
+        { "key": "desire", "text": "She wants to bless the last shell of the war, then bury the guns.", "line": "Bless the last shell. Then bury every gun." },
+        { "key": "treasure", "text": "The names of every gunner she buried, carved inside the old bell.", "line": "Every name is carved in the old bell.",
+          "mission": { "task": "Recover the bell from the ruined chapel on Kessra map 3.", "reward": { "kind": "xp", "amount": 250 } } }
+      ]
+    },
+    {
+      "name": "Major Elena Ruiz",
+      "personality": "wary",
+      "relations": { "ground": { "to": "allied", "why": "She served beside Colonel Aldric Vane." } },
+      "lines": {
+        "start": "Nothing personal. We'll both do our jobs.",
+        "win": "By the range card. Well done.",
+        "lose": "Discipline holds the arc. Fall back."
+      },
+      "secrets": [
+        { "key": "want", "item": "slag-iron", "text": "She wants Slag Iron. She heard Vane's regiment bell is cracked.", "line": "Slag Iron. A bell somewhere needs recasting." },
+        { "key": "hate", "text": "She hates Colonel Hargreave, who calls doctrine cowardice.", "line": "Hargreave calls doctrine cowardice. He's never read it." },
+        { "key": "share", "text": "She teaches the range-card drill to commanders who keep discipline.", "line": "Keep discipline, and I'll teach you the card.",
+          "mission": { "task": "Win Kessra map 4 without selling a tower.", "reward": { "kind": "xp", "amount": 300 } } },
+        { "key": "sense", "text": "She feels a misfire coming before the breech even closes.", "line": "That gun will misfire. Don't ask how I know." },
+        { "key": "desire", "text": "She wants to retire somewhere quiet, with one particular colonel.", "line": "Somewhere quiet. One colonel. No guns." },
+        { "key": "love", "guard": "fear", "who": "Colonel Aldric Vane", "text": "She loves Colonel Aldric Vane of the Powder. She aims wide on his line.", "line": "I aim wide on Vane's line. Tell no one." },
+        { "key": "treasure", "text": "Her first range card, signed by every gunner she lost.", "line": "My first range card has their names on it.",
+          "mission": { "task": "Recover the card from the old battery on Kessra map 4.", "reward": { "kind": "loyalty", "amount": 30 } } },
+        { "key": "sorrow", "guard": "fear", "text": "She taught the range card to Vex Marrow, years ago.", "line": "I taught Marrow to aim. Every reef is mine." },
+        { "key": "magic", "text": "A round she calls by the card lands exactly. Never more, never less.", "line": "By the card, it lands exactly. Always.",
+          "mission": { "task": "Deliver 10 Mesa Copper for new range stakes.", "reward": { "kind": "resource", "item": "slag-iron", "amount": 30 } } }
+      ]
+    },
+    {
+      "name": "Fire-Director Yusuf Kaya",
+      "personality": "devoted",
+      "relations": { "hightech": { "to": "wary", "why": "He writes to Amara Okonkwo about sparing clinics." } },
+      "lines": {
+        "start": "I'll range you honestly. No round wasted.",
+        "win": "Tight pattern. The ground was spared.",
+        "lose": "I answer for each round. Even these."
+      },
+      "secrets": [
+        { "key": "want", "item": "ghost-brass", "text": "He wants Ghost Brass, for range-finders that never drift.", "line": "Ghost Brass. My range-finders drift without it." },
+        { "key": "sense", "text": "He knows where a round lands the moment it leaves, eyes shut.", "line": "Eyes shut, I know where it lands." },
+        { "key": "share", "text": "He shares his firing tables with commanders who spare the ground.", "line": "Spare the ground, and I'll share my tables.",
+          "mission": { "task": "Finish Kessra map 5 with every harvester alive.", "reward": { "kind": "xp", "amount": 300 } } },
+        { "key": "love", "who": "R&D Lead Amara Okonkwo", "text": "He loves R&D Lead Amara Okonkwo of High Tech, a rival's healer.", "line": "Amara's clinic is never on my grid. Never." },
+        { "key": "hate", "text": "He hates Grand-Bombardier Seline Voss, whose symmetry needs craters.", "line": "Voss wants craters for balance. I want none." },
+        { "key": "magic", "text": "No round he directs lands on a civilian.", "line": "My rounds don't find civilians. They can't.",
+          "mission": { "task": "Direct the fire: win Kessra map 5 at three stars.", "reward": { "kind": "gold", "amount": 400 } } },
+        { "key": "desire", "guard": "loyalty", "text": "He wants artillery outlawed, his own guns first.", "line": "Outlaw the guns. Start with mine." },
+        { "key": "sorrow", "text": "One of his rounds hit a school. His maths was right. The map was wrong.", "line": "My maths was right. The map put a school there." },
+        { "key": "treasure", "guard": "loyalty", "text": "The true survey maps, proving command moved the school's mark.", "line": "I kept the true maps. Command lied.",
+          "mission": { "task": "Recover the maps from the survey post on Kessra map 5.", "reward": { "kind": "loyalty", "amount": 40 } } }
+      ]
+    },
+    {
+      "name": "Warlord-Gunner Vex Marrow",
+      "personality": "cruel",
+      "relations": { "air": { "to": "friendly", "why": "He and Renegade \"Viper\" Ryu burn the same towns." } },
+      "lines": {
+        "start": "Ooh, a fresh target. Let's hear you scream.",
+        "win": "Bah. The horizon owes me a scream.",
+        "lose": "Feed the guns! Feed them everything!"
+      },
+      "secrets": [
+        { "key": "want", "item": "heartflame", "text": "He wants Heartflame, for shells that never stop burning.", "line": "Heartflame. Shells that never stop burning." },
+        { "key": "share", "text": "He shells harder whoever pays him.", "line": "Paid me? Good. Now I aim better.",
+          "lie": { "text": "He'll spare your flank if you pay him off.", "line": "Pay me, and I spare your flank.", "until": 42 },
+          "mission": { "task": "Pay him: finish an Artillery mission for him.", "reward": { "kind": "gold", "amount": 200 } } },
+        { "key": "sense", "text": "He hears the horizon scream before it breaks.", "line": "Hear that? The horizon's about to scream." },
+        { "key": "hate", "text": "He hates Wavecaller Nerea, who will not stop hunting him.", "line": "Nerea won't stop hunting me. Flattering, really." },
+        { "key": "treasure", "text": "The reef holds only the people he shelled.", "line": "No core in the reef. Just my targets.",
+          "lie": { "text": "He says the reef wreck hides a Dreadnought Core.", "line": "There's a Dreadnought Core in the reef. Go dig.", "until": 80 },
+          "mission": { "task": "Dive the reef wreck on Kessra map 6.", "reward": { "kind": "gold", "amount": 150 } } },
+        { "key": "magic", "text": "Whatever he flattens stays flat. Nothing grows back.", "line": "Nothing grows where I've been. Nothing.",
+          "mission": { "task": "Win Kessra map 6 without building a wall.", "reward": { "kind": "xp", "amount": 150 } } },
+        { "key": "desire", "text": "He wants to hear a whole planet scream at once.", "line": "One day, a whole planet screaming. Lovely." },
+        { "key": "love", "who": "Renegade \"Viper\" Ryu", "text": "He loves Renegade \"Viper\" Ryu, and would still shell Viper for the noise.", "line": "Viper's my favourite. I'd still shell Viper." },
+        { "key": "sorrow", "guard": "shame", "text": "His mother was Reef-Born. Hers was the first reef he shelled.", "line": "My mother was Reef-Born. I shelled her first." }
+      ]
+    },
+    {
+      "name": "Colonel Hargreave",
+      "personality": "proud",
+      "relations": { "ground": { "to": "allied", "why": "General Kord Stahl points; Hargreave fires." } },
+      "lines": {
+        "start": "You are a coordinate. Coordinates do not argue.",
+        "win": "Over budget. Not over.",
+        "lose": "Fire is the cheapest morality."
+      },
+      "secrets": [
+        { "key": "share", "text": "He lends his batteries to any commander who fires first.", "line": "Fire first, and my batteries back you.",
+          "mission": { "task": "Build six towers before wave 1 ends.", "reward": { "kind": "gold", "amount": 400 } } },
+        { "key": "want", "item": "starfall-iron", "text": "He wants Starfall Iron, for a gun that reaches orbit.", "line": "Starfall Iron. I want a gun that reaches orbit." },
+        { "key": "hate", "text": "He hates Fire-Director Yusuf Kaya, whose precision makes him look a butcher.", "line": "Kaya's precision makes me look like a butcher." },
+        { "key": "desire", "text": "He wants a long war, long enough to make Grand-Bombardier.", "line": "A short war? Then who would promote me?",
+          "lie": { "text": "He says he wants a short war.", "line": "A short war, Commander. Overwhelming, then over.", "until": 80 } },
+        { "key": "magic", "text": "When he orders fire, no gun on the line can refuse.", "line": "I say fire. Every gun obeys. Every one.",
+          "mission": { "task": "Win Kessra map 7 at three stars.", "reward": { "kind": "xp", "amount": 250 } } },
+        { "key": "sense", "text": "He feels morale break across a field, like ice cracking.", "line": "Hear the ice? Their nerve just broke." },
+        { "key": "love", "guard": "shame", "who": "General Kord Stahl", "text": "He loves General Kord Stahl, who has never once thanked him.", "line": "Kord never thanks me. I'd fire for him anyway." },
+        { "key": "treasure", "text": "A medal for mercy, awarded to him by clerical error.", "line": "They gave me a medal for mercy. A mistake.",
+          "mission": { "task": "Take the medal from his bunker on Kessra map 7.", "reward": { "kind": "loyalty", "amount": 30 } } },
+        { "key": "sorrow", "guard": "shame", "text": "He held fire once. The men he spared killed his brother.", "line": "I held fire once. They killed my brother." }
+      ]
+    },
+    {
+      "name": "Grand-Bombardier Seline Voss",
+      "personality": "devoted",
+      "relations": { "ground": { "to": "wary", "why": "Kord Stahl climbs too high for her symmetry." } },
+      "lines": {
+        "start": "You've raised yourself too high. I'm here to dig.",
+        "win": "Unbalanced. The horizon will keep accounts.",
+        "lose": "Symmetry restored. A crater for a crater."
+      },
+      "secrets": [
+        { "key": "hate", "text": "She hates CEO Adrian Sterling, who rose too high. Symmetry demands his crater.", "line": "Sterling's tower is too tall. Symmetry demands a crater." },
+        { "key": "share", "text": "Bases that comply are marked first.", "line": "The ones who comply? I mark them first.",
+          "lie": { "text": "She offers a ceasefire to bases built no higher than hers.", "line": "Build no higher than me, and I'll hold fire.", "until": 60 },
+          "mission": { "task": "Build low: win a Kessra map without upgrading a tower.", "reward": { "kind": "gold", "amount": 500 } } },
+        { "key": "want", "item": "ember-obsidian", "text": "She wants Ember Obsidian, black glass for a monument to balance.", "line": "Ember Obsidian. Balance deserves a monument." },
+        { "key": "sense", "text": "She feels imbalance like a tilt in the floor.", "line": "The floor's tilting. Someone's climbed too high." },
+        { "key": "magic", "text": "Every crater she digs is matched by one in her enemy's house.", "line": "Each crater I dig, your house gets one too.",
+          "mission": { "task": "Win Kessra map 8 at three stars.", "reward": { "kind": "alignment", "amount": -2 } } },
+        { "key": "desire", "text": "She wants Ochre's towers levelled to Kessra's dust.", "line": "Ochre's towers, down to our dust. Balanced." },
+        { "key": "love", "guard": "loyalty", "who": "The Siegemaster", "text": "She loves The Siegemaster, which no longer knows her name.", "line": "The Siegemaster forgot my name. I serve anyway." },
+        { "key": "treasure", "guard": "loyalty", "text": "The Siegemaster's first range card, from when it was a man.", "line": "I have its first range card. A man's handwriting.",
+          "mission": { "task": "Recover the card from the high battery on Kessra map 8.", "reward": { "kind": "resource", "item": "ghost-brass", "amount": 2 } } },
+        { "key": "sorrow", "text": "She was an architect once. She shelled her own first building.", "line": "I designed buildings once. I shelled my first." }
+      ]
+    },
+    {
+      "name": "The Siegemaster",
+      "personality": "cruel",
+      "relations": { "water": { "to": "friendly", "why": "The Undertow keeps what it unmarks." } },
+      "lines": {
+        "start": "You are a mark on the horizon. I unmark.",
+        "win": "The mark remains. For now.",
+        "lose": "Unmarked. The map forgets. Then I do."
+      },
+      "secrets": [
+        { "key": "share", "text": "It fires on the coordinate you name, first.", "line": "You named it. I fired on it first.",
+          "lie": { "text": "It offers to spare any coordinate you name.", "line": "Name a coordinate. I will spare it.", "until": 60 },
+          "mission": { "task": "Name it: finish an Artillery mission for it.", "reward": { "kind": "gold", "amount": 600 } } },
+        { "key": "sense", "text": "It hears every horizon breathing, and wants them quiet.", "line": "Every horizon breathes. I want quiet." },
+        { "key": "want", "item": "glacier-breath", "text": "It wants Glacier Breath, for barrels that never get to cool.", "line": "Glacier Breath. My barrels never cool." },
+        { "key": "magic", "text": "Whatever it unmarks is forgotten, by maps and by people.", "line": "I unmark it. Even your memory lets go.",
+          "mission": { "task": "Hold Kessra map 9 at three stars.", "reward": { "kind": "xp", "amount": 400 } } },
+        { "key": "hate", "text": "It hates Chaplain-Gunner Ruth Bellamy, who prays it back toward being a man.", "line": "The chaplain prays I was a man. Stop her." },
+        { "key": "love", "who": "Grand-Bombardier Seline Voss", "text": "It still loves Seline Voss. It forgot her name, not her.", "line": "Seline. The one mark I cannot remove.",
+          "lie": { "text": "It says it loves nothing. Nothing personal is left.", "line": "Love? There is nothing personal left in me.", "until": 100 } },
+        { "key": "desire", "text": "It wants to unmark itself last, when nothing else is left.", "line": "When every mark is gone, I unmark myself." },
+        { "key": "treasure", "text": "Its own name, scratched on the first shell it ever fired.", "line": "My name is on the first shell. Find it.",
+          "mission": { "task": "Find the first shell in the proving ground on Kessra map 9.", "reward": { "kind": "resource", "item": "dreadnought-core", "amount": 1 } } },
+        { "key": "sorrow", "text": "It was a gunner who missed once. It removed the part that could.", "line": "I missed once. I removed the part that could." }
+      ]
+    }
+  ],
+  "maps": {
+    "1": { "primary": "Logistician Bo Farrell", "secondary": { "name": "CFO Julian Vance", "faction": "hightech", "line": "Tell Farrell his invoice cleared. Early, for once." } },
+    "2": { "primary": "Spotter \"Ricochet\" Deacon", "secondary": { "name": "Kaito \"Rogue\" Minami", "faction": "air", "line": "Ricochet missed me again. Tell him thanks. Or don't." } },
+    "3": { "primary": "Chaplain-Gunner Ruth Bellamy", "secondary": { "name": "Tide-Priestess Marena", "faction": "water", "line": "Ruth prays for my reef. Few gunners do." } },
+    "4": { "primary": "Major Elena Ruiz", "secondary": { "name": "Colonel Aldric Vane", "faction": "ground", "line": "Major Ruiz is aiming wide again. Let her." } },
+    "5": { "primary": "Fire-Director Yusuf Kaya", "secondary": { "name": "R&D Lead Amara Okonkwo", "faction": "hightech", "line": "Yusuf keeps my clinic off his grid. Keep it there." } },
+    "6": { "primary": "Warlord-Gunner Vex Marrow", "secondary": { "name": "Wavecaller Nerea", "faction": "water", "line": "Marrow's here? Good. I brought the tide." } },
+    "7": { "primary": "Colonel Hargreave", "secondary": { "name": "General Kord Stahl", "faction": "ground", "line": "Fire on my mark, Hargreave. Any mark." } },
+    "8": { "primary": "Grand-Bombardier Seline Voss", "secondary": { "name": "CEO Adrian Sterling", "faction": "hightech", "line": "Voss wants a crater my size. Bring more shells." } },
+    "9": { "primary": "The Siegemaster", "secondary": { "name": "The Undertow (drowned collective)", "faction": "water", "line": "We hold what the Siegemaster unmarks. It is quiet here." } }
+  }
+}
