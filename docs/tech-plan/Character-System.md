@@ -205,6 +205,8 @@ break, so a player who tracks the story can work it out:
 4. **Corroboration.** Two independent tellers (not in each other's circle) who say the same thing. The Standings group
    rumours that agree.
 5. **Contradiction.** A rumour that conflicts with something the owner has confirmed is marked as contradicted.
+6. **How they say it.** Hesitation in the line itself (§7.4): "Well, I, uh .. I heard she" reads differently from a
+   flat statement. Nothing marks it; the prose carries it.
 
 There is a hidden credibility in code, used by the tests and by the payoff, never shown:
 
@@ -220,7 +222,49 @@ There is a hidden credibility in code, used by the tests and by the payoff, neve
 The test checks that this number follows only from the visible clues, so anything a player can infer is also what
 the code believes.
 
-### 7.4 The owner's reaction (it was told behind their back)
+### 7.4 How it is said: tells in the prose (owner: "delays, contradictions … '..' 'um' 'well,' 'I, uh ..'")
+
+The hidden credibility also shapes the line. A rumour is written once, clean; the game adds **tells** when it is
+spoken. Tells are the subtle clue: no icon, no colour, just how the character talks.
+
+**How many tells.** Generated, no randomness:
+
+| Input | Tells |
+|---|---|
+| Credibility ≥ 0.9 (a good teller, or several agreeing) | 0 |
+| Credibility 0.5–0.9 | 1 |
+| Credibility < 0.5 | 2 |
+| The version told is a twist or a lie | +1 |
+| The teller is `schemer` or `cruel` | the +1 for lying is dropped: **they lie smoothly** |
+| Cap | 2 tells per line, so lines stay short |
+
+So a smooth line proves nothing on its own. A schemer's calm is no comfort, and a hesitant good character is unsure,
+not lying (good never lie). Players who know the cast read the tell against the speaker. That is the inference.
+
+**Which tells.** Personality picks the kind, so each voice stays itself:
+
+| Personality | Tells it uses |
+|---|---|
+| open-hearted, whimsical | fillers: "um", "uh", "I, uh .." |
+| wary | hedges: "Well,", "They say", "If it's true," |
+| proud | no fillers; a restart: "Everyone knows… I know." |
+| devoted | a pause: ".." before the name |
+| schemer, cruel (lying, at credibility < 0.5) | a contradiction only: "At the docks. Or the yard. The docks." |
+
+**The pause is timed.** ".." is a beat in the comm card's typing: the line holds about 400 ms there. Today
+`typeText` in `src/comm/commCard.js` types at a steady rate; it gains a hold on "..". Under reduced motion the hold
+is dropped and the dots stay.
+
+**The owner's own lies** carry tells by the same rule when told in person. So Graf (PE, cruel) offers her amnesty
+without a flicker, and a nervous liar gives themself away.
+
+**Where tells appear.** Only on rumours and on lies told in person. Authored battle lines are never altered.
+
+**Code.** `src/comm/tells.js` (new): `tellsFor(line, { credibility, version, personality, seed })` returns the spoken
+line. The seed is owner + secret + teller, so the same rumour always reads the same. It is not in the sim tick, so
+replays are unaffected.
+
+### 7.5 The owner's reaction (it was told behind their back)
 
 When the player has heard a rumour and the owner later tells it in person, the owner reacts by the secret's guard:
 
@@ -235,14 +279,14 @@ When the player has heard a rumour and the owner later tells it in person, the o
 If the rumour was twisted or false, the owner's version replaces it. The Standings show "Vex's version was a lie", and
 the teller gets the lied-before mark.
 
-### 7.5 The payoff for inferring well (with the secret-missions follow-up)
+### 7.6 The payoff for inferring well (with the secret-missions follow-up)
 
 - A **rumoured want** can be given early. A true rumour earns the gift bonus; a false one wastes the item.
 - A **rumoured treasure or share** opens its mission from the rumour. A true rumour pays the reward; a twisted one
   sends the player somewhere wrong (an ambush wave or nothing).
 - So inference has a price and a reward, and no menu ever says "73% likely".
 
-### 7.6 Save data
+### 7.7 Save data
 
 `s.rumours[owner] = [{ key, teller, version: 'true' | 'twist' | 'lie' | 'false', at }]`, next to the existing
 `s.secretsHeard`. It is pure data, and `secrets.js` gains `rumoursFor(…)`, `credibility(…)` and `noteRumour(…)`.
@@ -273,6 +317,8 @@ Open for the owner: in-world names; whether balance is the hidden truth; how muc
 5. Every close or across secret has at least one knower through a real relationship (fallbacks listed).
 6. Every secret an evil hostile knower can tell has a `twist`.
 7. A good teller never yields a twisted or false rumour. Credibility follows only from the visible clues.
+   Tells follow only from credibility, version and personality; a credibility-1.0 truth has none; a schemer's or
+   cruel teller's lie adds none; no line gains more than 2 tells; authored battle lines are never changed.
 8. Every homeworld map's secondary is an across-knower of a main-character secret where one exists.
 
 ## 10. Data changes
@@ -285,6 +331,8 @@ Open for the owner: in-world names; whether balance is the hidden truth; how muc
 | `content/characters/<faction>.json` | secrets gain optional `reach` / `why` / `twist`; `love`/`hate` point at threads |
 | `src/save/secrets.js` | rumours, credibility, owner reaction |
 | `src/comm/mapCast.js` | rumour channels (opening, wave 3 cut-in) |
+| `src/comm/tells.js` (new) | hesitation, hedges and contradictions added to spoken rumours and lies |
+| `src/comm/commCard.js` | `typeText` holds on ".." (not under reduced motion) |
 | `src/menu/standingsScreen.js` | rumoured secrets, tellers, corroboration, contradictions |
 
 `voicepacks.json` stays the source of alignment, motivation and phrases. The `characters/*.json` files own the
@@ -297,7 +345,7 @@ battle lines and the fiction. Nothing is copied between them.
    the consistency test reporting what fails.
 3. **Rework the casts to pass the gate:** #349's 72 characters plus any Powder changes. Powder changes are listed for
    the owner, who approved that file. #349 is folded in here rather than merged as it stands.
-4. **Rumours in play:** the channels, the Standings, the owner's reaction, save data.
+4. **Rumours in play:** the channels, the Standings, the owner's reaction, tells in the prose, save data.
 5. **Payoffs:** inside the secret-missions follow-up (MM-story_mwohmo7a_2z).
 6. **Magic sides:** after the magic system design.
 
