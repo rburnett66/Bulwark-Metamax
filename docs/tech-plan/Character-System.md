@@ -1,7 +1,8 @@
 # Tech Plan — The character system: generated layers, secret reach and rumours
 
 **Repo copy is canonical:** `docs/tech-plan/Character-System.md`.
-**Status:** v0.1, 2026-11-20, agent-proposed for owner review. Ticket: MM-story_mwp5vobq_31.
+**Status:** v0.3, 2026-11-20. v0.2 approved by the owner (#350); v0.3 makes pride a flaw (§4.1). Tickets:
+MM-story_mwp5vobq_31, MM-story_mwpdkocr_3g.
 **Builds on:** `Character-Secrets.md` (the nine secrets and the reveal rules, shipped in #348). This doc puts that work
 back on a generated footing and adds secret reach and rumours.
 
@@ -24,6 +25,7 @@ The layers, bottom up:
 | 2 | Faction relations | **authored world input**, one reason per pair | `src/data/factionRelations.js` (exists) |
 | 3 | Base relation, character → character | **generated** from 1 + 2 | new |
 | 4 | Personality | **generated** from alignment; a declared alternate allowed | new rule over existing content |
+| 4a | Flaw (pride, greed, …) | **declared**, any alignment, at most one | new (§4.1) |
 | 5 | Drama threads (love, kin, hunts, …) | **declared exceptions** above 3 | GDD §12 + `threads.json` |
 | 6 | Secret reach and who knows | **generated** from 4 + 5; declared overrides | new |
 | 7 | Rumours: what a knower says, true or not | **generated** from 1–6 | new |
@@ -83,20 +85,37 @@ exception, at most one per faction.
 | Alignment | Axes | Primary | Alternate | Because |
 |---|---|---|---|---|
 | AG | Good, T3 | devoted | open-hearted | a zealot for the good; holds the line for others |
-| PG | Good, T3 | devoted | proud | the order is everything; pride in keeping it |
+| PG | Good, T3 | devoted | wary | the order is everything; watches for what breaks it |
 | G | Good, T2 | open-hearted | wary | committed but human; some have been burned |
 | CG | Good, T1 | whimsical | open-hearted | loose, generous, quick to share |
-| N | T0 | wary | proud | uncommitted: watches, trusts slowly |
+| N | T0 | wary | whimsical | uncommitted: watches, trusts slowly, or drifts |
 | CE | Evil, T1 | cruel | schemer | loose and hungry; takes what it wants |
 | E | Evil, T2 | schemer | devoted | committed to a bad cause; plans, or serves |
-| PE | Evil, T3 | schemer | proud | the throne: controls through what it knows |
+| PE | Evil, T3 | schemer | cruel | the throne: controls through what it knows, or through fear |
 | DE | Evil, T3 | cruel | schemer | the abyss: consumes, lies to feed |
 
-The personality rules that already exist (whimsical tells magic early, proud tells sorrow last, and so on) stay as
-they are. Checked against the 81 characters as written today (#348 and #349), **16 fall outside this table**, 3 of
-them Powder (Seraphine AG proud, Kord Stahl E proud, Graf PE cruel). Each one either moves to their primary or
-alternate, or is declared as an exception. One open question: three AG characters (Seraphine, Aurelia, Elias) are
-proud, so AG may want proud as its alternate instead of open-hearted.
+The personality rules that already exist (whimsical tells magic early, and so on) stay as they are. **Proud is no
+longer a personality** (owner 2026-11-20: "Pride is a flaw of its own so it feels less like an alignment
+description"); its rules move to the pride flaw below. Checked against the 81 characters as written today (#348 and
+#349), 16 fell outside the v0.2 table, 3 of them Powder (Seraphine AG proud, Kord Stahl E proud, Graf PE cruel).
+Under v0.3 every proud character takes their alignment's personality plus the pride flaw, and Graf (PE cruel) is now
+inside the table, so the remaining exceptions are recounted by the gate (§9) and listed in the cast rework.
+
+### 4.1 Flaws (declared, any alignment)
+
+A **flaw** is a weakness that cuts across alignment: a good character can be proud, an evil one can be afraid. It is
+optional, at most one per character, and declared in the character file (`"flaw": "pride"`). Each flaw changes the
+rules a little, so it shows in play rather than in a description.
+
+| Flaw | In the secrets | In the prose (§7.4) | In magic (Magic-System.md) |
+|---|---|---|---|
+| **pride** | sorrow and love told last; sorrow and love reach → private | a restart: "Everyone knows… I know." | overreach: pushes past their depth |
+| **greed** | want told first; a rumoured want given early is worth double | none of its own | hoards: one side only, never blends |
+| **wrath** | hate reach → close as well as across: everyone hears it | a flat repeat: "She did it. She did." | burns: the cost lands on others nearby |
+| **envy** | tells rumours about rivals even when shielding (§7.1) | a jab before the name | takes: draws on another's magic |
+| **fear** | share and sorrow held behind the fear guard | hedges, whatever the personality | flinches: stops short of depth 3 |
+
+A flaw is a fact like any other: the gate checks it is one of the five and that its rules hold.
 
 ## 5. Drama threads (declared, above the matrix)
 
@@ -152,7 +171,7 @@ Every secret has a **reach**: who besides the character knows it, and so who els
 **Personality shifts the defaults by one step:**
 - whimsical: private → close for magic and sense;
 - open-hearted: private → close for desire;
-- proud, schemer: close → private for sorrow and love.
+- schemer, and the pride flaw (§4.1): close → private for sorrow and love.
 
 **Generated check:** a close or across secret with nobody who knows it falls back to private, and the test lists it so
 a writer can add a thread or accept the fallback.
@@ -249,7 +268,7 @@ know the cast learn each one's normal voice, and the change from it is the clue.
 |---|---|
 | open-hearted, whimsical | fillers: "um", "uh", "I, uh .." |
 | wary | hedges: "Well,", "They say", "If it's true," |
-| proud | no fillers; a restart: "Everyone knows… I know." |
+| a flaw with its own tell (§4.1) | the flaw's tell replaces the personality's |
 | devoted | a pause: ".." before the name |
 | schemer, cruel (lying, at credibility < 0.5) | a contradiction only: "At the docks. Or the yard. The docks." |
 
@@ -293,19 +312,17 @@ the teller gets the lied-before mark.
 `s.rumours[owner] = [{ key, teller, version: 'true' | 'twist' | 'lie' | 'false', at }]`, next to the existing
 `s.secretsHeard`. It is pure data, and `secrets.js` gains `rumoursFor(…)`, `credibility(…)` and `noteRumour(…)`.
 
-## 8. Magic side (hook only; waits on the owner's decisions)
+## 8. Magic side (hook only; the design is `Magic-System.md`)
 
-Working names: **Structure · Quantum · Chaos**, and the pair blends **Foresight** (Structure+Quantum), **Craft**
-(Structure+Chaos) and **Miracle** (Quantum+Chaos). The magic system design is its own doc. This model only reserves:
+The three magics (themes: organic, electric, quantum; names still to choose) are neutral; good and evil are how a
+character uses them. Each `magic` and `sense` secret gains:
 
-- `side` on each `magic` and `sense` secret: one side or one blend.
-- A character's place in the triangle, generated:
-  - the faction's **home side** (draft: Structure for Powder, Artillery and Arcane; Quantum for Space, High Tech and
-    Air; Chaos for Greenies, Water and Dark);
-  - pulled by **conviction**: the T3 Balance-Keepers sit near the centre and hold the tension (GDD §10.1, "both poles
-    to stay balanced"); T2 sit at their faction's side; T1 lean toward Chaos (looseness); N drift with their faction.
+- `side`: one magic or one blend;
+- `use`: good, neutral or evil, generated from the character's polarity (declared exceptions allowed);
+- `depth`: 0–3, where 3 is extreme and must carry its cost;
+- `stage`: which step of the discovery storyline the secret supports.
 
-Open for the owner: in-world names; whether balance is the hidden truth; how much the sides touch battle.
+Rules and checks are in `Magic-System.md` §8.
 
 ## 9. The consistency test (the gate)
 
@@ -313,7 +330,8 @@ Open for the owner: in-world names; whether balance is the hidden truth; how muc
 `characters.test.mjs` where they overlap.
 
 1. The alignment matrix regenerated from the §10.2 rules equals the GDD §10.3 table.
-2. Every personality is its alignment's primary or alternate, or a declared exception (≤ 1 per faction).
+2. Every personality is its alignment's primary or alternate, or a declared exception (≤ 1 per faction). Every
+   flaw is one of the five, at most one per character, and its rules hold.
 3. Every thread names real characters, and all GDD §12 threads are present.
 4. Every love and hate secret agrees with a thread or the base relation. A love with base ≤ 0 is a tagged thread.
 5. Every close or across secret has at least one knower through a real relationship (fallbacks listed).
