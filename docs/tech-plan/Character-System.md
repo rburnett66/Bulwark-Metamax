@@ -296,7 +296,7 @@ battle lines and the fiction. Nothing is copied between them.
 2. **The model and the gate:** `alignment.js`, `characterModel.js`, `threads.json` built from today's 81 casts, and
    the consistency test reporting what fails.
 3. **Rework the casts to pass the gate:** #349's 72 characters plus any Powder changes. Powder changes are listed for
-   the owner, since he approved that file. #349 is folded in here rather than merged as it stands.
+   the owner, who approved that file. #349 is folded in here rather than merged as it stands.
 4. **Rumours in play:** the channels, the Standings, the owner's reaction, save data.
 5. **Payoffs:** inside the secret-missions follow-up (MM-story_mwohmo7a_2z).
 6. **Magic sides:** after the magic system design.
