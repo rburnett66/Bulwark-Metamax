@@ -236,10 +236,12 @@ spoken. Tells are the subtle clue: no icon, no colour, just how the character ta
 | Credibility < 0.5 | 2 |
 | The version told is a twist or a lie | +1 |
 | The teller is `schemer` or `cruel` | the +1 for lying is dropped: **they lie smoothly** |
+| The teller is `open-hearted` or `whimsical` | +1 filler always, even telling the truth: **it is how they talk** |
 | Cap | 2 tells per line, so lines stay short |
 
-So a smooth line proves nothing on its own. A schemer's calm is no comfort, and a hesitant good character is unsure,
-not lying (good never lie). Players who know the cast read the tell against the speaker. That is the inference.
+So a tell means nothing until it is read against the speaker. A schemer's calm is no comfort; an open-hearted "um" is just
+their voice; but a wary or devoted character who suddenly hedges is passing on something they don't trust. Players who
+know the cast learn each one's normal voice, and the change from it is the clue. That is the inference.
 
 **Which tells.** Personality picks the kind, so each voice stays itself:
 
@@ -317,7 +319,7 @@ Open for the owner: in-world names; whether balance is the hidden truth; how muc
 5. Every close or across secret has at least one knower through a real relationship (fallbacks listed).
 6. Every secret an evil hostile knower can tell has a `twist`.
 7. A good teller never yields a twisted or false rumour. Credibility follows only from the visible clues.
-   Tells follow only from credibility, version and personality; a credibility-1.0 truth has none; a schemer's or
+   Tells follow only from credibility, version and personality; a credibility-1.0 truth has none beyond the open-hearted/whimsical filler; a schemer's or
    cruel teller's lie adds none; no line gains more than 2 tells; authored battle lines are never changed.
 8. Every homeworld map's secondary is an across-knower of a main-character secret where one exists.
 
