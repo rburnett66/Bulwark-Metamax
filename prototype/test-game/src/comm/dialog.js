@@ -130,17 +130,13 @@ export function tipsCall(packs, factionName, seed, kind, outcome = null) {
   const goodish = fac.chars.filter((c) => ['AG', 'PG', 'G', 'CG', 'N'].includes(c.align));
   const cast = goodish.length ? goodish : fac.chars;
   const ch = cast[Math.abs(seed | 0) % cast.length];
-  const phrase = (ch.phrases || [])[Math.abs((seed | 0) >> 2) % Math.max(1, (ch.phrases || []).length)] || '';
-  const flavor = phrase ? ' “' + phrase + '”' : '';
-  // 'closing' — the quest-giver's verdict after the last wave [MM-story_mvk8gz1k_r]. PLACEHOLDER COPY (owner: "We will
-  // tune the copy later").
+  // 'closing' — the quest-giver's verdict after the last wave [MM-story_mvk8gz1k_r]. SHORT (owner 2026-11-19: "We need
+  // to simplify the dialog, what we have now is too wordy") [MM-story_mwohmn64_2y]: one line each, no motto tacked on.
   const line = kind === 'reward'
-    ? 'Five stars, commander — the bonus is yours. ' + (ch.motivation || '') + flavor
+    ? 'Five stars, Commander. The bonus is yours.'
     : kind === 'closing'
-      ? (outcome === 'FULFILLED'
-        ? 'The crystals are in our hands. You kept your word, commander — we will remember it.' + flavor
-        : 'The haul came up short. A deal is a deal, commander, and this one is broken.' + flavor)
-      : 'The contract stands. The crystals we spoke of lie beyond the front — push out when the ring opens, and haul at least four of every five.' + flavor;
+      ? (outcome === 'FULFILLED' ? 'You kept your word, Commander. We will remember.' : 'The haul came up short. The deal is broken.')
+      : 'The contract stands. Haul four of every five crystals.';
   // factionKey + sub: the comm card drops any spec without a known factionKey, and main.js awaits
   // the close of this call — so a keyless tip was silently skipped AND hung TAP TO START.
   return {

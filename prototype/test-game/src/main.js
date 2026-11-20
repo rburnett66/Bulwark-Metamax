@@ -37,7 +37,9 @@ import { setChannelVolume, initAudio } from './comm/voice.js';
 import { musicPlay, musicIntensity, musicSting, musicResume } from './audio/music.js';
 import { loadVoicePacks, challengeCall, winCall, defeatCall, fallbackCall, tipsCall, classifyOutcome, characterCall } from './comm/dialog.js';
 import { RARE_OFFER, rareOfferEarned, rareContractFor, pickBuyer, settleRareContract, bankRareSale, rareResultLine } from './data/rareContract.js';
-import { addLoyalty } from './save/contracts.js';
+import { addLoyalty, rivalOf } from './save/contracts.js';
+import { loadCharacterFiles, mapCast, openingCall, secondaryCall, closingCall, SECONDARY_AFTER_WAVE } from './comm/mapCast.js';
+import { noteSecretTold } from './save/secrets.js';
 import { showContractModal } from './render/contractModal.js';
 import { ensureReveals, newlyDue, revealLine, shipArrived } from './save/reveals.js';
 import { noteRapportEvent } from './save/standings.js';
@@ -759,7 +761,9 @@ export function boot(mountEl, seed) {
     setPlaying(!menu.isOpen());
   }
   let voicePacks = null;
-  loadVoicePacks().then((p) => {
+  let characterFiles = {};   // content/characters/<faction>.json — the map cast and the secrets [MM-story_mwohmm89_2x]
+  const characterFilesP = loadCharacterFiles().then((f) => { characterFiles = f || {}; });
+  Promise.all([loadVoicePacks(), characterFilesP]).then(([p]) => {
     voicePacks = p;
     if (p) console.log('[dialog] voice packs loaded:', Object.keys(p.factions).length, 'factions');
     // boot lands on the tap-to-start interlude before the packs resolve — deliver wave 1's challenge now,
@@ -772,21 +776,50 @@ export function boot(mountEl, seed) {
   let killsThisWave = 0;          // the wave report's damage line (enemies destroyed this wave)
   let pendingWaveReport = null;    // { model } — shown by runWaveEnd (hud.showWaveReport), then cleared
 
+  let castOfMatch = null;          // this map's cast (mapCast.js), worked out once per match
   function resetCommTracking() {
     for (const k in factionVisits) delete factionVisits[k];
     lastWaveFaction = null;
     structuresLostThisWave = 0;
     killsThisWave = 0;
     pendingWaveReport = null;
+    castOfMatch = null;
   }
 
+  // ONE CHARACTER PER MAP (owner 2026-11-19) [MM-story_mwohmm89_2x]: the planet's faction fields one character for the
+  // whole map (content/characters `maps`, else its cast rotated by map number), and a character from another faction
+  // speaks once after wave 3. The waves in between have no character dialog.
+  function matchCast() {
+    if (castOfMatch || !voicePacks) return castOfMatch;
+    const fac = REG.find(currentTestFaction || DEFAULT_FACTION);
+    if (!fac) return null;
+    const rival = REG.find(rivalOf(fac.name) || '');
+    castOfMatch = mapCast(characterFiles, voicePacks, fac.key, currentMapId || 1, rival ? rival.key : null);
+    return castOfMatch;
+  }
+
+  /** A wave starts: track it; only the map's first wave has a character (the primary's opening). */
   function commChallenge(faction, wave, hold) {
     factionVisits[faction] = (factionVisits[faction] || 0) + 1;
     lastWaveFaction = faction;
     structuresLostThisWave = 0;
-    const call = challengeCall(voicePacks, faction, wave, currentSeed, factionVisits[faction])
+    if (wave !== 1) return Promise.resolve();
+    const cast = matchCast();
+    const fac = REG.find(currentTestFaction || DEFAULT_FACTION);
+    const open = cast && openingCall(cast, characterFiles, voicePacks, loadSave(), fac ? fac.name : null);
+    // a secret told in person is told once; a replay (no hold) re-hears it without spending it
+    if (open && open.secret && hold && mode === 'play') updateSave((sv) => { noteSecretTold(sv, cast.primary.name, open.secret); });
+    const call = (open && open.spec)
+      || challengeCall(voicePacks, faction, wave, currentSeed, factionVisits[faction])
       || fallbackCall(faction, wave, currentSeed);
+    if (!call) return Promise.resolve();
     return comm.showCall(hold ? { ...call, hold: true, center: true } : call);   // held = interlude: centre stage, 2× [MM-story_mvempsla_q]
+  }
+
+  /** After wave 3: the secondary from another faction, held centre stage. */
+  function commSecondary() {
+    const call = secondaryCall(matchCast(), voicePacks);
+    return call ? comm.showCall({ ...call, hold: true, center: true }) : null;
   }
 
   // ── PRE-BATTLE dialog sequence (owner: ALL dialog before the battle) ──
@@ -822,9 +855,20 @@ export function boot(mountEl, seed) {
       // 3. SECONDARY (match START only): a TIP, iff the loyalty deal is live (contract accepted)
       // 4. one-second beat, THEN "TAP TO START"
       if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
-      const closed = comm.waitForClose();
-      await commChallenge(faction, idx + 1, true);          // primary, held
-      await closed;
+      // one character per map (owner 2026-11-19): the primary opens the map; after wave 3 the secondary speaks once;
+      // the other waves go straight to the intel [MM-story_mwohmm89_2x]
+      if (idx === 0) {
+        const closed = comm.waitForClose();
+        await commChallenge(faction, 1, true);             // primary, held
+        await closed;
+      } else {
+        lastWaveFaction = faction;
+        if (idx === SECONDARY_AFTER_WAVE && secondaryCall(matchCast(), voicePacks)) {
+          const closed = comm.waitForClose();
+          await commSecondary();
+          await closed;
+        }
+      }
       if (!interlude || mode !== 'play') return;
       if (idx === 0) {
         // MATCH START: 1s beat, explicit TAP TO START (the build phase before wave 1 stays player-paced).
@@ -1104,9 +1148,11 @@ export function boot(mountEl, seed) {
             } : null;
             if (openPodChest && !lastWaveFaction) setTimeout(openPodChest, 1200);
             if (lastWaveFaction) {
-              const call = S.result === 'win'
-                ? winCall(voicePacks, lastWaveFaction, S.waves ? S.waves.current : 0, currentSeed, commOutcome(), true)
-                : defeatCall(voicePacks, lastWaveFaction, currentSeed);
+              // the map's own character has the last word (owner 2026-11-19) [MM-story_mwohmm89_2x]
+              const call = closingCall(matchCast(), characterFiles, voicePacks, S.result)
+                || (S.result === 'win'
+                  ? winCall(voicePacks, lastWaveFaction, S.waves ? S.waves.current : 0, currentSeed, commOutcome(), true)
+                  : defeatCall(voicePacks, lastWaveFaction, currentSeed));
               setTimeout(async () => {
                 if (openPodChest) await openPodChest();
                 if (S !== sim) return;
