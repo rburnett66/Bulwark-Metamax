@@ -122,8 +122,9 @@ different magics.
   - **T2** sit at their faction's side.
   - **T1** lean toward organic (looseness, change).
   - **N** drift with their faction.
-- A **flaw** (Character-System.md §4.1) is what usually pushes a character to depth 3: pride overreaches, greed
-  hoards one side, wrath burns.
+- A **flaw** (Character-System.md §5a) is what pushes a character to depth 3: proud overreaches, driven is consumed,
+  reckless rushes in. Indulgent users hoard one magic; cowardly users stop short. Depth is declared, not generated,
+  and the gate checks that every depth-3 character has one of the three flaws that lead there.
 
 ## 5. Extremes: high cost and consequences
 
@@ -210,7 +211,7 @@ to `characterSystem.test.mjs`:
 
 ## 10. Order of work
 
-1. This doc and the Character-System v0.3 flaw change, owner review.
+1. This doc and the Character-System v0.3 flaw layer, owner review.
 2. `magic.js` and the checks, inside the model-and-gate story (MM-story_mwp61a5f_32).
 3. Tag every magic and sense secret during the cast rework (MM-story_mwohmp8n_30).
 4. Battle balance and backlash, only if chosen: its own story under the combat agent.

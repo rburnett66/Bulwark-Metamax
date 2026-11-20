@@ -1,7 +1,7 @@
 # Tech Plan — The character system: generated layers, secret reach and rumours
 
 **Repo copy is canonical:** `docs/tech-plan/Character-System.md`.
-**Status:** v0.3, 2026-11-20. v0.2 approved by the owner (#350); v0.3 makes pride a flaw (§4.1). Tickets:
+**Status:** v0.3, 2026-11-20. v0.2 approved by the owner (#350); v0.3 makes flaws a generated layer (§5a). Tickets:
 MM-story_mwp5vobq_31, MM-story_mwpdkocr_3g.
 **Builds on:** `Character-Secrets.md` (the nine secrets and the reveal rules, shipped in #348). This doc puts that work
 back on a generated footing and adds secret reach and rumours.
@@ -25,8 +25,8 @@ The layers, bottom up:
 | 2 | Faction relations | **authored world input**, one reason per pair | `src/data/factionRelations.js` (exists) |
 | 3 | Base relation, character → character | **generated** from 1 + 2 | new |
 | 4 | Personality | **generated** from alignment; a declared alternate allowed | new rule over existing content |
-| 4a | Flaw (pride, greed, …) | **declared**, any alignment, at most one | new (§4.1) |
 | 5 | Drama threads (love, kin, hunts, …) | **declared exceptions** above 3 | GDD §12 + `threads.json` |
+| 5a | Flaws (proud, greedy, rude, …) | **generated** from 1–5 on eight axes; declared overrides | new (§5a) |
 | 6 | Secret reach and who knows | **generated** from 4 + 5; declared overrides | new |
 | 7 | Rumours: what a knower says, true or not | **generated** from 1–6 | new |
 | 8 | Magic side | **generated** from faction + conviction (draft) | new; waits on the magic design |
@@ -96,26 +96,10 @@ exception, at most one per faction.
 
 The personality rules that already exist (whimsical tells magic early, and so on) stay as they are. **Proud is no
 longer a personality** (owner 2026-11-20: "Pride is a flaw of its own so it feels less like an alignment
-description"); its rules move to the pride flaw below. Checked against the 81 characters as written today (#348 and
+description"); its rules move to the proud extreme of the Self-regard flaw axis (§5a). Checked against the 81 characters as written today (#348 and
 #349), 16 fell outside the v0.2 table, 3 of them Powder (Seraphine AG proud, Kord Stahl E proud, Graf PE cruel).
-Under v0.3 every proud character takes their alignment's personality plus the pride flaw, and Graf (PE cruel) is now
+Under v0.3 every proud character takes their alignment's personality, and pride comes back as a generated flaw, and Graf (PE cruel) is now
 inside the table, so the remaining exceptions are recounted by the gate (§9) and listed in the cast rework.
-
-### 4.1 Flaws (declared, any alignment)
-
-A **flaw** is a weakness that cuts across alignment: a good character can be proud, an evil one can be afraid. It is
-optional, at most one per character, and declared in the character file (`"flaw": "pride"`). Each flaw changes the
-rules a little, so it shows in play rather than in a description.
-
-| Flaw | In the secrets | In the prose (§7.4) | In magic (Magic-System.md) |
-|---|---|---|---|
-| **pride** | sorrow and love told last; sorrow and love reach → private | a restart: "Everyone knows… I know." | overreach: pushes past their depth |
-| **greed** | want told first; a rumoured want given early is worth double | none of its own | hoards: one side only, never blends |
-| **wrath** | hate reach → close as well as across: everyone hears it | a flat repeat: "She did it. She did." | burns: the cost lands on others nearby |
-| **envy** | tells rumours about rivals even when shielding (§7.1) | a jab before the name | takes: draws on another's magic |
-| **fear** | share and sorrow held behind the fear guard | hedges, whatever the personality | flinches: stops short of depth 3 |
-
-A flaw is a fact like any other: the gate checks it is one of the five and that its rules hold.
 
 ## 5. Drama threads (declared, above the matrix)
 
@@ -144,6 +128,123 @@ so there is one place that answers "who is tied to whom".
   against a hostile war. A love that contradicts the matrix with no tag fails the test.
 - The GDD §12 threads ([DL] [TA] [RE] [RV] [TW] [FL]) must all be present.
 
+## 5a. Flaws (generated from layers 1–5)
+
+> **owner** (2026-11-20): "Flaw might be another personality factor to determine. And should be derived from the rest
+> of the characteristics. Lack of trusting, too trusting, proud, emotionally unstable, greedy, lustful, arrogant,
+> closed minded, low IQ, lazy, self centered, narcissistic, over baring, rude, racist, mean spirited, endless list
+> here."
+
+A flaw is a weakness that cuts across alignment: a good character can be proud and an evil one cowardly. Flaws are
+**generated**, like personality, from everything already known about the character. The list of flaw words is open
+and can grow without limit, because **the rules attach to a small fixed set of flaw axes, not to each word.** A new
+word costs one line of data and no new rules.
+
+### 5a.1 The eight flaw axes
+
+Each axis is a trait that is a flaw at either extreme. A character scores from −3 to +3 on every axis; near 0 is no
+flaw.
+
+| Axis | − extreme | + extreme |
+|---|---|---|
+| **Trust** | gullible: too trusting, naive, easily led | suspicious: distrustful, paranoid |
+| **Self-regard** | self-doubting: insecure, servile | proud: vain, arrogant, conceited, grandiose |
+| **Temper** | cold: aloof, callous, unfeeling | volatile: moody, emotionally unstable, hot-headed, wrathful |
+| **Appetite** | joyless: prudish, puritan, grim | indulgent: greedy, lustful, gluttonous, decadent |
+| **Mind** | flighty: scatterbrained, dim, slow-witted, credulous | rigid: stubborn, closed-minded, dogmatic, prejudiced, bigoted |
+| **Drive** | idle: lazy, apathetic, indecisive | driven: obsessive, ruthless, consumed |
+| **Regard for others** | self-effacing: doormat, people-pleaser | self-centred: rude, selfish, overbearing, mean-spirited, narcissistic |
+| **Courage** | cowardly: timid, spineless | reckless: rash, foolhardy |
+
+Every word in the owner's list has a home:
+
+| Owner's word | Axis and extreme |
+|---|---|
+| lack of trusting / too trusting | Trust + / Trust − |
+| proud, arrogant | Self-regard + |
+| emotionally unstable | Temper + |
+| greedy, lustful | Appetite + |
+| closed minded | Mind + |
+| racist | Mind +: **prejudiced against** a named faction (§5a.3) |
+| low IQ | Mind −: dim, slow-witted |
+| lazy | Drive − |
+| self centered, narcissistic, overbearing, rude, mean spirited | Regard for others + |
+
+### 5a.2 Where the scores come from
+
+Each input pushes an axis by 1 (2 where marked). The sums are clamped to −3…+3.
+
+| Input | Pushes |
+|---|---|
+| **Alignment polarity** | Evil: Regard +1, Appetite +1. Good and T3 (AG, PG): Appetite −1. |
+| **Conviction** | T3: Mind +1, Self-regard +1. T1: Temper +1, Courage +1, Mind −1. N: Drive −1. |
+| **Personality** | wary: Trust +1, Temper −1 · open-hearted: Trust −1, Regard −1 · whimsical: Mind −1, Drive −1, Self-regard −1 · devoted: Drive +1, Regard −1 · schemer: Trust +1, Regard +1, Temper −1 · cruel: Regard +1, Temper −1 |
+| **Rank**, from the title (General, Chancellor, Field-Marshal, Chieftain: high; Sergeant, raider, crewman: low) | high: Self-regard +1, Regard +1 · low: Self-regard −1 |
+| **Threads** (§5) | hunts someone: Drive +2, Temper +1 · is hunted: Trust +1 · loves two or more: Appetite +1 · loves without return: Self-regard −1 · `uses` someone: Appetite +1, Regard +1 · was used or betrayed: Trust +1 |
+| **Faction** | home magic side (Magic-System.md §4): electric Mind +1 · organic Temper +1 · quantum Mind −1. Each faction may add one cultural push with a reason (for example Powder: Self-regard +1, "the old houses"). |
+
+**The flaw is the axis with the largest score, if it is at least 2.** A second flaw is added if another axis also
+reaches 3. Ties go to the axis listed first. Most characters have one flaw; some have none.
+
+### 5a.3 Which word: the severity ladder
+
+Each extreme's ladder is its name followed by its words, mild to harsh. For Regard for others +: self-centred, rude,
+selfish, overbearing, mean-spirited, narcissistic.
+
+**Step on the ladder** = the score above 2 (0 or 1), plus 1 for N, plus 2 for Evil, plus 1 for T3, capped at the last
+word. So the same axis reads as "proud" on a good captain and "grandiose" on an evil chancellor.
+
+**Context words go first** when their condition holds:
+- **overbearing:** Regard + and high rank.
+- **lustful:** Appetite + and loves two or more.
+- **prejudiced against <faction>:** Mind + and the character's faction is hostile to that faction. A prejudiced
+  character's base relation to everyone in that faction drops by 1. The prejudice can be broken in play: rapport 60
+  with a member of that faction removes it, which makes a story beat rather than a fixed trait.
+- **wrathful:** Temper + and hunts someone.
+
+**Worked examples** (Powder, with the draft electric home side and the "old houses" push):
+- **Otto** (G, open-hearted, Captain, loves Rei and is loved back): no axis reaches 2. **No flaw.** His tragedy is
+  the war, not a weakness.
+- **Seraphine** (AG, devoted, Field-Marshal): Self-regard 3. Step 1 + 1 (T3) = 2: **arrogant**.
+- **Graf** (PE, cruel, Chancellor): Self-regard 3 and Regard 3, so two flaws. Self-regard step 4: **grandiose**.
+  Regard with high rank: **overbearing**.
+
+### 5a.4 What a flaw does in play
+
+The rules belong to the 16 extremes. Every word at an extreme plays the same way, and the word sets the voice.
+
+| Extreme | In the secrets and rapport | In the prose (§7.4) |
+|---|---|---|
+| gullible | repeats an owner's lie as true; tells secrets one step early | none of its own |
+| suspicious | close secrets become private; rapport gains −25% | a hedge |
+| self-doubting | sorrow told first | a trailing "…or not." |
+| proud | sorrow and love told last; their reach becomes private | a restart: "Everyone knows… I know." |
+| cold | gifts give half rapport | clipped: drops the opening word |
+| volatile | each kept or broken promise moves rapport ×1.5 | a flare: a short line in capitals |
+| joyless | gifts of luxuries give no rapport | none of its own |
+| indulgent | want told first; a rumoured want given early is worth double | none of its own |
+| flighty | tells others' secrets without meaning to (their rumours skip shielding) | a lost thread: "Where was I." |
+| rigid | holds to stage 1 of the magic story longer (Magic-System.md §6) | a flat repeat: "She did it. She did." |
+| idle | offers fewer missions | a sigh: "Fine." |
+| driven | tells their hate early when it is about the one they hunt | none of its own |
+| self-effacing | shields others' secrets even across factions | an apology first |
+| self-centred | tells others' secrets freely, their own last; broken promises cost ×2 | a jab before the name |
+| cowardly | share and sorrow held behind the fear guard | hedges, whatever the personality |
+| reckless | the first secret comes a step early | none of its own |
+
+**Credibility:** a teller who is **gullible** or **flighty** gets passed lies and repeats them. Good characters still
+never lie, but these two can be **wrong**: their credibility drops from 1.0 to 0.8. That gives careful players one
+more thing to weigh: honest is not the same as right.
+
+**Magic** (Magic-System.md §4): depth 3 is reached through proud (overreach), driven (consumed) or reckless (rash).
+Indulgent users hoard one magic and never blend. Cowardly users stop short of depth 3.
+
+### 5a.5 Declared flaws
+
+A writer can declare a flaw in place of the generated one, with a reason (`"flaw": { "word": "lazy", "why": "…" }`),
+at most two per faction. The gate lists every declared flaw beside the one the rules would have given, so the
+writer can see what they are overriding.
+
 ## 6. Secret reach (new)
 
 Every secret has a **reach**: who besides the character knows it, and so who else can tell the player.
@@ -171,7 +272,7 @@ Every secret has a **reach**: who besides the character knows it, and so who els
 **Personality shifts the defaults by one step:**
 - whimsical: private → close for magic and sense;
 - open-hearted: private → close for desire;
-- schemer, and the pride flaw (§4.1): close → private for sorrow and love.
+- schemer: close → private for sorrow and love (flaws shift reach too, §5a.4).
 
 **Generated check:** a close or across secret with nobody who knows it falls back to private, and the test lists it so
 a writer can add a thread or accept the fallback.
@@ -268,7 +369,7 @@ know the cast learn each one's normal voice, and the change from it is the clue.
 |---|---|
 | open-hearted, whimsical | fillers: "um", "uh", "I, uh .." |
 | wary | hedges: "Well,", "They say", "If it's true," |
-| a flaw with its own tell (§4.1) | the flaw's tell replaces the personality's |
+| a flaw with its own tell (§5a.4) | the flaw's tell replaces the personality's |
 | devoted | a pause: ".." before the name |
 | schemer, cruel (lying, at credibility < 0.5) | a contradiction only: "At the docks. Or the yard. The docks." |
 
@@ -331,7 +432,8 @@ Rules and checks are in `Magic-System.md` §8.
 
 1. The alignment matrix regenerated from the §10.2 rules equals the GDD §10.3 table.
 2. Every personality is its alignment's primary or alternate, or a declared exception (≤ 1 per faction). Every
-   flaw is one of the five, at most one per character, and its rules hold.
+   flaw is the one §5a generates, or a declared override with a reason (≤ 2 per faction); its word is on its
+   extreme's ladder; a prejudice names a faction its own faction is hostile to.
 3. Every thread names real characters, and all GDD §12 threads are present.
 4. Every love and hate secret agrees with a thread or the base relation. A love with base ≤ 0 is a tagged thread.
 5. Every close or across secret has at least one knower through a real relationship (fallbacks listed).
@@ -348,6 +450,7 @@ Rules and checks are in `Magic-System.md` §8.
 | `src/data/alignment.js` (new) | axes, the 11 rules, `alignmentRelation(a, b)` |
 | `src/data/characterModel.js` (new) | `baseRelation`, `personalityFor`, `circleOf`, `reachOf`, `knowersOf` |
 | `content/characters/threads.json` (new) | every drama thread |
+| `src/data/flaws.js` (new) | the eight axes, their ladders and context words, `flawsFor(character)` |
 | `content/characters/<faction>.json` | secrets gain optional `reach` / `why` / `twist`; `love`/`hate` point at threads |
 | `src/save/secrets.js` | rumours, credibility, owner reaction |
 | `src/comm/mapCast.js` | rumour channels (opening, wave 3 cut-in) |
