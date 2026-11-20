@@ -1,7 +1,7 @@
 # Tech Plan — The character system: generated layers, secret reach and rumours
 
 **Repo copy is canonical:** `docs/tech-plan/Character-System.md`.
-**Status:** v0.3, 2026-11-20. v0.2 approved by the owner (#350); v0.3 makes flaws a generated layer (§5a). Tickets:
+**Status:** v0.3, 2026-11-20. v0.2 approved by the owner (#350); v0.3 makes flaws a generated layer (§5a) and adds faction traits (§2a). Tickets:
 MM-story_mwp5vobq_31, MM-story_mwpdkocr_3g.
 **Builds on:** `Character-Secrets.md` (the nine secrets and the reveal rules, shipped in #348). This doc puts that work
 back on a generated footing and adds secret reach and rumours.
@@ -23,13 +23,14 @@ The layers, bottom up:
 |---|---|---|---|
 | 1 | Alignment axes and matrix | **generated** from 11 rules | GDD §10 |
 | 2 | Faction relations | **authored world input**, one reason per pair | `src/data/factionRelations.js` (exists) |
+| 2a | Faction traits: known for, known to lack | **authored world input**, public | new (§2a) |
 | 3 | Base relation, character → character | **generated** from 1 + 2 | new |
 | 4 | Personality | **generated** from alignment; a declared alternate allowed | new rule over existing content |
 | 5 | Drama threads (love, kin, hunts, …) | **declared exceptions** above 3 | GDD §12 + `threads.json` |
 | 5a | Flaws (proud, greedy, rude, …) | **generated** from 1–5 on eight axes; declared overrides | new (§5a) |
 | 6 | Secret reach and who knows | **generated** from 4 + 5; declared overrides | new |
 | 7 | Rumours: what a knower says, true or not | **generated** from 1–6 | new |
-| 8 | Magic side | **generated** from faction + conviction (draft) | new; waits on the magic design |
+| 8 | Magic side (Brain, Soul, Body) | **generated** from faction + conviction | `Magic-System.md` |
 
 The missing `bulwark-dialog-system.md` (the original dialog design) is still not in the repo or on MetaMax. If it is
 found it outranks this doc where they disagree, and this doc is revised to match.
@@ -53,6 +54,51 @@ Hostile, and every other pair with a one-line reason (the GDD §9 tropes). The d
 statement about the world, not about people. It can later be tied to the magic sides (§8).
 
 As numbers: same faction +1 · allied +1 · friendly +1 · neutral 0 · wary −1 · hostile −1.
+
+## 2a. Faction traits: what everyone knows (authored world input)
+
+> **owner** (2026-11-20): "Each faction might also possess a set of common strengths as characteristics. Everyone
+> knows Powder is resourceful and heavily armored, but lacking in science and strategic planning."
+
+Each faction has a short public **reputation**: two strengths and two weaknesses that everyone in the universe
+knows. Like faction relations (§2), it is authored, because it is a statement about the world. Everything below it
+reads from it.
+
+| Faction | Known for | Known to lack | Status |
+|---|---|---|---|
+| **Powder** | resourceful · heavily armoured | science · strategic planning | owner |
+| Air | speed · daring aces | staying power (fragile) · patience | draft |
+| High Tech | precision · shields | numbers (every unit is expensive) · adaptability | draft |
+| Artillery | range · siege patience | speed · close defence | draft |
+| Water | endurance in the cold · adaptability | unity (rival tribes) · reach away from water | draft |
+| Arcane | discipline of faith · energy weapons | open minds (dogma) · hardiness | draft |
+| Space | advanced science · long sight (orbital) | ground sense (detached) · speed of decision (bureaucracy) | draft |
+| Dark | strength at night · endurance past death | trust (everyone distrusts them) · restraint | draft |
+| Greenies | numbers (the swarm) · recovery | individual initiative (the hive) · strength alone | draft |
+
+The drafts come from each faction's identity in Special-Abilities-Design and the GDD; the owner confirms or
+rewrites them.
+
+**What reads from the traits:**
+
+1. **The Standings.** The faction detail shows "Known for" and "Known to lack" (public from the start).
+2. **Characters, by default.** Every character is assumed to fit their faction's reputation. A character who goes
+   **against type** declares it (`"againstType": "science"`, with a reason), and against-type facts are good secret
+   material: the Powder officer who reads physics in secret is a `desire` or `share` secret waiting to be written.
+   The gate requires at least one against-type character per faction, so no faction is only its stereotype.
+3. **Flaws** (§5a.2). A weakness that is personal becomes the faction's cultural push on a flaw axis: Powder's lack
+   of strategic planning pushes Mind −1 (short-sighted). A weakness that is not personal (science) pushes nothing.
+   Against-type characters skip the push.
+4. **Home magic** (Magic-System.md §4). The traits must agree with the faction's home magic: a faction known to lack
+   science is never Brain-home. Powder is Soul-home: resourceful, armoured and stubborn in a stand.
+5. **Combat data.** A strength that names a battle stat must show in the faction's units
+   (`content/units/*.units.json`): "heavily armoured" means Powder's units rank in the top third of the nine
+   factions on HP and armour; a weakness means the bottom third. Traits with no battle stat (science, strategy) are
+   story only. A mismatch is listed by the gate; the fix is the trait's wording or a balance retune, and the owner
+   chooses.
+6. **Prejudice and rumours.** A prejudiced character (§5a.3) believes the weaknesses of the faction they look down on
+   and says so: "Powder couldn't plan a picnic." Those lines come from the traits, so prejudice reads the same
+   across the cast.
 
 ## 3. Base relation between two characters (generated)
 
@@ -151,7 +197,7 @@ flaw.
 | **Self-regard** | self-doubting: insecure, servile | proud: vain, arrogant, conceited, grandiose |
 | **Temper** | cold: aloof, callous, unfeeling | volatile: moody, emotionally unstable, hot-headed, wrathful |
 | **Appetite** | joyless: prudish, puritan, grim | indulgent: greedy, lustful, gluttonous, decadent |
-| **Mind** | flighty: scatterbrained, dim, slow-witted, credulous | rigid: stubborn, closed-minded, dogmatic, prejudiced, bigoted |
+| **Mind** | flighty: short-sighted, scatterbrained, dim, slow-witted, credulous | rigid: stubborn, closed-minded, dogmatic, prejudiced, bigoted |
 | **Drive** | idle: lazy, apathetic, indecisive | driven: obsessive, ruthless, consumed |
 | **Regard for others** | self-effacing: doormat, people-pleaser | self-centred: rude, selfish, overbearing, mean-spirited, narcissistic |
 | **Courage** | cowardly: timid, spineless | reckless: rash, foolhardy |
@@ -181,7 +227,7 @@ Each input pushes an axis by 1 (2 where marked). The sums are clamped to −3…
 | **Personality** | wary: Trust +1, Temper −1 · open-hearted: Trust −1, Regard −1 · whimsical: Mind −1, Drive −1, Self-regard −1 · devoted: Drive +1, Regard −1 · schemer: Trust +1, Regard +1, Temper −1 · cruel: Regard +1, Temper −1 |
 | **Rank**, from the title (General, Chancellor, Field-Marshal, Chieftain: high; Sergeant, raider, crewman: low) | high: Self-regard +1, Regard +1 · low: Self-regard −1 |
 | **Threads** (§5) | hunts someone: Drive +2, Temper +1 · is hunted: Trust +1 · loves two or more: Appetite +1 · loves without return: Self-regard −1 · `uses` someone: Appetite +1, Regard +1 · was used or betrayed: Trust +1 |
-| **Faction** | home magic side (Magic-System.md §4): electric Mind +1 · organic Temper +1 · quantum Mind −1. Each faction may add one cultural push with a reason (for example Powder: Self-regard +1, "the old houses"). |
+| **Faction** | home magic (Magic-System.md §4): Brain Mind +1 · Body Temper +1 · Soul Courage +1. Faction traits (§2a): a personal weakness is a cultural push (Powder, "lacking strategic planning": Mind −1); against-type characters skip it. |
 
 **The flaw is the axis with the largest score, if it is at least 2.** A second flaw is added if another axis also
 reaches 3. Ties go to the axis listed first. Most characters have one flaw; some have none.
@@ -202,12 +248,12 @@ word. So the same axis reads as "proud" on a good captain and "grandiose" on an 
   with a member of that faction removes it, which makes a story beat rather than a fixed trait.
 - **wrathful:** Temper + and hunts someone.
 
-**Worked examples** (Powder, with the draft electric home side and the "old houses" push):
+**Worked examples** (Powder: Soul-home, and the strategic-planning push):
 - **Otto** (G, open-hearted, Captain, loves Rei and is loved back): no axis reaches 2. **No flaw.** His tragedy is
   the war, not a weakness.
-- **Seraphine** (AG, devoted, Field-Marshal): Self-regard 3. Step 1 + 1 (T3) = 2: **arrogant**.
-- **Graf** (PE, cruel, Chancellor): Self-regard 3 and Regard 3, so two flaws. Self-regard step 4: **grandiose**.
-  Regard with high rank: **overbearing**.
+- **Seraphine** (AG, devoted, Field-Marshal): Self-regard 2. Step 0 + 1 (T3) = 1: **vain**.
+- **Graf** (PE, cruel, Chancellor): Regard for others 3, with high rank: **overbearing**. Self-regard 2 is not
+  enough for a second flaw.
 
 ### 5a.4 What a flaw does in play
 
@@ -415,7 +461,7 @@ the teller gets the lied-before mark.
 
 ## 8. Magic side (hook only; the design is `Magic-System.md`)
 
-The three magics (themes: organic, electric, quantum; names still to choose) are neutral; good and evil are how a
+The three magics (Brain, the electric field; Soul, the quantum field; Body, the organic field) are neutral; good and evil are how a
 character uses them. Each `magic` and `sense` secret gains:
 
 - `side`: one magic or one blend;
@@ -442,6 +488,8 @@ Rules and checks are in `Magic-System.md` §9; the player's own magic skills are
    Tells follow only from credibility, version and personality; a credibility-1.0 truth has none beyond the open-hearted/whimsical filler; a schemer's or
    cruel teller's lie adds none; no line gains more than 2 tells; authored battle lines are never changed.
 8. Every homeworld map's secondary is an across-knower of a main-character secret where one exists.
+9. Every faction has two strengths and two weaknesses (§2a) and at least one against-type character; its traits
+   agree with its home magic; a strength or weakness that names a battle stat agrees with its units' data.
 
 ## 10. Data changes
 
@@ -450,6 +498,7 @@ Rules and checks are in `Magic-System.md` §9; the player's own magic skills are
 | `src/data/alignment.js` (new) | axes, the 11 rules, `alignmentRelation(a, b)` |
 | `src/data/characterModel.js` (new) | `baseRelation`, `personalityFor`, `circleOf`, `reachOf`, `knowersOf` |
 | `content/characters/threads.json` (new) | every drama thread |
+| `src/data/factionTraits.js` (new) | each faction's known-for and known-to-lack, with the stat each names |
 | `src/data/flaws.js` (new) | the eight axes, their ladders and context words, `flawsFor(character)` |
 | `content/characters/<faction>.json` | secrets gain optional `reach` / `why` / `twist`; `love`/`hate` point at threads |
 | `src/save/secrets.js` | rumours, credibility, owner reaction |
