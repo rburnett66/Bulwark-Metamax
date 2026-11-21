@@ -136,6 +136,8 @@ const CSS = `
 .bw-comm .bw-tapclose { color:#ffd76a; letter-spacing:.2em; animation:bwTapPulse 1.1s ease-in-out infinite; }
 @keyframes bwTapPulse { 0%,100%{opacity:.45} 50%{opacity:1} }
 .bw-comm.signoff .bw-comm-end{opacity:1}
+.bw-comm-back{background:none;border:1px solid #2e3846;color:#ffd76a;border-radius:4px;font-size:10px;line-height:1;padding:3px 7px;margin-right:6px;cursor:pointer}
+.bw-comm-back[hidden]{display:none}
 .bw-comm-choices{padding:0 11px 8px}
 .bw-comm-terms{font-size:9.5px;line-height:1.45;color:#9fb3c6;margin-bottom:6px}
 .bw-comm-terms b{color:#f2c869}
@@ -289,6 +291,28 @@ function staticNoise(cv, on) {
   cv._raf = requestAnimationFrame(() => staticNoise(cv, cv.classList.contains('on')));
 }
 
+/**
+ * PAGES (owner 2026-11-21 [MM-story_mwpzbj5c_45]): "Consider mobile with no more than two sentences per screen with bread
+ * crumbs swipe left and right to continue or back." A line is cut at its sentence ends into pages of at most `max`
+ * sentences; a line of one or two sentences is one page. → [string]
+ */
+export function pagesOf(line, max = 2) {
+  const t = String(line || '').trim();
+  if (!t) return [];
+  // a sentence ends at one full stop, ! or ? (and any closing quote) before a capital; a run of dots is a pause (a tell's
+  // "..", Character-System §7.4), not an end
+  const sentences = t.split(/(?<=(?:(?<!\.)\.|[!?])["'”’)]*)\s+(?=["'“‘(]?[A-Z0-9])/);
+  const out = [];
+  for (let i = 0; i < sentences.length; i += max) out.push(sentences.slice(i, i + max).join(' ').trim());
+  return out.filter(Boolean);
+}
+/** A scene's calls with every long line split into pages: one call per page, the same speaker and voice. */
+export function paginate(calls, max = 2) {
+  const out = [];
+  for (const c of (calls || []).filter(Boolean)) for (const line of pagesOf(c.line, max)) out.push({ ...c, line });
+  return out;
+}
+
 /** A scene's breadcrumbs: one dot per line of the speaker's run, the current one lit, the read ones dimmer. */
 export function crumbsHTML(c) {
   if (!c || !(c.n > 1)) return '';
@@ -307,7 +331,7 @@ function cardHTML(d, f) {
     portraitImg(d.name, d.mood) + relationLabel(d.name, d.mood) +
     '<div class="bw-comm-pscan"></div><div class="bw-comm-veil"></div><div class="bw-comm-dslot"></div></div>' +
     '<div class="bw-comm-right"><div class="bw-comm-meta"></div><div class="bw-comm-text"></div>' +
-    '<div class="bw-comm-foot"><span class="bw-comm-foot-l"></span>' + crumbsHTML(d.crumbs) + '<span class="bw-comm-qchip">◇ QUEST OFFER</span><span class="bw-comm-end">— END —</span></div>' +
+    '<div class="bw-comm-foot"><span class="bw-comm-foot-l"></span>' + (d.crumbs ? '<button type="button" class="bw-comm-back" aria-label="Back" hidden>◂</button>' : '') + crumbsHTML(d.crumbs) + '<span class="bw-comm-qchip">◇ QUEST OFFER</span><span class="bw-comm-end">— END —</span></div>' +
     '</div></div>' +
     '<canvas class="bw-comm-static"></canvas>';
 }
@@ -373,7 +397,22 @@ export function createComm(doc) {
       liveAudio = null;
     }
   }
-  card.addEventListener('click', () => {
+  // a scene answers swipes and arrow keys: left / → is next, right / ← is back (owner 2026-11-21) [MM-story_mwpzbj5c_45]
+  let _down = null, _swiped = false;
+  card.addEventListener('pointerdown', (e) => { _down = { x: e.clientX, y: e.clientY }; });
+  card.addEventListener('pointerup', (e) => {
+    if (!_down) return;
+    const dx = e.clientX - _down.x, dy = e.clientY - _down.y; _down = null;
+    if (_scene && Math.abs(dx) > 40 && Math.abs(dx) > 1.5 * Math.abs(dy)) { _swiped = true; if (dx < 0) _scene.tap(); else _scene.back(); }
+  });
+  const onKey = (e) => {
+    if (!_scene || !card.classList.contains('show')) return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); _scene.tap(); } else if (e.key === 'ArrowLeft') { e.preventDefault(); _scene.back(); }
+  };
+  doc.addEventListener('keydown', onKey);
+  card.addEventListener('click', (e) => {
+    if (_swiped) { _swiped = false; return; }
+    if (e.target.closest && e.target.closest('.bw-comm-back')) { e.stopPropagation(); if (_scene) _scene.back(); return; }
     if (_scene) { _scene.tap(); return; }   // a scene: the tap finishes the line, or moves to the next one
     token++; stopAudio(); card.className = 'bw-comm'; _resolveClosed();
   });
@@ -526,6 +565,7 @@ export function createComm(doc) {
   // same window: re-typed and re-voiced, the breadcrumb moves on, nothing else is rebuilt. A tap while a line is typing
   // finishes it. A new speaker is a new transmission. onLine(call, index) fires as each line starts (a holo-slide, say).
   let _scene = null, _rush = false;
+  const BACK = Symbol('back');
   const sameSpeaker = (a, b) => a.factionKey === b.factionKey && a.name === b.name;
   function setFoot(text) {
     const footl = card.querySelector('.bw-comm-foot-l');
@@ -536,6 +576,8 @@ export function createComm(doc) {
     dots.forEach((dot, i) => { dot.className = i < at ? 'read' : i === at ? 'on' : ''; });
     const box = card.querySelector('.bw-comm-crumbs');
     if (box) box.setAttribute('aria-label', 'line ' + (at + 1) + ' of ' + dots.length);
+    const back = card.querySelector('.bw-comm-back');
+    if (back) back.hidden = !(at > 0);
   }
   async function sayInPlace(d) {
     const my = token, live = () => token === my && !!_scene && !_scene.aborted;
@@ -570,9 +612,10 @@ export function createComm(doc) {
     // the card has grown by the choices: centre stage fits it to the screen again
     if (card.classList.contains('center')) card.style.transform = 'translate(-50%,-50%) scale(' + centerScale(card).toFixed(3) + ')';
     return new Promise((res) => {
-      const done = (v) => { scene.choosing = false; scene.waiter = null; box.remove(); res(v); };
+      const done = (v) => { scene.choosing = false; scene.waiter = null; scene.onBack = null; box.remove(); res(v); };
       scene.choosing = true;
       scene.waiter = () => done(null);   // abort() resolves it
+      scene.onBack = () => done(BACK);   // a swipe back leaves the choice for the page before
       choices.forEach((c, k) => {
         const b = card.ownerDocument.createElement('button');
         b.type = 'button'; b.className = 'bw-comm-choice' + (c.primary ? ' primary' : ''); b.textContent = c.label;
@@ -587,45 +630,58 @@ export function createComm(doc) {
    * shown above the buttons; opts.replies[value]: the speaker's answer to it, then opts.after (more lines, same speaker),
    * each in the same window. → the chosen value (undefined without choices).
    */
+  /** A line again in the same window, at once: going back is reading, not hearing it twice. */
+  function showInPlace(d) {
+    if (liveAudio && liveAudio.utter) liveAudio.utter.stop();
+    const txt = card.querySelector('.bw-comm-text');
+    if (txt) txt.textContent = d.line;
+  }
   async function playScene(calls, { onLine = null, center = true, choices = null, terms = '', replies = {}, after = [] } = {}) {
-    const list = (calls || []).filter(Boolean);
+    const list = paginate(calls);
     let i = 0, chosen;
     while (i < list.length && !hushed) {
       let j = i + 1;
       while (j < list.length && sameSpeaker(list[j], list[i])) j++;
-      const run = list.slice(i, j), n = run.length, base = i;
+      const run = list.slice(i, j), n = run.length, base = i, lastRun = j >= list.length;
       const sizeTo = run.reduce((a, c) => (String(c.line).length > a.length ? String(c.line) : a), '');
       const waiting = () => new Promise((res) => { _scene.waiter = res; });
       _scene = {
-        typing: true, waiter: null, aborted: false,
-        tap() { if (this.choosing) return; if (this.typing) _rush = true; else if (this.waiter) { const w = this.waiter; this.waiter = null; w(); } },
-        abort() { this.aborted = true; if (this.waiter) { const w = this.waiter; this.waiter = null; w(); } },
+        typing: true, waiter: null, aborted: false, choosing: false, onBack: null,
+        tap() { if (this.choosing) return; if (this.typing) _rush = true; else if (this.waiter) { const w = this.waiter; this.waiter = null; w('next'); } },
+        back() { if (this.onBack) { this.onBack(); return; } if (this.typing) _rush = true; else if (this.waiter) { const w = this.waiter; this.waiter = null; w('back'); } },
+        abort() { this.aborted = true; if (this.waiter) { const w = this.waiter; this.waiter = null; w('abort'); } },
       };
       const scene = _scene;
       if (onLine) onLine(run[0], base);
       const shut = waitForClose();
       await showCall({ ...run[0], hold: true, center, sizeTo, crumbs: n > 1 ? { at: 0, n } : null });
-      for (let k = 1; k < n && !scene.aborted && _held; k++) {
-        scene.typing = false; setFoot('TAP ▸ NEXT');
-        await waiting();
-        if (scene.aborted) break;
-        scene.typing = true; setCrumb(k);
+      let k = 0;
+      while (!scene.aborted && _held) {
+        const last = k === n - 1, ask = !!choices && lastRun && last;
+        scene.typing = false;
+        let dir;
+        if (ask) {
+          const v = await askChoice(scene, choices, terms);
+          if (v === BACK) dir = 'back'; else { chosen = v; break; }
+        } else {
+          setFoot(!last || !lastRun ? 'TAP ▸ NEXT' : 'TAP TO CLOSE');
+          dir = await waiting();
+        }
+        if (scene.aborted || !_held) break;
+        if (dir === 'back') { if (k > 0) { k--; setCrumb(k); showInPlace(run[k]); } continue; }
+        if (last) break;
+        k++; scene.typing = true; setCrumb(k);
         if (onLine) onLine(run[k], base + k);
         await sayInPlace(run[k]);
       }
-      if (!scene.aborted && _held && choices && j >= list.length) {
-        scene.typing = false;
-        chosen = await askChoice(scene, choices, terms);
-        const more = [replies[chosen], ...(chosen != null ? after : [])].filter(Boolean);
-        for (let k = 0; k < more.length && !scene.aborted && _held; k++) {
+      if (!scene.aborted && _held && choices && lastRun && chosen !== undefined) {
+        const more = paginate([replies[chosen], ...(chosen != null ? after : [])]);
+        for (let m = 0; m < more.length && !scene.aborted && _held; m++) {
           scene.typing = true;
-          await sayInPlace(more[k]);
-          scene.typing = false; setFoot(k < more.length - 1 ? 'TAP ▸ NEXT' : 'TAP TO CLOSE');
-          await waiting();
+          await sayInPlace(more[m]);
+          scene.typing = false; setFoot(m < more.length - 1 ? 'TAP ▸ NEXT' : 'TAP TO CLOSE');
+          let d; do { d = await waiting(); } while (d === 'back' && !scene.aborted);   // the answer is given: no going back past it
         }
-      } else if (!scene.aborted && _held) {
-        scene.typing = false; setFoot(j < list.length ? 'TAP ▸ NEXT' : 'TAP TO CLOSE');
-        await waiting();
       }
       if (_scene === scene) _scene = null;
       if (scene.aborted) break;
@@ -645,6 +701,6 @@ export function createComm(doc) {
     get hushed() { return hushed; },
     waitForClose,
     get muted() { return isMuted(); },
-    destroy() { token++; stopAudio(); card.remove(); muteBtn.remove(); style.remove(); },
+    destroy() { token++; stopAudio(); doc.removeEventListener('keydown', onKey); card.remove(); muteBtn.remove(); style.remove(); },
   };
 }

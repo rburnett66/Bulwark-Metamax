@@ -50,3 +50,18 @@ test('bankRareSale: gold to the bank, loyalty to the buyer, the sold units leave
   const t = {}; bankRareSale(t, { sold: 0, gold: 0, loyalty: 0 }, {}); assert.deepEqual(t, {});
   assert.match(rareResultLine({ sold: 12, gold: 240 }, 'Dawnwing Carrier', 'Ember Shard'), /Dawnwing Carrier bought 12 Ember Shard for 240 gold/);
 });
+
+// [MM-story_mwpzbj5c_45] owner 2026-11-21: "Players can always return to find a mission they need."
+test('a declined offer stays open: it comes again at wave 3 on the planet\'s next map, without the stars', async () => {
+  const { openOfferOn, setOpenOffer } = await import('./rareContract.js');
+  assert.equal(rareOfferEarned({ clearedWave: 3, waveStars: 1 }), false);
+  assert.equal(rareOfferEarned({ clearedWave: 3, waveStars: 1, open: true }), true, 'open: no stars needed');
+  assert.equal(rareOfferEarned({ clearedWave: 2, waveStars: 3, open: true }), false, 'still after wave 3');
+  assert.equal(rareOfferEarned({ clearedWave: 3, waveStars: 5, alreadyOffered: true, open: true }), false, 'once a map');
+  const s = {};
+  assert.equal(openOfferOn(s, 'air'), null);
+  setOpenOffer(s, 'air', { contact: 'Quartermaster Ines Roth', buyer: 'ground' });
+  assert.deepEqual(openOfferOn(s, 'air'), { contact: 'Quartermaster Ines Roth', buyer: 'ground' });
+  setOpenOffer(s, 'air', null);
+  assert.equal(openOfferOn(s, 'air'), null, 'accepted: closed');
+});

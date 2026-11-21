@@ -36,7 +36,7 @@ import { createComm } from './comm/commCard.js';
 import { setChannelVolume, initAudio } from './comm/voice.js';
 import { musicPlay, musicIntensity, musicSting, musicResume } from './audio/music.js';
 import { loadVoicePacks, challengeCall, winCall, defeatCall, fallbackCall, tipsCall, classifyOutcome } from './comm/dialog.js';
-import { RARE_OFFER, rareOfferEarned, rareContractFor, pickBuyer, settleRareContract, bankRareSale, rareResultLine } from './data/rareContract.js';
+import { RARE_OFFER, rareOfferEarned, rareContractFor, pickBuyer, settleRareContract, bankRareSale, rareResultLine, openOfferOn, setOpenOffer } from './data/rareContract.js';
 import { addLoyalty, rivalOf } from './save/contracts.js';
 import { loadCharacterFiles, mapCast, openingCall, secondaryCall, closingCall, withMood, SECONDARY_AFTER_WAVE, contractOfferScene, characterEntry } from './comm/mapCast.js';
 import { spendMoodCall, noteMoodSeen } from './save/standings.js';
@@ -957,20 +957,24 @@ export function boot(mountEl, seed) {
   function prepareRareOffer(secondary = null) {
     if (mode !== 'play' || !currentMapId || rareRun.offered || !missionCatalog) return null;
     const cleared = sim.waves ? sim.waves.current : 0;            // waves cleared so far = the wave just cleared
-    if (!rareOfferEarned({ clearedWave: cleared, waveStars: rareRun.waveStars[cleared], alreadyOffered: rareRun.offered })) return null;
     const sv = loadSave(), here = (REG.find(currentTestFaction || DEFAULT_FACTION) || {}).key;
-    const own = secondary && secondary.faction && PLANETS[secondary.faction] && secondary.faction !== here ? secondary.faction : null;
+    // an offer declined before is still open here: it comes again, from the same character (owner 2026-11-21)
+    const open = openOfferOn(sv, here);
+    if (!rareOfferEarned({ clearedWave: cleared, waveStars: rareRun.waveStars[cleared], alreadyOffered: rareRun.offered, open: !!open })) return null;
+    const own = open ? null : secondary && secondary.faction && PLANETS[secondary.faction] && secondary.faction !== here ? secondary.faction : null;
     const arrived = Object.keys(PLANETS).filter((k) => shipArrived(sv, k));   // the save keys ships by planet name
-    const buyer = own || pickBuyer(arrived, here, currentSeed);
+    const buyer = (open && PLANETS[open.buyer] ? open.buyer : null) || own || pickBuyer(arrived, here, currentSeed);
     const terms = buyer && rareContractFor(here, currentMapId);
     if (!buyer || !terms) return null;
     const BP = PLANETS[buyer], cs = (missionCatalog.capitalShips || {})[BP.name] || {};
     const fac = voicePacks && voicePacks.factions && voicePacks.factions[buyer];
-    const contact = own ? ((fac && fac.characters.find((c) => c.name === secondary.name)) || { name: secondary.name })
+    const contact = open ? ((fac && fac.characters.find((c) => c.name === open.contact)) || { name: open.contact })
+      : own ? ((fac && fac.characters.find((c) => c.name === secondary.name)) || { name: secondary.name })
       : fac && fac.characters.find((c) => c.name !== cs.captain && c.phrases && c.phrases.length);
     if (!contact) return null;
     rareRun.offered = true;
-    return { buyer, terms, contact, fac, cs, BP, here, bySecondary: !!own, flavour: own ? secondary.line || null : null };
+    const bySecondary = !!own || !!(open && secondary && secondary.name === contact.name);
+    return { buyer, terms, contact, fac, cs, BP, here, bySecondary, again: !!open, flavour: bySecondary ? secondary.line || null : null };
   }
 
   /**
@@ -985,7 +989,7 @@ export function boot(mountEl, seed) {
     const entry = characterEntry(characterFiles, buyer, contact.name);
     const scene = contractOfferScene(voicePacks, { factionKey: buyer, name: contact.name, factionName: fac ? fac.name : BP.name,
       planetName: (PLANETS[here] || {}).name || 'this world', rareName, quota: terms.quota, price: terms.pricePerUnit,
-      personality: entry && entry.personality, flavour: o.flavour });
+      personality: entry && entry.personality, flavour: o.flavour, again: o.again });
     const sv = loadSave(), mood = (c) => withMood(c, sv);
     const calls = scene.calls.map(mood);
     if (!calls.length || mode !== 'play') return;
@@ -994,11 +998,13 @@ export function boot(mountEl, seed) {
     const choice = await comm.playScene(calls, {
       center: true,
       terms: `${ship} buys up to <b>${terms.quota}</b> ${rareName} at <b>${terms.pricePerUnit}</b> gold each, paid when the map ends, win or lose.` +
-        ` Something sold: <b>+${terms.loyalty} loyalty</b> with ${fac ? fac.name : BP.name}. Decline: no cost, but the offer has to be earned again.`,
+        ` Something sold: <b>+${terms.loyalty} loyalty</b> with ${fac ? fac.name : BP.name}. Decline: no cost; the offer stays open for your next map here.`,
       choices: [{ label: 'ACCEPT', value: 'accept', primary: true }, { label: 'DECLINE', value: 'decline' }],
       replies: { accept: mood(scene.replies.accept), decline: mood(scene.replies.decline) },
       after: scene.after.map(mood),
     });
+    // declined (or cut short): the offer stays open on this planet; accepted: it is closed (owner 2026-11-21)
+    updateSave((s) => setOpenOffer(s, here, choice === 'accept' ? null : { contact: contact.name, buyer }));
     if (choice === 'accept' && mode === 'play') {
       rareRun.contract = { ...terms, buyer, buyerFaction: fac ? fac.name : null, ship: cs.ship || BP.name, contact: contact.name, rareName };
       // the contact greets the player aboard on the first visit (Q4): remembered per ship

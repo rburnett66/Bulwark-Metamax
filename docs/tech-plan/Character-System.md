@@ -499,6 +499,17 @@ the teller gets the lied-before mark.
 - The expression is generated from the character's personality and alignment by `tools/dialog/expression_prompts.py`,
   which also writes the switch-on list from the files present. `tools/portraits/index.html` reviews all 81.
 
+### 7.9 Order matters (owner 2026-11-21, design open)
+
+*"Sometime the order of acceptance and completion matter to a relationship."* Not built. To decide with the owner:
+- **Accepting a rival's offer first:** for example, taking one faction's contract before its rival's makes the rival
+  think less of the player, even if both are completed.
+- **Completing in order:** a friend's contract finished before the rival's earns a bonus; finished after, a slight.
+- **Keeping one promise by breaking another:** contracts that conflict, where finishing one ends the other.
+
+The data it needs is an ordered log of offers (made / accepted / declined / completed, with who and when). The rules
+belong to §5 faction relations and §7.8 mood shifts. Ticket: story_mwq11to8_1.
+
 ## 8. Magic side (hook only; the design is `Magic-System.md`)
 
 The three magics (Brain, the electric field; Soul, the quantum field; Body, the organic field) are neutral; good and evil are how a

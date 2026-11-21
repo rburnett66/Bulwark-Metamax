@@ -106,3 +106,10 @@ test('the wave-3 offer is a dialog: an introduction, the offer in their voice, a
   assert.equal(spokenFleet('Greenies (Chem)'), 'the Greenies fleet');
   assert.equal(spokenFleet('High Tech'), 'the High Tech fleet');
 });
+
+test('an offer declined before comes back with its own opening, and a decline promises to ask again', () => {
+  const sc = contractOfferScene(PACKS, { factionKey: 'ground', name: 'Quartermaster Ines Roth', factionName: 'Ground / Powder',
+    planetName: 'Florael', rareName: 'Dawnpollen', quota: 40, price: 12, personality: 'wary', flavour: null, again: true });
+  assert.equal(sc.calls[0].line, 'Back on Florael? My offer still stands.');
+  assert.match(sc.replies.decline.line, /ask again|be around|ask once more/);
+});

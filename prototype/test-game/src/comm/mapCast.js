@@ -211,14 +211,14 @@ const OFFER_CLOSER = {
 };
 const OFFER_REPLY = {
   accept: { good: "Good. We'll be watching for it.", neutral: 'Done, then. Bring it in.', evil: "Good. Don't be late." },
-  decline: { good: 'Your call. Maybe another time.', neutral: "Your loss. Offers like this don't wait.", evil: 'Remember you said no.' },
+  decline: { good: "Your call. I'll ask again next time.", neutral: "Your loss. I'll be around.", evil: "Remember you said no. I'll ask once more." },
 };
 const leaning = (align) => (/G$/.test(align || '') ? 'good' : /E$/.test(align || '') ? 'evil' : 'neutral');
 
 /**
  * The offer scene: the contact introduces themselves and makes the offer in their own voice, the player chooses, the
  * contact answers. o: { factionKey (the buyer's), name (the contact), factionName, planetName (where the player is),
- * rareName, quota, price, personality, flavour (their own line, said last, or null) }.
+ * rareName, quota, price, personality, flavour (their own line, said last, or null), again (an offer declined before) }.
  * → { calls: [intro, offer], replies: { accept, decline }, after: [flavour] } — comm.playScene's calls and options.
  */
 export function contractOfferScene(packs, o) {
@@ -226,7 +226,7 @@ export function contractOfferScene(packs, o) {
   const sub = 'CONTRACT OFFER';
   const line = (text) => characterCall(packs, o.factionKey, o.name, say(text), sub);
   const closer = OFFER_CLOSER[o.personality] || OFFER_CLOSER['open-hearted'];
-  const intro = line(`I hear you're gathering resources on ${o.planetName}.`);
+  const intro = line(o.again ? `Back on ${o.planetName}? My offer still stands.` : `I hear you're gathering resources on ${o.planetName}.`);
   const offer = line(`I'm ${shortName(o.name)}, from ${spokenFleet(o.factionName)}. If you can deliver some ${o.rareName}, we will pay: ${o.price} gold each, up to ${o.quota}. ${closer}`);
   const lean = leaning(pc.align);
   return {

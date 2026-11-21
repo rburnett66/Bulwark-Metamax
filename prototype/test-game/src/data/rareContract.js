@@ -28,11 +28,21 @@ export function rareContractFor(planet, mapId) {
 
 /**
  * Is the offer earned now? Only when the wave just cleared is RARE_OFFER.wave, it scored RARE_OFFER.minStars or more,
- * and this run has not already offered it (accepted or declined: a decline is re-earned on a later run, never
- * re-offered in the same one).
+ * and this run has not already offered it. An offer the player declined stays OPEN (owner 2026-11-21: "Players can
+ * always return to find a mission they need" [MM-story_mwpzbj5c_45]): on the next map on that planet it comes again at
+ * wave RARE_OFFER.wave without the stars.
  */
-export function rareOfferEarned({ clearedWave, waveStars, alreadyOffered = false }, R = RARE_OFFER) {
-  return !alreadyOffered && clearedWave === R.wave && Number(waveStars) >= R.minStars;
+export function rareOfferEarned({ clearedWave, waveStars, alreadyOffered = false, open = false }, R = RARE_OFFER) {
+  return !alreadyOffered && clearedWave === R.wave && (!!open || Number(waveStars) >= R.minStars);
+}
+
+/** The offer left open on a planet (s.openOffers[planetKey]: { contact, buyer }), or null. */
+export const openOfferOn = (s, planetKey) => ((s && s.openOffers) || {})[planetKey] || null;
+/** Keep a declined offer open on a planet, or close it (contact null) once it is accepted. Mutates s. */
+export function setOpenOffer(s, planetKey, offer) {
+  if (!s.openOffers || typeof s.openOffers !== 'object') s.openOffers = {};
+  if (offer && offer.contact && offer.buyer) s.openOffers[planetKey] = { contact: offer.contact, buyer: offer.buyer };
+  else delete s.openOffers[planetKey];
 }
 
 /**
