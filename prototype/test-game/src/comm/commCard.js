@@ -28,10 +28,10 @@ import { MOOD_PORTRAITS } from '../data/portraitMoods.js';
    (same authored-art-with-fallback pattern as unitArt.js). */
 export function portraitSlug(name) { return String(name).replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase(); }
 const PORTRAIT_DIR = 'content/dialog/portraits/';
-export const MOODS = Object.freeze(['angry', 'neutral', 'happy']);
+export const MOODS = Object.freeze(['antagonistic', 'neutral', 'friendly']);   // relationship portraits (save/standings.js moodFor)
 /**
- * A character's portrait <img>, with their expression when the art exists (owner 2026-11-09: "additional portraits that
- * show angry, neutral, and happy expressions"): <slug>-<mood>.png, falling back to <slug>.png, then to nothing (the
+ * A character's portrait <img>, with their expression when the art exists (owner 2026-11-20: "3 portraits invoking
+ * relationship as neutral, friendly, or antagonistic"): <slug>-<mood>.png, falling back to <slug>.png, then to nothing (the
  * card's silhouette shows). dir: the portraits folder URL.
  */
 export function portraitImg(name, mood = null, dir = PORTRAIT_DIR) {

@@ -6,16 +6,16 @@ import { portraitImg } from './commCard.js';
 import { MOOD_PORTRAITS } from '../data/portraitMoods.js';
 
 test('no expression art yet: the base portrait, with no request for a missing file', () => {
-  const h = portraitImg('Colonel Aldric Vane', 'angry', 'p/');
+  const h = portraitImg('Colonel Aldric Vane', 'antagonistic', 'p/');
   assert.match(h, /src="p\/colonel-aldric-vane\.png"/);
-  assert.doesNotMatch(h, /-angry/);
+  assert.doesNotMatch(h, /-antagonistic/);
 });
 
 test('with expression art: the mood portrait first, then the base portrait if it fails to load', () => {
   MOOD_PORTRAITS.add('colonel-aldric-vane');
   try {
-    const h = portraitImg('Colonel Aldric Vane', 'happy', 'p/');
-    assert.match(h, /src="p\/colonel-aldric-vane-happy\.png"/);
+    const h = portraitImg('Colonel Aldric Vane', 'friendly', 'p/');
+    assert.match(h, /src="p\/colonel-aldric-vane-friendly\.png"/);
     assert.match(h, /data-base="p\/colonel-aldric-vane\.png"/);
     assert.match(portraitImg('Colonel Aldric Vane', 'smug', 'p/'), /src="p\/colonel-aldric-vane\.png"/, 'an unknown mood is ignored');
   } finally { MOOD_PORTRAITS.delete('colonel-aldric-vane'); }

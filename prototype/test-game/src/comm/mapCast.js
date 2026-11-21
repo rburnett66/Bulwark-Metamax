@@ -13,6 +13,7 @@
 import { characterCall } from './dialog.js';
 import { untoldSecret } from '../save/secrets.js';
 import { FACTION_KEYS } from '../data/factionRelations.js';
+import { standingOf } from '../save/standings.js';
 
 /** Fetch every faction's characters file that exists. Never throws. → { [factionKey]: file } */
 export async function loadCharacterFiles(base = 'content/characters/') {
@@ -101,6 +102,15 @@ export function closingCall(cast, files, packs, result) {
   const pc = (packFaction(packs, cast.primary.faction) || { characters: [] }).characters.find((c) => c.name === cast.primary.name);
   const l = pc && pc.lines && (result === 'win' ? pc.lines.winEfficient : pc.lines.defeat);
   return l ? characterCall(packs, cast.primary.faction, pc.name, say(firstSentence(l.line)), result === 'win' ? 'CONCESSION' : 'VERDICT') : null;
+}
+
+/**
+ * A call with its speaker's relationship portrait (antagonistic / neutral / friendly) from the player's rating with them
+ * and any mood shift [MM-story_mwpni0v4_3m]. → the call (unchanged when it has no speaker)
+ */
+export function withMood(call, s) {
+  if (!call || !call.name) return call;
+  try { return { ...call, mood: standingOf(s, call.name).mood }; } catch (e) { return call; }
 }
 
 /** The wave whose clear brings the secondary in (owner: "appearing at wave 3"). */

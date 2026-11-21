@@ -459,6 +459,23 @@ the teller gets the lied-before mark.
 `s.rumours[owner] = [{ key, teller, version: 'true' | 'twist' | 'lie' | 'false', at }]`, next to the existing
 `s.secretsHeard`. It is pure data, and `secrets.js` gains `rumoursFor(…)`, `credibility(…)` and `noteRumour(…)`.
 
+### 7.8 Relationship portraits (owner 2026-11-20)
+
+> "The character should all have 3 portraits invoking relationship as neutral, friendly, or antagonistic. These can be
+> swapped into dialogs based on friend level. Even an angry character could appear neutral if given the right info or
+> gift."
+
+- Every character has three portraits besides their base: **antagonistic, neutral, friendly**
+  (`<slug>-<mood>.png`). The rating band picks one: Wary or Hostile → antagonistic; Friendly or Trusted → friendly;
+  otherwise neutral (`standings.js moodFor`).
+- A **mood shift** moves the portrait one step warmer or colder for the character's next few calls without moving the
+  rating (`s.moodShift`): a kept promise or the right gift or news softens; a broken promise, a rumour told behind
+  their back, or a Read or Coerce hardens. Kept and broken promises are wired now; gifts and news arrive with the
+  payoff and rumours stories.
+- Every map dialog (the opening, the wave 3 secondary, the closing) and the Standings show the portrait.
+- The expression is generated from the character's personality and alignment by `tools/dialog/expression_prompts.py`,
+  which also writes the switch-on list from the files present. `tools/portraits/index.html` reviews all 81.
+
 ## 8. Magic side (hook only; the design is `Magic-System.md`)
 
 The three magics (Brain, the electric field; Soul, the quantum field; Body, the organic field) are neutral; good and evil are how a

@@ -1,55 +1,104 @@
 #!/usr/bin/env python3
-"""tools/dialog/expression_prompts.py — the prompt sheet for the characters' expression portraits [MM-task_mw9odkf0_4].
+"""tools/dialog/expression_prompts.py — the RELATIONSHIP PORTRAIT tool [MM-story_mwpni0v4_3m] (was MM-task_mw9odkf0_4).
 
-Owner 2026-11-09: "We should make additional portraits that show angry, neutral, and happy expressions". The game
-draws content/dialog/portraits/<slug>-<angry|neutral|happy>.png by the player's rating with the character
-(save/standings.js moodFor) once the slug is listed in src/data/portraitMoods.js, and the plain <slug>.png until then.
+Owner 2026-11-20: "We should also strengthen the character creation tool for images. The character should all have 3
+portraits invoking relationship as neutral, friendly, or antagonistic. These can be swapped into dialogs based on
+friend level. Even an angry character could appear neutral if given the right info or gift."
 
-Each prompt is an EDIT of the character's existing portrait (attach it as the reference image), so the face, outfit
-and framing stay the same and only the expression changes. A character whose base portrait is still a placeholder is
-marked: make its final portrait first. The expression wording follows the character's alignment (a good character's
-anger is stern, an evil one's is menacing; an evil character's happiness is a smirk).
+The game draws content/dialog/portraits/<slug>-<antagonistic|neutral|friendly>.png by the player's rating with the
+character and any mood shift (src/save/standings.js moodFor), once the slug is listed in src/data/portraitMoods.js, and
+the plain <slug>.png until then.
 
-Writes, from content/dialog/voicepacks.json and content/missions/missions.json (giver art status):
-  docs/16 Bulwark MM/create/portrait-expressions/Portrait-Expression-Prompts.md
+What this tool does, from content/dialog/voicepacks.json, content/characters/<faction>.json and the portraits folder:
+  1. One prompt per character and relationship. Each prompt EDITS the character's existing portrait (attach it as the
+     reference), so face, outfit and framing stay and only the expression changes. The expression is GENERATED from
+     the character's personality (their characters file, else their alignment's primary personality,
+     docs/tech-plan/Character-System.md §4) and coloured by alignment: a devoted character's antagonism is stern
+     disappointment, a schemer's is a thin smile that does not reach the eyes.
+  2. A status for every character: base art final or placeholder, base file format and size, and which of the three
+     relationship files exist and are the right size (864 x 1152 PNG).
+  3. Writes src/data/portraitMoods.js: every slug whose three files are present, so a committed set switches on with
+     no hand edit.
+
+Writes:
+  docs/16 Bulwark MM/create/portrait-expressions/Portrait-Expression-Prompts.md   (the prompt sheet)
   docs/16 Bulwark MM/create/portrait-expressions/prompts.json
+  prototype/test-game/tools/portraits/prompts.json                                 (read by the review page)
+  prototype/test-game/src/data/portraitMoods.js
 
 Run from the repo root:  python tools/dialog/expression_prompts.py
+Review page (served):    python serve_prototype.py prototype/test-game/tools/portraits/index.html
 """
 import json
 import os
 import re
+import struct
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.join(HERE, '..', '..')
 GAME = os.path.join(REPO, 'prototype', 'test-game')
+PORTRAITS = os.path.join(GAME, 'content', 'dialog', 'portraits')
 OUT = os.path.join(REPO, 'docs', '16 Bulwark MM', 'create', 'portrait-expressions')
+REVIEW = os.path.join(GAME, 'tools', 'portraits')
+MOODS_JS = os.path.join(GAME, 'src', 'data', 'portraitMoods.js')
 
+MOODS = ('antagonistic', 'neutral', 'friendly')
+SIZE = (864, 1152)
 ALIGN_NAME = {'AG': 'absolute good', 'PG': 'principled good', 'G': 'good', 'CG': 'chaotic good', 'N': 'neutral',
               'CE': 'chaotic evil', 'E': 'evil', 'PE': 'principled evil', 'DE': 'dark evil'}
 GOOD, EVIL = {'AG', 'PG', 'G', 'CG'}, {'CE', 'E', 'PE', 'DE'}
+# Character-System.md §4: each alignment's primary personality (used when a character file does not name one)
+PRIMARY = {'AG': 'devoted', 'PG': 'devoted', 'G': 'open-hearted', 'CG': 'whimsical', 'N': 'wary',
+           'CE': 'cruel', 'E': 'schemer', 'PE': 'schemer', 'DE': 'cruel'}
 
+# How each personality looks at someone it is antagonistic to, neutral with, or friendly with.
 EXPRESSION = {
-    'angry': {
-        'good': 'stern, disappointed anger: brows drawn down and together, eyes hard and level, jaw set, lips pressed thin',
-        'neutral': 'cold irritation: brows lowered, eyes narrowed, a tight frown, nostrils slightly flared',
-        'evil': 'open menace: eyes narrowed to slits, a snarl baring the teeth, brows sharply knitted, head tilted forward',
+    'devoted': {
+        'antagonistic': 'stern, disappointed anger, as at someone who broke faith: brows drawn down and together, eyes hard and level, jaw set, lips pressed thin',
+        'neutral': 'dutiful attention: brows level, a steady direct gaze, mouth at rest, posture of someone on watch',
+        'friendly': 'solemn warmth, as to a trusted comrade: a small sincere smile, softened eyes, brows relaxed',
     },
-    'neutral': {
-        'good': 'calm and attentive: relaxed brows, steady direct gaze, mouth at rest',
-        'neutral': 'composed and unreadable: relaxed brows, steady gaze, mouth at rest',
-        'evil': 'guarded and watchful: level brows, cool appraising gaze, mouth at rest',
+    'open-hearted': {
+        'antagonistic': 'hurt more than hostile: brows pinched upward, eyes wounded and wary, mouth turned down',
+        'neutral': 'open and curious: brows slightly raised, eyes interested, the hint of a ready smile',
+        'friendly': 'warm, open pleasure: a genuine smile showing a little teeth, eyes crinkled at the corners, brows lifted',
     },
-    'happy': {
-        'good': 'warm, open pleasure: a genuine smile showing a little teeth, eyes crinkled at the corners, brows lifted',
-        'neutral': 'quiet approval: a small closed-mouth smile, softened eyes',
-        'evil': 'satisfied and sly: a crooked smirk, one brow raised, eyes glinting',
+    'wary': {
+        'antagonistic': 'cold suspicion: eyes narrowed and sidelong, brows lowered, mouth a flat line, chin tucked',
+        'neutral': 'guarded and unreadable: level brows, a measuring gaze, mouth at rest',
+        'friendly': 'a reluctant, earned smile: one corner of the mouth up, eyes still watchful but softened',
     },
+    'whimsical': {
+        'antagonistic': 'mocking scorn: one brow arched high, a lopsided sneer, eyes rolling slightly',
+        'neutral': 'amused detachment: a faint private smile, one brow a touch higher than the other',
+        'friendly': 'delighted mischief: a wide grin, bright eyes, brows lifted as if sharing a joke',
+    },
+    'proud': {
+        'antagonistic': 'haughty disdain: chin raised, looking down the nose, lids half-lowered, lips thin',
+        'neutral': 'composed self-regard: chin level and high, a cool steady gaze, mouth at rest',
+        'friendly': 'gracious approval: a restrained smile, a slight approving nod of the head, eyes warm',
+    },
+    'schemer': {
+        'antagonistic': 'quiet threat: a thin smile that does not reach the eyes, eyes cold and fixed, head slightly tilted',
+        'neutral': 'polite and calculating: a pleasant mask of a smile, appraising eyes',
+        'friendly': 'satisfied and sly: a crooked smirk, one brow raised, eyes glinting, as with a useful ally',
+    },
+    'cruel': {
+        'antagonistic': 'open menace: eyes narrowed to slits, a snarl baring the teeth, brows sharply knitted, head forward',
+        'neutral': 'bored contempt: heavy-lidded eyes, mouth slack with disinterest',
+        'friendly': 'a predatory grin: teeth showing, eyes bright with appetite, as to a useful tool',
+    },
+}
+TINT = {'good': '', 'neutral': '', 'evil': ' Keep an edge of menace even in warmth.'}
+FRAME = {
+    'antagonistic': 'looking at someone they consider an enemy',
+    'neutral': 'looking at someone they have no feelings about yet',
+    'friendly': 'looking at someone they like and trust',
 }
 STYLE = ('Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or '
          'headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial '
-         'expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152). '
-         'No text, no letters, no border.')
+         'expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), '
+         'saved as PNG. No text, no letters, no border.')
 
 
 def slug(name):
@@ -60,6 +109,53 @@ def family(align):
     return 'good' if align in GOOD else 'evil' if align in EVIL else 'neutral'
 
 
+def image_info(path):
+    """→ {'exists', 'format', 'size'} from the file's header (no image library needed)."""
+    if not os.path.exists(path):
+        return {'exists': False, 'format': None, 'size': None}
+    with open(path, 'rb') as f:
+        head = f.read(64 * 1024)
+    if head[:8] == b'\x89PNG\r\n\x1a\n':
+        return {'exists': True, 'format': 'png', 'size': list(struct.unpack('>II', head[16:24]))}
+    if head[:3] == b'\xff\xd8\xff':
+        i = 2
+        while i < len(head) - 9:
+            if head[i] != 0xFF:
+                i += 1
+                continue
+            marker = head[i + 1]
+            if marker in (0xC0, 0xC1, 0xC2):
+                h, w = struct.unpack('>HH', head[i + 5:i + 9])
+                return {'exists': True, 'format': 'jpeg', 'size': [w, h]}
+            i += 2 + struct.unpack('>H', head[i + 2:i + 4])[0]
+        return {'exists': True, 'format': 'jpeg', 'size': None}
+    return {'exists': True, 'format': 'unknown', 'size': None}
+
+
+def problems(info, need_png=True):
+    out = []
+    if not info['exists']:
+        return ['missing']
+    if need_png and info['format'] != 'png':
+        out.append(f'{info["format"]} saved as .png')
+    if info['size'] and tuple(info['size']) != SIZE:
+        out.append(f'{info["size"][0]}×{info["size"][1]}, not 864×1152')
+    return out
+
+
+def personality_map():
+    out = {}
+    folder = os.path.join(GAME, 'content', 'characters')
+    for f in os.listdir(folder) if os.path.isdir(folder) else []:
+        if not f.endswith('.json') or f == 'threads.json':
+            continue
+        data = json.load(open(os.path.join(folder, f), encoding='utf-8'))
+        for c in data.get('characters', []):
+            if c.get('personality'):
+                out[c['name']] = c['personality']
+    return out
+
+
 def main():
     packs = json.load(open(os.path.join(GAME, 'content', 'dialog', 'voicepacks.json'), encoding='utf-8'))
     missions = json.load(open(os.path.join(GAME, 'content', 'missions', 'missions.json'), encoding='utf-8'))
@@ -68,42 +164,92 @@ def main():
         g = m.get('giver') or {}
         if g.get('name'):
             art[g['name']] = g.get('art') or art.get(g['name']) or 'Placeholder'
-    rows, md = [], []
-    md.append('# Character expression portraits (prompts)\n')
-    md.append('Owner 2026-11-09: "We should make additional portraits that show angry, neutral, and happy expressions". '
-              'Three per character, 243 in all. Each prompt **edits the character\'s existing portrait**: attach '
-              '`content/dialog/portraits/<slug>.png` as the reference image, paste the prompt, and save the result '
-              'under the file name shown (864 × 1152 PNG).\n')
-    md.append('**To switch a character on:** commit its three files, then add its slug to '
-              '`prototype/test-game/src/data/portraitMoods.js` (`portraitMoods.test.mjs` checks the files are there). '
-              'The game then shows angry when the player is Wary or Hostile with them, happy when Friendly or Trusted, '
-              'neutral otherwise.\n')
-    md.append('Characters marked **placeholder** still have a placeholder base portrait: make the final portrait '
-              'first, then these.\n')
-    md.append(f'**Shared instruction (inside every prompt):** {STYLE}\n')
+    pers = personality_map()
+
+    chars, rows = [], []
     for key, fac in packs['factions'].items():
-        md.append(f'\n## {fac["name"]}\n')
         for c in fac.get('characters', []):
             name, align = c['name'], c.get('align', 'N')
-            status = art.get(name, 'Placeholder')
-            md.append(f'\n### {name} · {ALIGN_NAME.get(align, align)}{"" if status == "Final" else " · placeholder"}\n')
-            md.append(f'Reference: `content/dialog/portraits/{slug(name)}.png`\n')
-            for mood in ('angry', 'neutral', 'happy'):
-                expr = EXPRESSION[mood][family(align)]
-                prompt = (f'{STYLE} The character is {name}, {fac["name"]} faction, {ALIGN_NAME.get(align, align)}. '
-                          f'New expression ({mood}): {expr}.')
-                file = f'content/dialog/portraits/{slug(name)}-{mood}.png'
-                rows.append({'faction': key, 'name': name, 'slug': slug(name), 'align': align, 'mood': mood,
-                             'file': file, 'base': f'content/dialog/portraits/{slug(name)}.png',
-                             'baseArt': status, 'prompt': prompt})
-                md.append(f'\n**{mood.capitalize()}** → `{file}`\n\n```\n{prompt}\n```\n')
+            sl = slug(name)
+            personality = pers.get(name) or PRIMARY.get(align, 'wary')
+            source = 'character file' if name in pers else f'{align} primary (Character-System §4)'
+            base = image_info(os.path.join(PORTRAITS, sl + '.png'))
+            entry = {'faction': key, 'factionName': fac['name'], 'name': name, 'slug': sl, 'align': align,
+                     'alignName': ALIGN_NAME.get(align, align), 'personality': personality,
+                     'personalitySource': source, 'baseArt': art.get(name, 'Placeholder'),
+                     'base': f'content/dialog/portraits/{sl}.png', 'baseInfo': base,
+                     'baseProblems': problems(base, need_png=False) + (['placeholder base art'] if art.get(name, 'Placeholder') != 'Final' else []),
+                     'moods': {}}
+            expr_set = EXPRESSION.get(personality, EXPRESSION['wary'])
+            for mood in MOODS:
+                file = f'content/dialog/portraits/{sl}-{mood}.png'
+                info = image_info(os.path.join(GAME, file))
+                prompt = (f'{STYLE} The character is {name}, {fac["name"]} faction, {ALIGN_NAME.get(align, align)}, '
+                          f'{personality}. Relationship: {mood}, {FRAME[mood]}. New expression: {expr_set[mood]}.'
+                          f'{TINT[family(align)] if mood == "friendly" else ""}')
+                entry['moods'][mood] = {'file': file, 'info': info, 'problems': problems(info), 'prompt': prompt}
+                rows.append({'faction': key, 'name': name, 'slug': sl, 'align': align, 'personality': personality,
+                             'mood': mood, 'file': file, 'base': entry['base'], 'baseArt': entry['baseArt'],
+                             'prompt': prompt})
+            entry['ready'] = all(not entry['moods'][m]['problems'] for m in MOODS)
+            chars.append(entry)
+
+    ready = sorted(c['slug'] for c in chars if c['ready'])
+    have_any = sum(1 for c in chars if any(c['moods'][m]['info']['exists'] for m in MOODS))
+
+    # 1. the prompt sheet
+    md = ['# Character relationship portraits (prompts)\n',
+          'Owner 2026-11-20: "The character should all have 3 portraits invoking relationship as neutral, friendly, or '
+          'antagonistic. These can be swapped into dialogs based on friend level. Even an angry character could appear '
+          'neutral if given the right info or gift." Three per character. Each prompt **edits the character\'s '
+          'existing portrait**: attach `content/dialog/portraits/<slug>.png` as the reference image, paste the prompt, '
+          'and save the result under the file name shown (864 × 1152 PNG).\n',
+          '**Switching on is automatic:** commit a character\'s three files and re-run '
+          '`python tools/dialog/expression_prompts.py`; it lists the slug in `src/data/portraitMoods.js`. The game shows '
+          'antagonistic when the player is Wary or Hostile with them, friendly when Friendly or Trusted, neutral '
+          'otherwise, shifted one step by a kept or broken promise, a gift or news (save/standings.js).\n',
+          '**Review page:** `tools/portraits/index.html` shows every character\'s base portrait and its three '
+          'relationship portraits side by side, flags what is missing or the wrong size, and copies each prompt.\n',
+          f'**Status:** {len(chars)} characters, {len(ready)} with all three relationship portraits, {have_any} with at '
+          f'least one.\n',
+          f'**Shared instruction (inside every prompt):** {STYLE}\n']
+    for key, fac in packs['factions'].items():
+        md.append(f'\n## {fac["name"]}\n')
+        for c in [x for x in chars if x['faction'] == key]:
+            flags = '' if not c['baseProblems'] else ' · ' + ', '.join(c['baseProblems'])
+            md.append(f'\n### {c["name"]} · {c["alignName"]} · {c["personality"]}{flags}\n')
+            md.append(f'Reference: `{c["base"]}` · personality from {c["personalitySource"]}\n')
+            for mood in MOODS:
+                mm = c['moods'][mood]
+                state = 'done' if not mm['problems'] else ', '.join(mm['problems'])
+                md.append(f'\n**{mood.capitalize()}** → `{mm["file"]}` ({state})\n\n```\n{mm["prompt"]}\n```\n')
     os.makedirs(OUT, exist_ok=True)
     with open(os.path.join(OUT, 'Portrait-Expression-Prompts.md'), 'w', encoding='utf-8') as f:
         f.write('\n'.join(md))
     with open(os.path.join(OUT, 'prompts.json'), 'w', encoding='utf-8') as f:
         json.dump({'style': STYLE, 'expression': EXPRESSION, 'prompts': rows}, f, indent=1, ensure_ascii=False)
-    final = len({r['name'] for r in rows if r['baseArt'] == 'Final'})
-    print(f'{len(rows)} prompts for {len(rows) // 3} characters ({final} with final base art) -> {OUT}')
+
+    # 2. the review page's data
+    os.makedirs(REVIEW, exist_ok=True)
+    with open(os.path.join(REVIEW, 'prompts.json'), 'w', encoding='utf-8') as f:
+        json.dump({'moods': list(MOODS), 'size': list(SIZE), 'characters': chars}, f, indent=1, ensure_ascii=False)
+
+    # 3. the switch-on list
+    with open(MOODS_JS, 'w', encoding='utf-8', newline='\n') as f:
+        f.write('/**\n'
+                ' * src/data/portraitMoods.js — GENERATED by tools/dialog/expression_prompts.py; do not edit by hand.\n'
+                ' * The characters whose three RELATIONSHIP PORTRAITS have landed [MM-story_mwpni0v4_3m] (owner 2026-11-20: "3 portraits\n'
+                ' * invoking relationship as neutral, friendly, or antagonistic"). For a slug listed here the game draws\n'
+                ' * content/dialog/portraits/<slug>-<antagonistic|neutral|friendly>.png by the player\'s rating with them and any mood\n'
+                ' * shift (save/standings.js moodFor); for any other it keeps the one portrait it has. The tool lists a slug once all\n'
+                ' * three files are in content/dialog/portraits/; portraitMoods.test.mjs checks they are there and are 864 × 1152.\n'
+                ' * Review page: tools/portraits/index.html.\n'
+                ' */\n'
+                'export const MOOD_PORTRAITS = new Set([\n')
+        for s in ready:
+            f.write(f"  '{s}',\n")
+        f.write(']);\n')
+    print(f'{len(rows)} prompts for {len(chars)} characters; {len(ready)} ready, {have_any} started -> {OUT}')
 
 
 if __name__ == '__main__':

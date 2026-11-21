@@ -74,8 +74,8 @@ test('the captain of a planet\'s ship, and the portrait expression a rating show
   const catalog = JSON.parse(readFileSync(new URL('../../content/missions/missions.json', import.meta.url), 'utf8'));
   assert.equal(captainOf(catalog, 'Verdance'), 'Colonel Aldric Vane');
   assert.equal(captainOf(catalog, 'Nowhere'), null);
-  assert.equal(moodFor('hostile'), 'angry'); assert.equal(moodFor('wary'), 'angry');
+  assert.equal(moodFor('hostile'), 'antagonistic'); assert.equal(moodFor('wary'), 'antagonistic');
   assert.equal(moodFor('neutral'), 'neutral'); assert.equal(moodFor('unmet'), 'neutral');
-  assert.equal(moodFor('friendly'), 'happy'); assert.equal(moodFor('trusted'), 'happy');
-  assert.equal(standingOf({ rapport: { X: { score: 70, kept: 2, broken: 0 } } }, 'X').mood, 'happy');
+  assert.equal(moodFor('friendly'), 'friendly'); assert.equal(moodFor('trusted'), 'friendly');
+  assert.equal(standingOf({ rapport: { X: { score: 70, kept: 2, broken: 0 } } }, 'X').mood, 'friendly');
 });
