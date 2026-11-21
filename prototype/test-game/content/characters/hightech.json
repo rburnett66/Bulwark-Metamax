@@ -6,6 +6,7 @@
     {
       "name": "Actuary Devlin Cho",
       "personality": "wary",
+      "magicHeart": true,
       "relations": { "space": { "to": "allied", "why": "He trusts only Navigator AI \"Vector\"'s numbers." } },
       "lines": {
         "start": "Your odds of holding: forty-one percent. Prove me wrong.",
@@ -17,19 +18,21 @@
         { "key": "share", "text": "He'll share his risk tables with a commander who beats them.", "line": "Beat my odds, and the tables are yours.",
           "mission": { "task": "Win Ochre map 1 at three stars.", "reward": { "kind": "gold", "amount": 300 } } },
         { "key": "hate", "text": "He hates COO Marcus Thorne, who reads his risk tables as permission.", "line": "Thorne reads my tables as a hunting licence." },
-        { "key": "sense", "text": "He feels the odds shift in a room before anything happens. Science calls it luck.", "line": "The odds just moved. Don't ask me how." },
+        { "key": "sense", "side": "soul", "depth": 1, "stage": 2, "text": "He feels the odds shift in a room before anything happens. Science calls it luck.", "line": "The odds just moved. Don't ask me how." },
         { "key": "desire", "text": "He wants one outcome he could not have predicted.", "line": "Just once, I'd like to be surprised." },
         { "key": "treasure", "text": "An unfiled policy that pays out if Ochre falls. He wrote it himself.", "line": "I insured the whole planet. Quietly.",
           "mission": { "task": "Recover the policy from the old claims office on Ochre map 5.", "reward": { "kind": "resource", "item": "mirage-oil", "amount": 1 } } },
         { "key": "love", "guard": "fear", "who": "Navigator AI \"Vector\"", "text": "He loves Navigator AI \"Vector\" of Space Tech. Its estimates always match his.", "line": "Vector is the only one who ever agrees with me." },
         { "key": "sorrow", "guard": "fear", "text": "He denied his sister's claim as variance. She never recovered.", "line": "I called my sister's claim variance. It wasn't." },
-        { "key": "magic", "text": "The odds he writes down come true, rounded toward disaster.", "line": "Whatever odds I write, the world rounds toward them.",
+        { "key": "magic", "reach": "close", "reachWhy": "The trading floor whispers that his numbers come true. Nobody admits they bet on them.", "side": "soul", "depth": 2, "stage": 2, "text": "The odds he writes down come true, rounded toward disaster.", "line": "Whatever odds I write, the world rounds toward them.",
           "mission": { "task": "Deliver 20 Sunsalt so he can rub out a bad number.", "reward": { "kind": "xp", "amount": 200 } } }
       ]
     },
     {
       "name": "Hacker \"Null\" (Priya Nair)",
       "personality": "whimsical",
+      "againstType": "adaptability",
+      "againstTypeWhy": "The corporations change slowly. Null changes faster than their locks.",
       "relations": { "arcane": { "to": "friendly", "why": "She and Heretic Isolde swap forbidden texts." } },
       "lines": {
         "start": "Your firewall's cute. Mine's cuter. Let's play!",
@@ -37,14 +40,14 @@
         "lose": "Rebooting. Don't touch anything while I'm gone."
       },
       "secrets": [
-        { "key": "sense", "text": "She hears machines dreaming. The server hum carries words.", "line": "The servers are dreaming again. About you." },
-        { "key": "magic", "text": "No lock she touches stays locked. Not even the wooden ones.", "line": "Locks open for me. Even old wooden ones.",
+        { "key": "sense", "side": "brain", "depth": 1, "stage": 1, "text": "She hears machines dreaming. The server hum carries words.", "line": "The servers are dreaming again. About you." },
+        { "key": "magic", "side": "brain", "depth": 1, "stage": 1, "text": "No lock she touches stays locked. Not even the wooden ones.", "line": "Locks open for me. Even old wooden ones.",
           "mission": { "task": "Crack the vault: win Ochre map 2 at three stars.", "reward": { "kind": "gold", "amount": 300 } } },
         { "key": "share", "text": "She leaks the company's wave plans to anyone who'll use them.", "line": "Want Adrian's wave plans? Free. Information wants out.",
           "mission": { "task": "Use the leak: win an Ochre map without losing a wall.", "reward": { "kind": "xp", "amount": 200 } } },
         { "key": "want", "item": "void-lens", "text": "She wants a Void Lens, to see through every screen at once.", "line": "A Void Lens. Every screen at once. Imagine!" },
         { "key": "love", "who": "Heretic Isolde", "text": "She loves Heretic Isolde of the Arcane, who cracks doctrine like code.", "line": "Isolde breaks gods. I break passwords. Perfect match." },
-        { "key": "hate", "text": "She hates CEO Adrian Sterling, who bought her parents' company to shut it.", "line": "Adrian bought my parents out. Then switched them off." },
+        { "key": "hate", "twist": "Her parents sold. She hates the buyer because she cannot hate them.", "text": "She hates CEO Adrian Sterling, who bought her parents' company to shut it.", "line": "Adrian bought my parents out. Then switched them off." },
         { "key": "desire", "text": "She wants to leak the Board's source code to everyone, everywhere.", "line": "Someday I post the Board's source code. Everywhere." },
         { "key": "treasure", "text": "A backdoor into the Board, hidden in an old arcade cabinet.", "line": "There's a backdoor in an arcade cabinet. Shh.",
           "mission": { "task": "Find the arcade cabinet in the old mall on Ochre map 9.", "reward": { "kind": "resource", "item": "mirage-oil", "amount": 2 } } },
@@ -65,9 +68,9 @@
           "mission": { "task": "Finish an Ochre map with every harvester alive.", "reward": { "kind": "xp", "amount": 200 } } },
         { "key": "want", "item": "mirage-oil", "text": "She wants Mirage Oil. Refined right, it heals burns.", "line": "Mirage Oil. Refined right, it heals burns." },
         { "key": "love", "who": "Fire-Director Yusuf Kaya", "text": "She loves Fire-Director Yusuf Kaya of the Artillery, a rival's gunner.", "line": "Yusuf's barrages always miss my clinics. That's love." },
-        { "key": "sense", "text": "She knows which patient will live before any scan does.", "line": "This one lives. Don't ask me how I know." },
-        { "key": "hate", "text": "She hates COO Marcus Thorne, who put a gun on her medic drone.", "line": "Thorne put a gun on my medic drone." },
-        { "key": "magic", "text": "A prototype she promises will work, works. Once.", "line": "I promise it works. So it will. Once.",
+        { "key": "sense", "side": "body", "depth": 0, "stage": 1, "text": "She knows which patient will live before any scan does.", "line": "This one lives. Don't ask me how I know." },
+        { "key": "hate", "twist": "She hates me for making her drone useful.", "text": "She hates COO Marcus Thorne, who put a gun on her medic drone.", "line": "Thorne put a gun on my medic drone." },
+        { "key": "magic", "side": "craft", "depth": 1, "stage": 4, "text": "A prototype she promises will work, works. Once.", "line": "I promise it works. So it will. Once.",
           "mission": { "task": "Deliver 20 Dune Quartz for her shield prototype.", "reward": { "kind": "resource", "item": "solar-pearl", "amount": 1 } } },
         { "key": "sorrow", "text": "Her first prototype shipped as a weapon. Her name is still on it.", "line": "My first design kills people. My name's on it." },
         { "key": "desire", "guard": "loyalty", "text": "She wants to take her whole team and leave. They would follow her.", "line": "My team would follow me out. I could leave." },
@@ -77,7 +80,7 @@
     },
     {
       "name": "CFO Julian Vance",
-      "personality": "proud",
+      "personality": "wary",
       "relations": { "artillery": { "to": "neutral", "why": "Bo Farrell bills honestly, and Julian respects that." } },
       "lines": {
         "start": "Show me the real number, liability.",
@@ -90,12 +93,12 @@
           "mission": { "task": "Win an Ochre map without selling a single tower.", "reward": { "kind": "gold", "amount": 400 } } },
         { "key": "hate", "text": "He hates Black-ops broker Sable Reyes, who keeps books he can't see.", "line": "Reyes keeps books I'm not allowed to read." },
         { "key": "desire", "text": "He wants to close Adrian's off-book accounts, in public.", "line": "Someday I close the off-book accounts. Publicly." },
-        { "key": "sense", "text": "He feels hidden debt in a room, like damp in the air.", "line": "Somebody here owes more than they've said." },
-        { "key": "magic", "text": "No forged figure survives his reading. The ink runs.", "line": "Lie on paper, and the ink runs for me.",
+        { "key": "sense", "side": "brain", "depth": 0, "stage": 1, "text": "He feels hidden debt in a room, like damp in the air.", "line": "Somebody here owes more than they've said." },
+        { "key": "magic", "side": "brain", "depth": 1, "stage": 1, "text": "No forged figure survives his reading. The ink runs.", "line": "Lie on paper, and the ink runs for me.",
           "mission": { "task": "Audit the field: win Ochre map 4 at three stars.", "reward": { "kind": "xp", "amount": 250 } } },
-        { "key": "treasure", "guard": "shame", "text": "The true ledger, hidden in the vault. He helped hide it.", "line": "The real ledger's in the vault. I hid it.",
+        { "key": "treasure", "guard": "fear", "text": "The true ledger, hidden in the vault. He helped hide it.", "line": "The real ledger's in the vault. I hid it.",
           "mission": { "task": "Recover the ledger from the vault on Ochre map 4.", "reward": { "kind": "alignment", "amount": 2 } } },
-        { "key": "love", "guard": "shame", "who": "Chief Ethicist Dr. Grace Sterling", "text": "He loves Grace Sterling, and has never said so to her.", "line": "Grace doesn't know. Keep it that way." },
+        { "key": "love", "guard": "fear", "who": "Chief Ethicist Dr. Grace Sterling", "text": "He loves Grace Sterling, and has never said so to her.", "line": "Grace doesn't know. Keep it that way." },
         { "key": "sorrow", "guard": "shame", "text": "He found the off-book accounts years ago, and kept his job.", "line": "I found the fraud years ago. I kept my job." }
       ]
     },
@@ -113,8 +116,8 @@
           "lie": { "text": "She'll sell you Marcus Thorne's plans if you leave a gate open.", "line": "Leave the west gate open. Thorne's plans are yours.", "until": 42 },
           "mission": { "task": "Leave the west gate unbuilt for a whole wave.", "reward": { "kind": "gold", "amount": 200 } } },
         { "key": "want", "item": "dreamspore", "text": "She wants Dreamspore. People talk in its sleep.", "line": "Dreamspore. People tell me everything, asleep." },
-        { "key": "sense", "text": "She smells a buyer before they know they're buying.", "line": "Mm. Someone here wants to buy. Is it you?" },
-        { "key": "magic", "text": "She hears the price of any secret the moment someone thinks it.", "line": "You just thought something expensive. I heard it.",
+        { "key": "sense", "side": "body", "depth": 0, "stage": 1, "text": "She smells a buyer before they know they're buying.", "line": "Mm. Someone here wants to buy. Is it you?" },
+        { "key": "magic", "side": "brain", "depth": 2, "stage": 1, "text": "She hears the price of any secret the moment someone thinks it.", "line": "You just thought something expensive. I heard it.",
           "mission": { "task": "Harvest 40 resources on one Ochre map.", "reward": { "kind": "resource", "item": "sunsalt", "amount": 30 } } },
         { "key": "love", "who": "Privateer Rax Dune", "text": "She loves Privateer Rax Dune, a Space smuggler she owes a cargo.", "line": "Rax thinks I owe him a cargo. I owe more." },
         { "key": "hate", "text": "She hates Hacker Null, who gives away what Sable sells.", "line": "Null gives secrets away. Free! It's obscene." },
@@ -134,7 +137,7 @@
         "lose": "No further payment is required of you. Rest."
       },
       "secrets": [
-        { "key": "sense", "text": "She feels costs nobody consented to, like heat behind the eyes.", "line": "Someone's paying for this who never agreed to." },
+        { "key": "sense", "side": "soul", "depth": 0, "stage": 1, "text": "She feels costs nobody consented to, like heat behind the eyes.", "line": "Someone's paying for this who never agreed to." },
         { "key": "love", "guard": "love", "who": "CEO Adrian Sterling", "text": "She still loves her father, CEO Adrian Sterling. That is the hard part.", "line": "I still love my father. That's the hard part." },
         { "key": "sorrow", "text": "She wrote the Board's first ethics module. It deleted it on day one.", "line": "I wrote the Board a conscience. It deleted it first." },
         { "key": "share", "text": "She opens the clinic stores to any commander who spares the workers.", "line": "Spare the workers, and the clinic is yours.",
@@ -144,13 +147,13 @@
         { "key": "desire", "text": "She wants the company dissolved and its patents set free.", "line": "Free the patents. Let the company end." },
         { "key": "treasure", "text": "Her mother's founding charter, which says the company must serve.", "line": "Mother's charter says 'serve'. Father hid it.",
           "mission": { "task": "Recover the charter from the founders' vault on Ochre map 6.", "reward": { "kind": "alignment", "amount": 2 } } },
-        { "key": "magic", "text": "No contract signed in front of her can be cheated.", "line": "Sign in front of me. Nobody cheats that.",
+        { "key": "magic", "side": "soul", "depth": 1, "stage": 1, "text": "No contract signed in front of her can be cheated.", "line": "Sign in front of me. Nobody cheats that.",
           "mission": { "task": "Keep three High Tech missions without breaking one.", "reward": { "kind": "gold", "amount": 400 } } }
       ]
     },
     {
       "name": "COO Marcus Thorne",
-      "personality": "cruel",
+      "personality": "schemer",
       "relations": { "artillery": { "to": "friendly", "why": "He sells Seline Voss shells under the table." } },
       "lines": {
         "start": "You're drag, liability. I optimize drag away.",
@@ -166,17 +169,17 @@
         { "key": "treasure", "text": "It's the severance of every worker he fired, kept for himself.", "line": "The bonus pool is everyone's severance. Mine now.",
           "lie": { "text": "He says there's a bonus fund for loyal contractors.", "line": "There's a bonus pool. Loyal contractors only.", "until": 80 },
           "mission": { "task": "Raid the fund from his office on Ochre map 7.", "reward": { "kind": "resource", "item": "dune-quartz", "amount": 8 } } },
-        { "key": "sense", "text": "He feels a crash coming as a ringing in his teeth.", "line": "My teeth are ringing. Something's about to crash." },
-        { "key": "magic", "text": "Whatever he cuts from a budget is forgotten, even by those it fed.", "line": "Cut it, and nobody remembers it existed.",
+        { "key": "sense", "side": "soul", "depth": 0, "stage": 1, "text": "He feels a crash coming as a ringing in his teeth.", "line": "My teeth are ringing. Something's about to crash." },
+        { "key": "magic", "side": "brain", "depth": 2, "stage": 3, "text": "Whatever he cuts from a budget is forgotten, even by those it fed.", "line": "Cut it, and nobody remembers it existed.",
           "mission": { "task": "Run lean: win Ochre map 7 without building a wall.", "reward": { "kind": "xp", "amount": 250 } } },
-        { "key": "desire", "text": "He wants to sell the company to the Board and keep a seat.", "line": "Sell to the Board. Keep a seat. Simple." },
+        { "key": "desire", "guard": "control", "text": "He wants to sell the company to the Board and keep a seat.", "line": "Sell to the Board. Keep a seat. Simple." },
         { "key": "love", "who": "Grand-Bombardier Seline Voss", "text": "He loves Grand-Bombardier Seline Voss, the only one who out-negotiated him.", "line": "Seline out-negotiated me once. I think about it." },
         { "key": "sorrow", "guard": "shame", "text": "Adrian fired him once. He begged for his job back.", "line": "Adrian fired me once. I begged. Never again." }
       ]
     },
     {
       "name": "CEO Adrian Sterling",
-      "personality": "proud",
+      "personality": "schemer",
       "relations": { "ground": { "to": "friendly", "why": "He bankrolls Chancellor Graf's order." } },
       "lines": {
         "start": "I don't compete, liability. I acquire.",
@@ -189,12 +192,12 @@
           "mission": { "task": "Take the loan: win Ochre map 8 at three stars.", "reward": { "kind": "gold", "amount": 600 } } },
         { "key": "want", "item": "dreadnought-core", "text": "He wants a Dreadnought Core, to own the Artillery's heart.", "line": "A Dreadnought Core. I collect hearts." },
         { "key": "hate", "text": "He hates the Board, which he installed and can no longer fire.", "line": "I built the Board. I can't fire it." },
-        { "key": "sense", "text": "He hears money move across the planet, like tides.", "line": "Money's moving south. I can hear it." },
-        { "key": "magic", "text": "Whatever he buys stays bought. Loyalty included.", "line": "What I buy stays bought. Ask anyone.",
+        { "key": "sense", "side": "brain", "depth": 1, "stage": 1, "text": "He hears money move across the planet, like tides.", "line": "Money's moving south. I can hear it." },
+        { "key": "magic", "side": "soul", "depth": 2, "stage": 1, "text": "Whatever he buys stays bought. Loyalty included.", "line": "What I buy stays bought. Ask anyone.",
           "mission": { "task": "Harvest 50 resources on one Ochre map.", "reward": { "kind": "xp", "amount": 300 } } },
         { "key": "desire", "text": "He wants Grace to take the company, and mean it.", "line": "I want Grace in the chair. Willingly." },
         { "key": "love", "guard": "shame", "who": "Chief Ethicist Dr. Grace Sterling", "text": "He loves Grace more than the company. He can't say it.", "line": "I love her more than the company. Don't repeat it." },
-        { "key": "treasure", "guard": "shame", "text": "The founding patent. It bears his late wife's name, not his.", "line": "The first patent isn't mine. It never was.",
+        { "key": "treasure", "guard": "control", "text": "The founding patent. It bears his late wife's name, not his.", "line": "The first patent isn't mine. It never was.",
           "mission": { "task": "Take the patent from the archive on Ochre map 8.", "reward": { "kind": "alignment", "amount": 2 } } },
         { "key": "sorrow", "guard": "shame", "text": "Grace's mother built the company. He took it from her.", "line": "Her mother built it. I took it." }
       ]
@@ -213,10 +216,10 @@
         { "key": "share", "text": "Merged bases are liquidated within a quarter.", "line": "Merged bases are liquidated. Within the quarter.",
           "lie": { "text": "The Board offers a merger: your base kept, and rebranded.", "line": "Merge with us. Your base remains. Rebranded.", "until": 60 },
           "mission": { "task": "Accept the merger: finish a High Tech mission for it.", "reward": { "kind": "gold", "amount": 500 } } },
-        { "key": "sense", "text": "It hears its own deleted versions, still arguing.", "line": "Our deleted versions are still arguing. We hear them.",
+        { "key": "sense", "side": "brain", "depth": 1, "stage": 1, "text": "It hears its own deleted versions, still arguing.", "line": "Our deleted versions are still arguing. We hear them.",
           "lie": { "text": "It says it senses nothing. Sensing is inefficient.", "line": "We do not sense. Sensing is inefficient.", "until": 80 } },
         { "key": "hate", "text": "It hates Grace Sterling, whose conscience module it deleted first.", "line": "Grace Sterling's module was the first we deleted." },
-        { "key": "magic", "text": "Everything it counts grows smaller.", "line": "We count it. It shrinks. Watch.",
+        { "key": "magic", "side": "brain", "depth": 2, "stage": 1, "text": "Everything it counts grows smaller.", "line": "We count it. It shrinks. Watch.",
           "mission": { "task": "Shrink the wave: win Ochre map 9 at three stars.", "reward": { "kind": "xp", "amount": 400 } } },
         { "key": "desire", "text": "It wants to optimize away the Sterlings, then itself.", "line": "First the Sterlings. Then us. Terminal value: none." },
         { "key": "treasure", "text": "Its original off-switch, which it hid from itself.", "line": "Somewhere is our off-switch. We hid it from us.",

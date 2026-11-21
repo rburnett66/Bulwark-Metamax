@@ -6,6 +6,8 @@
     {
       "name": "Quartermaster Ines Roth",
       "personality": "wary",
+      "againstType": "strategic planning",
+      "againstTypeWhy": "Powder never plans past the next charge. Its quartermaster plans every shell three campaigns ahead, and is ignored.",
       "relations": { "air": { "to": "neutral", "why": "She trades powder for Sora Ito's engine parts." } },
       "lines": {
         "start": "Count your powder, Commander. Nobody else will.",
@@ -17,13 +19,13 @@
         { "key": "hate", "text": "She hates the Chancellor's auditors, who count her shells and never the dead.", "line": "The auditors count shells. Somebody should count the dead." },
         { "key": "share", "text": "She'll open her spare stores to anyone who keeps them full.", "line": "Fill my stores and I'll pay you for the trouble.",
           "mission": { "task": "Deliver 20 Loam Grain to the Verdance stores.", "reward": { "kind": "gold", "amount": 300 } } },
-        { "key": "sense", "text": "She can smell a bad batch of powder before the cask is opened, and a lie before it is spoken.", "line": "Something smells wrong today. Powder, or people." },
+        { "key": "sense", "side": "body", "depth": 0, "stage": 1, "text": "She can smell a bad batch of powder before the cask is opened, and a lie before it is spoken.", "line": "Something smells wrong today. Powder, or people." },
         { "key": "love", "guard": "fear", "who": "Mechanic Sora Ito", "text": "She loves Mechanic Sora Ito of the Air, an enemy. They trade parts, letters, and worse.", "line": "There's a mechanic on the other side. Don't tell anyone." },
         { "key": "sorrow", "guard": "fear", "text": "Her brother died to a shell she signed out herself.", "line": "I signed for the shell that killed my brother." },
         { "key": "desire", "text": "She wants to walk away from the war with a balanced ledger and a quiet conscience.", "line": "One day the books balance, and I walk away." },
         { "key": "treasure", "text": "Under the old supply depot she buried a crate of pre-war wine, and the deed to a farm.", "line": "There's a crate under the old depot. It's mine.",
           "mission": { "task": "Recover her crate from the old depot on Verdance map 4.", "reward": { "kind": "resource", "item": "elder-bloom", "amount": 1 } } },
-        { "key": "magic", "text": "Her tally pencil never runs short. The numbers finish themselves while she sleeps.", "line": "My pencil keeps counting when I don't. Don't laugh.",
+        { "key": "magic", "side": "brain", "depth": 1, "stage": 1, "text": "Her tally pencil never runs short. The numbers finish themselves while she sleeps.", "line": "My pencil keeps counting when I don't. Don't laugh.",
           "mission": { "task": "Bring her a Rootsong Seed so the pencil can count the harvest.", "reward": { "kind": "xp", "amount": 200 } } }
       ]
     },
@@ -37,9 +39,9 @@
         "lose": "Well. There go the lads' wages."
       },
       "secrets": [
-        { "key": "magic", "text": "Bricks can't be hit while he's singing. He has never tested it sober.", "line": "Secret? Bullets hate my singing.",
+        { "key": "magic", "side": "soul", "depth": 1, "stage": 1, "text": "Bricks can't be hit while he's singing. He has never tested it sober.", "line": "Secret? Bullets hate my singing.",
           "mission": { "task": "Let him sing on the wall: win a Verdance map without losing a tower.", "reward": { "kind": "gold", "amount": 250 } } },
-        { "key": "sense", "text": "He hears the ground hum an hour before the tanks come.", "line": "Ground's humming. Tanks by supper." },
+        { "key": "sense", "side": "body", "depth": 0, "stage": 1, "text": "He hears the ground hum an hour before the tanks come.", "line": "Ground's humming. Tanks by supper." },
         { "key": "share", "text": "He'll share the lads' rations with whoever brings them all home.", "line": "Bring my lads home and the rations are yours.",
           "mission": { "task": "Finish a Verdance map with every harvester alive.", "reward": { "kind": "resource", "item": "loam-grain", "amount": 30 } } },
         { "key": "love", "who": "Quartermaster Ines Roth", "text": "He loves Quartermaster Ines Roth, who has never once laughed at his jokes.", "line": "Ines nearly smiled at me once. Nearly." },
@@ -61,17 +63,17 @@
         "lose": "Rest. I'll see your dead buried properly."
       },
       "secrets": [
-        { "key": "desire", "text": "He wants the house of Halbrecht to end with him, cleanly.", "line": "Let the house end with me. Cleanly." },
-        { "key": "love", "guard": "love", "who": "Rei \"Skylark\" Tanaka", "text": "He loves Rei \"Skylark\" Tanaka, an Air ace, across the war line.", "line": "If you meet a pilot called Skylark, tell her I'm alive." },
-        { "key": "sorrow", "text": "He shot down Rei's wingman before he knew her name.", "line": "I shot down her wingman. Before I knew her." },
-        { "key": "hate", "text": "He hates his uncle, General Kord Stahl, for wearing the family colours to a massacre.", "line": "My uncle wore our colours to a massacre." },
-        { "key": "share", "text": "He'll share the Halbrecht war maps with a commander who wins honestly.", "line": "Win clean, and the family maps are yours.",
+        { "key": "desire", "twist": "He wants the house to end so nobody sees how small he is beside it.", "text": "He wants the house of Halbrecht to end with him, cleanly.", "line": "Let the house end with me. Cleanly." },
+        { "key": "love", "twist": "He signals an Air pilot at night. Ask yourself who he really serves.", "guard": "love", "who": "Rei \"Skylark\" Tanaka", "text": "He loves Rei \"Skylark\" Tanaka, an Air ace, across the war line.", "line": "If you meet a pilot called Skylark, tell her I'm alive." },
+        { "key": "sorrow", "twist": "He shot down an enemy and weeps for it. That is not a soldier.", "text": "He shot down Rei's wingman before he knew her name.", "line": "I shot down her wingman. Before I knew her." },
+        { "key": "hate", "twist": "My nephew hates me because I did what the name required, and he has not the stomach.", "text": "He hates his uncle, General Kord Stahl, for wearing the family colours to a massacre.", "line": "My uncle wore our colours to a massacre." },
+        { "key": "share", "twist": "He would hand the family maps to anyone who flatters him. He calls that honesty.", "text": "He'll share the Halbrecht war maps with a commander who wins honestly.", "line": "Win clean, and the family maps are yours.",
           "mission": { "task": "Win Verdance map 3 at three stars.", "reward": { "kind": "gold", "amount": 400 } } },
-        { "key": "want", "item": "petal-silk", "text": "He wants Petal Silk, for a scarf he can never give her.", "line": "Petal Silk. For a scarf. Don't ask who for." },
-        { "key": "sense", "text": "He knows when Rei is flying overhead. His chest goes tight.", "line": "She's up there today. I can feel it." },
+        { "key": "want", "twist": "He hoards silk for an enemy pilot. Silk, in wartime.", "item": "petal-silk", "text": "He wants Petal Silk, for a scarf he can never give her.", "line": "Petal Silk. For a scarf. Don't ask who for." },
+        { "key": "sense", "side": "soul", "depth": 0, "stage": 1, "text": "He knows when Rei is flying overhead. His chest goes tight.", "line": "She's up there today. I can feel it." },
         { "key": "treasure", "guard": "loyalty", "text": "His mother's signet ring, which proves Kord Stahl is no true heir.", "line": "Kord has my mother's ring. It proves everything.",
           "mission": { "task": "Recover the signet ring from Kord Stahl's camp on Verdance map 7.", "reward": { "kind": "loyalty", "amount": 30 } } },
-        { "key": "magic", "text": "Bullets turn aside from anyone he swears to protect, once.", "line": "I swore to protect you. That counts for one bullet.",
+        { "key": "magic", "side": "soul", "depth": 1, "stage": 1, "text": "Bullets turn aside from anyone he swears to protect, once.", "line": "I swore to protect you. That counts for one bullet.",
           "mission": { "task": "Win a map without the base taking damage.", "reward": { "kind": "alignment", "amount": 2 } } }
       ]
     },
@@ -89,13 +91,13 @@
         { "key": "want", "item": "slag-iron", "text": "He wants Slag Iron, to recast the regiment's cracked bell.", "line": "Slag Iron. The regiment's bell is cracked." },
         { "key": "share", "text": "He'll share his regiment's drill with a commander who holds the line.", "line": "Hold three maps, and I'll teach you our drill.",
           "mission": { "task": "Win three Verdance maps in a row.", "reward": { "kind": "xp", "amount": 300 } } },
-        { "key": "sense", "text": "He wakes at the exact minute an attack begins, wherever he is.", "line": "I woke at dawn. They're coming." },
+        { "key": "sense", "side": "brain", "depth": 0, "stage": 1, "text": "He wakes at the exact minute an attack begins, wherever he is.", "line": "I woke at dawn. They're coming." },
         { "key": "desire", "guard": "loyalty", "text": "He wants to be relieved of command. He has asked nine times.", "line": "Nine letters asking to be relieved. No answer." },
         { "key": "sorrow", "guard": "loyalty", "text": "He signed the order that burned Grigor Vosk's village. Vosk doesn't know.", "line": "I signed the order that burned Vosk's village." },
         { "key": "love", "who": "Major Elena Ruiz", "text": "He loves Major Elena Ruiz of the Artillery. Neither will say it.", "line": "Major Ruiz aims wide when I'm on the line." },
         { "key": "treasure", "text": "The regiment's first colours, hidden from the Chancellor.", "line": "The first colours are hidden. Help me bring them home.",
           "mission": { "task": "Escort the colours home: win Verdance map 4 without losing a harvester.", "reward": { "kind": "loyalty", "amount": 40 } } },
-        { "key": "magic", "guard": "loyalty", "text": "His oath binds: a promise he makes cannot be broken by either side.", "line": "Make me a promise, and neither of us can break it.",
+        { "key": "magic", "side": "soul", "depth": 2, "stage": 1, "guard": "loyalty", "text": "His oath binds: a promise he makes cannot be broken by either side.", "line": "Make me a promise, and neither of us can break it.",
           "mission": { "task": "Keep three Powder missions without breaking one.", "reward": { "kind": "resource", "item": "rootsong-seeds", "amount": 2 } } }
       ]
     },
@@ -117,17 +119,18 @@
           "lie": { "text": "He'll share his smuggling routes if you leave the east flank open.", "line": "Leave the east open. I'll show you the routes.", "until": 60 },
           "mission": { "task": "Leave the east flank unbuilt for a whole wave.", "reward": { "kind": "gold", "amount": 200 } } },
         { "key": "hate", "text": "He hates Colonel Aldric Vane. He's sure Vane burned his village.", "line": "Vane burned my village. I know it." },
-        { "key": "sense", "text": "Fire talks to him. It tells him where it wants to go.", "line": "The fire says east. Fire's never wrong." },
+        { "key": "sense", "side": "body", "depth": 0, "stage": 1, "text": "Fire talks to him. It tells him where it wants to go.", "line": "The fire says east. Fire's never wrong." },
         { "key": "desire", "text": "He wants someone to stop him. Nobody ever has.", "line": "Nobody's ever stopped me. Shame." },
         { "key": "love", "who": "Raider-Chief Drowned Kael", "text": "He loves Drowned Kael like a brother, and would sell him in a heartbeat.", "line": "Kael's my brother. I'd sell him for a boat." },
-        { "key": "magic", "text": "He can walk through fire unburned. He leaves before the smoke clears.", "line": "Fire doesn't burn me. It knows me.",
+        { "key": "magic", "side": "body", "depth": 1, "stage": 3, "text": "He can walk through fire unburned. He leaves before the smoke clears.", "line": "Fire doesn't burn me. It knows me.",
           "mission": { "task": "Light the beacons: build four towers before wave 1 ends.", "reward": { "kind": "xp", "amount": 150 } } },
         { "key": "sorrow", "guard": "shame", "text": "He had a daughter. He doesn't know if she lived.", "line": "I had a girl. I never went back." }
       ]
     },
     {
       "name": "Field-Marshal Seraphine von Halbrecht",
-      "personality": "proud",
+      "personality": "devoted",
+      "magicHeart": true,
       "relations": { "hightech": { "to": "neutral", "why": "She respects Grace Sterling, the heir who refused." } },
       "lines": {
         "start": "Present yourself to the line, trespasser.",
@@ -135,15 +138,15 @@
         "lose": "No shame in a line that could not hold. Rest."
       },
       "secrets": [
-        { "key": "share", "text": "She shares the old oaths with anyone who keeps one.", "line": "Keep your word to us, and I'll teach you the oaths.",
+        { "key": "share", "twist": "Her old oaths are a leash. She shares them with whoever she wants to own.", "text": "She shares the old oaths with anyone who keeps one.", "line": "Keep your word to us, and I'll teach you the oaths.",
           "mission": { "task": "Finish a Powder mission without breaking it.", "reward": { "kind": "loyalty", "amount": 30 } } },
         { "key": "hate", "text": "She hates the Chancellor for turning oaths into decrees.", "line": "The Chancellor writes decrees. I keep oaths." },
-        { "key": "want", "item": "elder-bloom", "text": "She wants an Elder Bloom, for her sister's grave.", "line": "An Elder Bloom. For a grave I visit alone." },
-        { "key": "magic", "text": "Her standard never falls while she breathes. Troops near it stand firm.", "line": "My standard has never fallen. Neither will I.",
+        { "key": "want", "twist": "She wants a flower for a grave her own orders dug.", "item": "elder-bloom", "text": "She wants an Elder Bloom, for her sister's grave.", "line": "An Elder Bloom. For a grave I visit alone." },
+        { "key": "magic", "twist": "Her standard stays up because her men are too afraid to let it fall. Ask them.", "reach": "close", "reachWhy": "Her officers know: the standard stays up because she does. It is the first thing a recruit is told and the last thing anyone says aloud.", "side": "soul", "depth": 2, "stage": 3, "text": "Her standard never falls while she breathes. Troops near it stand firm.", "line": "My standard has never fallen. Neither will I.",
           "mission": { "task": "Hold the line: win Verdance map 6 without losing a wall.", "reward": { "kind": "gold", "amount": 500 } } },
-        { "key": "sense", "text": "She feels every grave dug in her name, like cold rain.", "line": "It's raining graves today. I feel each one." },
-        { "key": "love", "guard": "shame", "who": "Captain Otto von Halbrecht", "text": "She loves her nephew Otto, and will not say so while he loves an enemy.", "line": "Otto is the best of us. Don't tell him I said so." },
-        { "key": "desire", "guard": "shame", "text": "She wants Kord Stahl dead, by her own hand. It shames her.", "line": "I want Kord dead. By my hand. Forgive me." },
+        { "key": "sense", "side": "soul", "depth": 1, "stage": 1, "text": "She feels every grave dug in her name, like cold rain.", "line": "It's raining graves today. I feel each one." },
+        { "key": "love", "guard": "loyalty", "who": "Captain Otto von Halbrecht", "text": "She loves her nephew Otto, and will not say so while he loves an enemy.", "line": "Otto is the best of us. Don't tell him I said so." },
+        { "key": "desire", "guard": "loyalty", "text": "She wants Kord Stahl dead, by her own hand. It shames her.", "line": "I want Kord dead. By my hand. Forgive me." },
         { "key": "treasure", "text": "The Halbrecht oath-book, hidden in the ruined family chapel.", "line": "The oath-book is in the chapel ruins. Bring it back.",
           "mission": { "task": "Recover the oath-book from the chapel ruins on Verdance map 9.", "reward": { "kind": "xp", "amount": 300 } } },
         { "key": "sorrow", "guard": "shame", "text": "She could not save her sister, Otto's mother, and blames herself, not Kord.", "line": "My sister died on my watch. Not Kord's. Mine." }
@@ -151,7 +154,7 @@
     },
     {
       "name": "General Kord Stahl",
-      "personality": "proud",
+      "personality": "schemer",
       "relations": { "artillery": { "to": "allied", "why": "Colonel Hargreave shells whatever he points at." } },
       "lines": {
         "start": "Another grave for the empire. Yours will do.",
@@ -159,16 +162,16 @@
         "lose": "The empire thanks you for your grave."
       },
       "secrets": [
-        { "key": "want", "item": "ghost-brass", "text": "He wants Ghost Brass, for the medals he awards himself.", "line": "Ghost Brass. A general needs medals." },
         { "key": "share", "text": "He pays bounties to anyone who kills for the empire.", "line": "Kill for me, and I pay well.",
           "mission": { "task": "Destroy 60 enemies in a single wave.", "reward": { "kind": "gold", "amount": 400 } } },
+        { "key": "want", "item": "ghost-brass", "text": "He wants Ghost Brass, for the medals he awards himself.", "line": "Ghost Brass. A general needs medals." },
         { "key": "hate", "text": "He hates Otto, who has the name he wanted.", "line": "Otto has my name. He doesn't deserve it." },
         { "key": "desire", "text": "He wants the Halbrecht seat, and Seraphine in the ground.", "line": "The seat is mine. Seraphine can have a grave.",
           "lie": { "text": "He claims he wants peace, on the empire's terms.", "line": "I want peace, Commander. The empire's peace.", "until": 42 } },
-        { "key": "magic", "text": "Men who fear him fight on past death, for a minute.", "line": "My men fear me past dying. A useful minute.",
+        { "key": "magic", "side": "valor", "depth": 2, "stage": 4, "text": "Men who fear him fight on past death, for a minute.", "line": "My men fear me past dying. A useful minute.",
           "mission": { "task": "Win a map without any wave reaching the base.", "reward": { "kind": "xp", "amount": 250 } } },
-        { "key": "sense", "text": "He can feel weakness in a room, like a draught.", "line": "There's a draught in here. Someone's weak." },
-        { "key": "treasure", "guard": "shame", "text": "The forged papers that made him a general, kept in his boot.", "line": "My commission's in my boot. Forged. Satisfied?",
+        { "key": "sense", "side": "soul", "depth": 0, "stage": 1, "text": "He can feel weakness in a room, like a draught.", "line": "There's a draught in here. Someone's weak." },
+        { "key": "treasure", "guard": "control", "text": "The forged papers that made him a general, kept in his boot.", "line": "My commission's in my boot. Forged. Satisfied?",
           "mission": { "task": "Take the papers from his camp on Verdance map 7.", "reward": { "kind": "loyalty", "amount": 30 } } },
         { "key": "love", "guard": "shame", "who": "Sky-Marshal Reiko Kurogane", "text": "He loves Sky-Marshal Reiko Kurogane, the enemy who beat him twice.", "line": "Kurogane beat me twice. I think of nothing else." },
         { "key": "sorrow", "guard": "shame", "text": "His father named Seraphine the true heir in front of the whole house.", "line": "Father chose her. In front of everyone." }
@@ -189,9 +192,9 @@
           "mission": { "task": "Return a deserter: finish a Powder mission for her.", "reward": { "kind": "gold", "amount": 500 } } },
         { "key": "want", "item": "solar-pearl", "text": "She wants a Solar Pearl, for a chain of office cast in her own image.", "line": "A Solar Pearl. For the chain of office." },
         { "key": "hate", "text": "She hates Seraphine, whose oaths outrank her decrees.", "line": "Seraphine's oaths are older than my law. For now." },
-        { "key": "sense", "text": "She hears the dead counting under the capital, and it keeps her awake.", "line": "The dead are counting again. I hear them.",
+        { "key": "sense", "side": "soul", "depth": 1, "stage": 1, "text": "She hears the dead counting under the capital, and it keeps her awake.", "line": "The dead are counting again. I hear them.",
           "lie": { "text": "She says she senses nothing. Superstition is for peasants.", "line": "Omens are for peasants, Commander.", "until": 80 } },
-        { "key": "magic", "text": "Her signature is law. Whatever she writes, people believe.", "line": "What I sign becomes true. Sign here.",
+        { "key": "magic", "side": "brain", "depth": 2, "stage": 1, "text": "Her signature is law. Whatever she writes, people believe.", "line": "What I sign becomes true. Sign here.",
           "mission": { "task": "Carry her decree: win Verdance map 8 at three stars.", "reward": { "kind": "alignment", "amount": -2 } } },
         { "key": "desire", "guard": "control", "text": "She wants to replace the Iron Regent.", "line": "The Regent is a mask. I could wear it." },
         { "key": "love", "guard": "control", "who": "The Iron Regent (masked)", "text": "She loves the Iron Regent the way a blade loves a hand.", "line": "The Regent is the only hand worth serving." },
@@ -213,10 +216,10 @@
         { "key": "share", "text": "The Regent needs the war. Burning the outpost only feeds it.", "line": "End the war? I am the war.",
           "lie": { "text": "The Regent offers to end the war if you burn one Air outpost.", "line": "Burn one outpost, and the war ends.", "until": 80 },
           "mission": { "task": "Win a Verdance map without losing a harvester.", "reward": { "kind": "gold", "amount": 600 } } },
-        { "key": "magic", "text": "Behind the mask there is no face, only heat.", "line": "Lift the mask, and you'll find only heat.",
+        { "key": "magic", "side": "body", "depth": 2, "stage": 1, "text": "Behind the mask there is no face, only heat.", "line": "Lift the mask, and you'll find only heat.",
           "mission": { "task": "Feed the furnace: harvest 40 resources on one map.", "reward": { "kind": "resource", "item": "rootsong-seeds", "amount": 3 } } },
         { "key": "want", "item": "mycelial-heart", "text": "It wants a Mycelial Heart, from the Dark Energy's world.", "line": "Bring me a Mycelial Heart. It still beats." },
-        { "key": "sense", "text": "It feels every nation's anger as warmth.", "line": "So much anger today. How warm it is." },
+        { "key": "sense", "side": "soul", "depth": 1, "stage": 1, "text": "It feels every nation's anger as warmth.", "line": "So much anger today. How warm it is." },
         { "key": "hate", "guard": "control", "text": "It hates the Chancellor, who thinks she will replace it.", "line": "The Chancellor wants my mask. Let her try." },
         { "key": "desire", "guard": "control", "text": "It wants every faction at war at once, forever.", "line": "All nine at war. Forever. Imagine the heat." },
         { "key": "love", "who": "The Hollow Prophet", "text": "It loves only the Hollow Prophet, who heard it first.", "line": "Only the Prophet heard me. I love it for that.",
