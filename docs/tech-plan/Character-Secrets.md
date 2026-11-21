@@ -83,15 +83,24 @@
   standings then mark it "was a lie".
 - `revealSecrets(char, s)` → `[{ key, label, text, lie, wasLie, mission, item }]` in order, plus `held` (count of
   guarded secrets waiting) and `locked` (count not reached).
-- **Heard in battle.** `s.secretsHeard[name]` counts the secrets a character has told in person; a newly revealed one
-  is spoken as that map's opening line (§5) and marked heard.
+- **Told aboard.** `s.secretsHeard[name]` counts the secrets a character has told in person. Secrets are told aboard
+  the faction's capital ship (owner 2026-11-21: "Secrets should usually be delivered at the capital ships"): after the
+  captain's greeting, up to three of the faction's characters with a newly unlocked secret come forward and tell it,
+  once each (`mapCast.js aboardSecretCalls`, `shipReveal.js`) [MM-story_mwpsuo5b_3x].
+- **The farm visitor** (Farming-Design rules 14–18, not built yet): the faction's wandering visitor on the outpost
+  shares what they know once the player's rapport with them has grown (owner 2026-11-21: "The wandering character on
+  the planet outpost could also share info once a report has been developed"). When the visitor is built, they tell
+  their own unlocked secrets and, as a close knower, rumours about their circle (Character-System §7.1).
 
 ## 5. Battle — one character per map, a secondary at wave 3, short lines
 
-- **Map start:** the map's primary (from `maps`, else the faction's cast rotated by map number) speaks once: a newly
-  revealed secret's `line` if there is one, else `lines.start`.
+- **Map start:** the map's primary (from `maps`, else the faction's cast rotated by map number) speaks once:
+  `lines.start`. Secrets are told aboard the capital ship (§4).
 - **Between waves:** no character dialog. The wave report, bonus pick and intel stay.
-- **After wave 3:** the secondary (another faction) speaks their one line. The rare-contract offer keeps its own slot.
+- **After wave 3:** one voice (owner 2026-11-21: "Wave 3 introduces a character and offers a contract"). The secondary
+  (another faction) introduces themselves with their one line and, when the rare contract is earned (3★ or more on
+  wave 3), offers it for their own faction's ship. A map with no secondary keeps the old offer from an arrived ship's
+  contact.
 - **Map end:** the primary's `lines.win` / `lines.lose`.
 - Factions without a characters file keep today's lines but follow the same cadence (primary = cast rotated by map,
   secondary = the rival faction's champion), so every map drops to three character beats.
