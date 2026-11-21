@@ -1,24 +1,44 @@
-// Portrait expressions (owner 2026-11-09) [MM-task_mw9odkf0_4]: a character's mood portrait is asked for only when its
-// art has landed (data/portraitMoods.js); otherwise the one portrait it has.
+// Relationship portraits [MM-story_mwpni0v4_3m] (was MM-task_mw9odkf0_4): a character's antagonistic / friendly portrait is
+// asked for only when its files exist (data/portraitMoods.js); neutral is the base. Placeholders (byte copies of the base)
+// carry the status printed over them; a change since last seen draws hearts or bolts.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { portraitImg } from './commCard.js';
-import { MOOD_PORTRAITS } from '../data/portraitMoods.js';
+import { portraitImg, relationLabel, doobersHTML } from './commCard.js';
+import { MOOD_PORTRAITS, PLACEHOLDER_PORTRAITS } from '../data/portraitMoods.js';
 
-test('no expression art yet: the base portrait, with no request for a missing file', () => {
-  const h = portraitImg('Colonel Aldric Vane', 'angry', 'p/');
-  assert.match(h, /src="p\/colonel-aldric-vane\.png"/);
-  assert.doesNotMatch(h, /-angry/);
+test('no relationship files: the base portrait, with no request for a missing file', () => {
+  const h = portraitImg('Nobody Unlisted', 'antagonistic', 'p/');
+  assert.match(h, /src="p\/nobody-unlisted\.png"/);
+  assert.doesNotMatch(h, /-antagonistic/);
 });
 
-test('with expression art: the mood portrait first, then the base portrait if it fails to load', () => {
-  MOOD_PORTRAITS.add('colonel-aldric-vane');
-  try {
-    const h = portraitImg('Colonel Aldric Vane', 'happy', 'p/');
-    assert.match(h, /src="p\/colonel-aldric-vane-happy\.png"/);
-    assert.match(h, /data-base="p\/colonel-aldric-vane\.png"/);
-    assert.match(portraitImg('Colonel Aldric Vane', 'smug', 'p/'), /src="p\/colonel-aldric-vane\.png"/, 'an unknown mood is ignored');
-  } finally { MOOD_PORTRAITS.delete('colonel-aldric-vane'); }
+test('with relationship files: the mood portrait first, then the base portrait if it fails to load', () => {
+  assert.ok(MOOD_PORTRAITS.has('colonel-aldric-vane'), 'the tool switched Aldric on with his placeholders');
+  const h = portraitImg('Colonel Aldric Vane', 'friendly', 'p/');
+  assert.match(h, /src="p\/colonel-aldric-vane-friendly\.png"/);
+  assert.match(h, /data-base="p\/colonel-aldric-vane\.png"/);
+  assert.match(portraitImg('Colonel Aldric Vane', 'smug', 'p/'), /src="p\/colonel-aldric-vane\.png"/, 'an unknown mood is ignored');
+  assert.match(portraitImg('Colonel Aldric Vane', 'neutral', 'p/'), /src="p\/colonel-aldric-vane\.png"/, 'neutral is the base portrait');
+  assert.doesNotMatch(portraitImg('Colonel Aldric Vane', 'neutral', 'p/'), /-neutral/);
+});
+
+test('a placeholder portrait has its relationship status printed over it; final art has none', () => {
+  assert.ok(PLACEHOLDER_PORTRAITS.has('colonel-aldric-vane'));
+  assert.match(relationLabel('Colonel Aldric Vane', 'friendly'), /class="bw-rel bw-rel-friendly">FRIENDLY</);
+  assert.match(relationLabel('Colonel Aldric Vane', 'neutral'), />NEUTRAL</);
+  assert.match(relationLabel('Colonel Aldric Vane', 'antagonistic'), />ANTAGONISTIC</);
+  assert.equal(relationLabel('Colonel Aldric Vane', null), '');
+  PLACEHOLDER_PORTRAITS.delete('colonel-aldric-vane');
+  try { assert.equal(relationLabel('Colonel Aldric Vane', 'friendly'), '', 'final art: no label'); }
+  finally { PLACEHOLDER_PORTRAITS.add('colonel-aldric-vane'); }
+});
+
+test('a relationship change draws hearts (better) or lightning bolts (worse); no change draws nothing', () => {
+  const up = doobersHTML('up'), down = doobersHTML('down');
+  assert.match(up, /bw-doobers-up/); assert.equal((up.match(/<i /g) || []).length, 7);
+  assert.match(up, /M12 21s/, 'a heart'); assert.match(down, /M13\.5 1\.5/, 'a bolt');
+  assert.equal(doobersHTML(null), ''); assert.equal(doobersHTML('sideways'), '');
+  assert.equal(doobersHTML('up'), up, 'the same every time: no chance in it');
 });
 
 // Scenes (owner 2026-11-09: "When a character has multiple lines of dialog use bread crumbs and cycle the dialog, but do
