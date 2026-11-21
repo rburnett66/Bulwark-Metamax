@@ -9,7 +9,9 @@
  */
 import { FACTION_KEYS } from './factionRelations.js';
 import { FACTION_TRAITS } from './factionTraits.js';
-import { isSide } from './magic.js';
+import { isSide, HOME_SIDE } from './magic.js';
+import { conviction } from './alignment.js';
+import { PLANET_ORDER } from '../save/reveals.js';
 
 /** Unit stat averages per faction, and each faction's rank (1 = highest) on each stat. */
 export function statRanks(units, packs) {
@@ -79,6 +81,8 @@ export function characterFindings(model, files, ranks) {
       if (s.key === 'magic' || s.key === 'sense') {
         const missing = [!isSide(s.side) && 'side', !(s.depth >= 0 && s.depth <= 3) && 'depth', !(s.stage >= 1 && s.stage <= 5) && 'stage'].filter(Boolean);
         if (missing.length) add(`magic-tags:${c.name}:${s.key}`, 'magic', c.faction, c.name, `${s.key} has no ${missing.join(', ')}`);
+        if (s.depth === 3 && !s.cost) add(`magic-cost:${c.name}:${s.key}`, 'magic', c.faction, c.name, `${s.key} is extreme (depth 3) with no cost written`);
+        if (s.stage === 5 && conviction(c.align) !== 3) add(`magic-stage5:${c.name}:${s.key}`, 'magic', c.faction, c.name, `a balance clue (stage 5) from a character who is not a Balance-Keeper (${c.align})`);
       }
     }
   }
@@ -105,6 +109,33 @@ export function characterFindings(model, files, ranks) {
     if (!chars.some((c) => c.againstType)) add(`against-type:${key}`, 'traits', key, null, 'no character goes against the faction\'s reputation');
     const hearts = chars.filter((c) => c.magicHeart);
     if (hearts.length !== 1) add(`magic-heart:${key}`, 'magic', key, null, hearts.length ? `${hearts.length} magic hearts; there must be one` : 'no magic heart declared');
+  }
+
+  // magic across the cast (Magic-System §6, §6.1, §9 checks 4, 6 and 10)
+  const keys = Object.keys(files);
+  if (keys.length === FACTION_KEYS.length) {
+    const fifth = new Set();
+    for (const key of keys) {
+      const cs = files[key].characters || [];
+      const sides = cs.flatMap((c) => (c.secrets || []).filter((s) => s.key === 'magic' && s.side).map((s) => s.side));
+      if (sides.length && sides.every((sd) => sd === HOME_SIDE[key])) add(`magic-offside:${key}`, 'magic', key, null, `every magic secret is the home magic (${HOME_SIDE[key]}); one character should use another`);
+      for (const c of cs) if ((c.secrets || []).some((s) => s.stage === 5)) fifth.add(key);
+    }
+    if (fifth.size < 5) add('magic-stage5-spread', 'magic', null, null, `balance clues (stage 5) in ${fifth.size} factions; the rule is at least 5`);
+    const third = (m) => (m <= 3 ? 'early' : m <= 6 ? 'middle' : 'late');
+    const heartMap = {};
+    for (const key of keys) {
+      const heart = (files[key].characters || []).find((c) => c.magicHeart);
+      const at = heart && Object.entries(files[key].maps || {}).find(([, m]) => m.primary === heart.name);
+      if (at) heartMap[key] = +at[0];
+    }
+    const placed = Object.values(heartMap);
+    if (placed.length === keys.length) {
+      if (!placed.includes(1) || !placed.includes(9)) add('magic-hearts-ends', 'magic', null, null, 'no faction meets its magic heart first (map 1) or last (map 9)');
+      for (const t of ['early', 'middle', 'late']) if (placed.filter((m) => third(m) === t).length < 2) add(`magic-hearts-${t}`, 'magic', null, null, `fewer than two factions meet their magic heart in the ${t} maps`);
+      const order = PLANET_ORDER.filter((k) => heartMap[k]);
+      for (let i = 1; i < order.length; i++) if (third(heartMap[order[i]]) === third(heartMap[order[i - 1]])) add(`magic-hearts-neighbours:${order[i - 1]}-${order[i]}`, 'magic', order[i], null, `${order[i - 1]} and ${order[i]} are neighbouring homeworlds with their hearts both in the ${third(heartMap[order[i]])} maps`);
+    }
   }
 
   for (const key of FACTION_KEYS) {

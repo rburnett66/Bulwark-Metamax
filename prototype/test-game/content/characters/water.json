@@ -5,7 +5,9 @@
   "characters": [
     {
       "name": "Ferryman Old Brack",
-      "personality": "proud",
+      "personality": "wary",
+      "againstType": "unity (rival tribes)",
+      "againstTypeWhy": "The tribes will not share a shore. Every one of them shares his boat.",
       "relations": { "arcane": { "to": "neutral", "why": "Archivist Balthus buys his drowned ledgers, and pays fair." } },
       "lines": {
         "start": "Fare first, landwalker. The current can wait.",
@@ -13,18 +15,18 @@
         "lose": "One holding under. Ledger balanced. Fare, please."
       },
       "secrets": [
-        { "key": "want", "item": "brine-ice", "text": "He wants Brine Ice, to keep the dead cold on the long crossings.", "line": "Brine Ice. The long crossings run warm this year." },
-        { "key": "share", "text": "He'll carry a commander's cargo for free, once, if the fare is paid in work.", "line": "Do the work, and I'll waive the fare. Once.",
+        { "key": "want", "twist": "He keeps the dead cold so they keep. He is saving them for someone.", "item": "brine-ice", "text": "He wants Brine Ice, to keep the dead cold on the long crossings.", "line": "Brine Ice. The long crossings run warm this year." },
+        { "key": "share", "twist": "His free crossing is a debt. Every passenger he carries free, he carries to us.", "text": "He'll carry a commander's cargo for free, once, if the fare is paid in work.", "line": "Do the work, and I'll waive the fare. Once.",
           "mission": { "task": "Deliver 20 Brine Ice to Brack's landing.", "reward": { "kind": "gold", "amount": 250 } } },
-        { "key": "sense", "text": "He knows who will ride his boat next. They already look wet to him.", "line": "You look dry today. Good. Stay that way." },
-        { "key": "hate", "text": "He hates no tribe. He hates the war, which overloads his boat.", "line": "I hate no one. I hate a full boat." },
+        { "key": "sense", "side": "foresight", "depth": 1, "stage": 4, "text": "He knows who will ride his boat next. They already look wet to him.", "line": "You look dry today. Good. Stay that way." },
+        { "key": "hate", "twist": "He says he hates the war. He hates the drowned, because we are the only fares who never pay.", "text": "He hates no tribe. He hates the war, which overloads his boat.", "line": "I hate no one. I hate a full boat." },
         { "key": "desire", "text": "He wants one empty crossing before he dies.", "line": "One empty crossing. That's all I'm owed." },
-        { "key": "magic", "text": "His boat never sinks while the fare is paid, whatever the storm.", "line": "Paid fares don't sink. Storms know the rules.",
+        { "key": "magic", "side": "soul", "depth": 1, "stage": 1, "text": "His boat never sinks while the fare is paid, whatever the storm.", "line": "Paid fares don't sink. Storms know the rules.",
           "mission": { "task": "Pay the fare: finish a Rime map without losing a harvester.", "reward": { "kind": "resource", "item": "glacier-breath", "amount": 1 } } },
-        { "key": "love", "guard": "shame", "who": "Tide-Priestess Marena", "text": "He loved Tide-Priestess Marena when they were young. He chose the oar over her.", "line": "Marena and I were young once. I chose the oar." },
-        { "key": "treasure", "guard": "shame", "text": "His fare-chest sank in the drowned quarter, holding every fare, and the one he should have refused.", "line": "My fare-chest sank in the drowned quarter. Fetch it.",
+        { "key": "love", "guard": "fear", "twist": "He chose the oar over her. He will choose us over the oar, in the end.", "who": "Tide-Priestess Marena", "text": "He loved Tide-Priestess Marena when they were young. He chose the oar over her.", "line": "Marena and I were young once. I chose the oar." },
+        { "key": "treasure", "guard": "fear", "text": "His fare-chest sank in the drowned quarter, holding every fare, and the one he should have refused.", "line": "My fare-chest sank in the drowned quarter. Fetch it.",
           "mission": { "task": "Recover the fare-chest from the drowned quarter on Rime map 1.", "reward": { "kind": "xp", "amount": 200 } } },
-        { "key": "sorrow", "guard": "shame", "text": "He once rowed Drowned Kael's raiders to the Reef-Born shoal, for the fare.", "line": "I rowed Kael's raiders to the shoal. They paid." }
+        { "key": "sorrow", "twist": "He rowed the raiders to the shoal and took their coin. Ask him how much.", "guard": "shame", "text": "He once rowed Drowned Kael's raiders to the Reef-Born shoal, for the fare.", "line": "I rowed Kael's raiders to the shoal. They paid." }
       ]
     },
     {
@@ -37,14 +39,14 @@
         "lose": "Don't sulk. The current picked me. I'll buy a drink."
       },
       "secrets": [
-        { "key": "sense", "text": "He feels a storm in his back teeth a day before the sky does.", "line": "Teeth ache. Storm by morning, friend." },
-        { "key": "magic", "text": "Any knot he ties holds until he laughs. Then it slips loose.", "line": "My knots hold till I laugh. So don't be funny.",
+        { "key": "sense", "side": "body", "depth": 0, "stage": 1, "text": "He feels a storm in his back teeth a day before the sky does.", "line": "Teeth ache. Storm by morning, friend." },
+        { "key": "magic", "side": "soul", "depth": 1, "stage": 1, "text": "Any knot he ties holds until he laughs. Then it slips loose.", "line": "My knots hold till I laugh. So don't be funny.",
           "mission": { "task": "Tie the line: win a Rime map without losing a wall.", "reward": { "kind": "gold", "amount": 250 } } },
         { "key": "love", "who": "Heretic Isolde", "text": "He loves Heretic Isolde of the Arcane, the enemy. She set his sails alight; he proposed.", "line": "A heretic set my sails on fire. I proposed." },
         { "key": "want", "item": "ember-obsidian", "text": "He wants Ember Obsidian. It stays warm, like a certain heretic.", "line": "Ember Obsidian. For someone warm. Don't ask." },
         { "key": "share", "text": "He'll split any haul with a commander who sails straight.", "line": "Sail straight with me, and we split the haul.",
           "mission": { "task": "Harvest 40 resources on one Rime map.", "reward": { "kind": "resource", "item": "frost-pearl", "amount": 3 } } },
-        { "key": "hate", "text": "He hates Abyssal Sovereign Thal, who taxes the currents.", "line": "Thal taxes the currents. Currents are free!" },
+        { "key": "hate", "twist": "The corsair hates my taxes because he has never paid for anything.", "text": "He hates Abyssal Sovereign Thal, who taxes the currents.", "line": "Thal taxes the currents. Currents are free!" },
         { "key": "treasure", "text": "A ship in a bottle, carved by his father, lost when the Gull went down.", "line": "Dad's bottled ship sank with the Gull. Find it?",
           "mission": { "task": "Search the wreck of the Gull on Rime map 2.", "reward": { "kind": "xp", "amount": 150 } } },
         { "key": "desire", "text": "He wants to sail off the edge of the map, just to see.", "line": "One day I sail off the map. Just to look." },
@@ -61,14 +63,14 @@
         "lose": "Count your losses. I've a gunner to find."
       },
       "secrets": [
-        { "key": "hate", "text": "She hates Warlord-Gunner Vex Marrow, whose guns shelled her reef.", "line": "Vex Marrow shelled my reef. He still breathes." },
+        { "key": "hate", "twist": "She hates my guns because her reef was hiding raiders. I hit what I aimed at.", "text": "She hates Warlord-Gunner Vex Marrow, whose guns shelled her reef.", "line": "Vex Marrow shelled my reef. He still breathes." },
         { "key": "desire", "text": "She wants Marrow sunk, and then a reef to rebuild.", "line": "Avenge first. Then rebuild. In that order." },
         { "key": "want", "item": "ghost-brass", "text": "She wants Ghost Brass, to cast a harpoon from Marrow's own metal.", "line": "Ghost Brass. I'll give Marrow his metal back." },
-        { "key": "sense", "text": "She hears the dead coral sing wherever shells have fallen.", "line": "The dead coral sings here. Shells fell close." },
+        { "key": "sense", "side": "body", "depth": 0, "stage": 1, "text": "She hears the dead coral sing wherever shells have fallen.", "line": "The dead coral sings here. Shells fell close." },
         { "key": "share", "text": "She'll share the reef's salvage with anyone who helps rebuild it.", "line": "Help me rebuild, and half the salvage is yours.",
           "mission": { "task": "Deliver 20 Frost Pearl to the reef-builders.", "reward": { "kind": "gold", "amount": 300 } } },
         { "key": "love", "guard": "fear", "who": "Chieftain Coral of the Reef-Born", "text": "She loves her elder sister, Chieftain Coral, and fears Coral will forgive the gunner.", "line": "Coral's my sister. She forgives too easily." },
-        { "key": "magic", "text": "When she calls, the sea rises one wave higher than it should.", "line": "I call, and the sea comes one wave higher.",
+        { "key": "magic", "side": "body", "depth": 1, "stage": 1, "text": "When she calls, the sea rises one wave higher than it should.", "line": "I call, and the sea comes one wave higher.",
           "mission": { "task": "Call the tide: win a Rime map with no wave reaching the base.", "reward": { "kind": "alignment", "amount": 2 } } },
         { "key": "sorrow", "guard": "fear", "text": "She was out hunting when the shells fell. Her apprentices were on the reef.", "line": "I was away. My apprentices were on the reef." },
         { "key": "treasure", "text": "The reef's heart-stone survived the shelling, buried under the rubble.", "line": "The reef's heart-stone survived. Help me lift it.",
@@ -77,7 +79,7 @@
     },
     {
       "name": "Chieftain Coral of the Reef-Born",
-      "personality": "open-hearted",
+      "personality": "devoted",
       "relations": { "arcane": { "to": "wary", "why": "Lightbearer Cassian hid her children from Kael." } },
       "lines": {
         "start": "Shield the shoal, landwalker. Don't scatter it.",
@@ -85,17 +87,17 @@
         "lose": "No joy in it. The reef will mourn you."
       },
       "secrets": [
-        { "key": "love", "who": "Corsair Finn Saltmoor", "text": "She loves Corsair Finn Saltmoor, who smuggles her people to safety and never stays.", "line": "Finn smuggles my people to safety. Then he leaves." },
-        { "key": "sorrow", "text": "She was promised to Drowned Kael once. She fled the wedding, and his raiding began.", "line": "I fled a wedding to Kael. The raids came after." },
-        { "key": "share", "text": "She'll open the shoal's pearl-store to anyone who guards its children.", "line": "Guard the shoal's children, and the pearls are yours.",
+        { "key": "love", "guard": "loyalty", "twist": "She gives the shoal's pearls to a smuggler who would sell her for a tide.", "who": "Corsair Finn Saltmoor", "text": "She loves Corsair Finn Saltmoor, who smuggles her people to safety and never stays.", "line": "Finn smuggles my people to safety. Then he leaves." },
+        { "key": "sorrow", "twist": "She broke her word at the altar, and blames me for keeping mine in blood.", "text": "She was promised to Drowned Kael once. She fled the wedding, and his raiding began.", "line": "I fled a wedding to Kael. The raids came after." },
+        { "key": "share", "twist": "Her pearl-store buys guards who answer to her, not to the shoal.", "text": "She'll open the shoal's pearl-store to anyone who guards its children.", "line": "Guard the shoal's children, and the pearls are yours.",
           "mission": { "task": "Finish a Rime map with every harvester alive.", "reward": { "kind": "resource", "item": "frost-pearl", "amount": 4 } } },
-        { "key": "hate", "text": "She hates Drowned Kael's nets, and hates that she still hates him.", "line": "Kael's nets take children. I can't stop hating him." },
-        { "key": "want", "item": "frost-pearl", "text": "She wants Frost Pearls, to buy back the children Kael's nets take.", "line": "Frost Pearls. Kael sells back what he takes." },
+        { "key": "hate", "twist": "She hates my nets because they bring back what she lost when she ran.", "text": "She hates Drowned Kael's nets, and hates that she still hates him.", "line": "Kael's nets take children. I can't stop hating him." },
+        { "key": "want", "twist": "She buys back children with pearls she took from their parents.", "item": "frost-pearl", "text": "She wants Frost Pearls, to buy back the children Kael's nets take.", "line": "Frost Pearls. Kael sells back what he takes." },
         { "key": "desire", "text": "She wants both tribes at one fire again.", "line": "One fire, both tribes. I'll see it yet." },
-        { "key": "sense", "text": "She feels every child of the shoal as a pull on her ribs.", "line": "Someone small is in the water. I feel it." },
-        { "key": "treasure", "text": "The ancestors' conch, which calls the whole shoal home, lost in the sunken shrine.", "line": "The ancestors' conch is lost. It calls everyone home.",
+        { "key": "sense", "side": "soul", "depth": 1, "stage": 1, "text": "She feels every child of the shoal as a pull on her ribs.", "line": "Someone small is in the water. I feel it." },
+        { "key": "treasure", "guard": "loyalty", "text": "The ancestors' conch, which calls the whole shoal home, lost in the sunken shrine.", "line": "The ancestors' conch is lost. It calls everyone home.",
           "mission": { "task": "Recover the conch from the sunken shrine on Rime map 4.", "reward": { "kind": "loyalty", "amount": 40 } } },
-        { "key": "magic", "text": "Where she plants her spear, the reef grows back overnight.", "line": "Where my spear stands, the reef regrows.",
+        { "key": "magic", "side": "body", "depth": 2, "stage": 1, "text": "Where she plants her spear, the reef grows back overnight.", "line": "Where my spear stands, the reef regrows.",
           "mission": { "task": "Plant the spear: build six walls on one Rime map.", "reward": { "kind": "xp", "amount": 200 } } }
       ]
     },
@@ -119,8 +121,8 @@
         { "key": "love", "who": "Chieftain Coral of the Reef-Born", "text": "He loves Chieftain Coral, who fled their wedding. So he hunts her.", "line": "Coral fled me. So I hunt her. Forever.",
           "lie": { "text": "He says he loves nothing but the hunt.", "line": "Love? I love the hunt, landwalker.", "until": 80 } },
         { "key": "hate", "text": "He hates Wavecaller Nerea, who sank his flagship.", "line": "Nerea sank my flagship. I'll take her sister." },
-        { "key": "sense", "text": "He tastes fear in the water, like blood.", "line": "Mmm. Someone's scared. The water tastes of it." },
-        { "key": "magic", "text": "He drowned once, given to the tide by Marena. The sea spat him back.", "line": "The sea drowned me once. It spat me back.",
+        { "key": "sense", "side": "body", "depth": 0, "stage": 1, "text": "He tastes fear in the water, like blood.", "line": "Mmm. Someone's scared. The water tastes of it." },
+        { "key": "magic", "side": "body", "depth": 2, "stage": 1, "text": "He drowned once, given to the tide by Marena. The sea spat him back.", "line": "The sea drowned me once. It spat me back.",
           "mission": { "task": "Raid hard: destroy 50 enemies in one wave on Rime.", "reward": { "kind": "xp", "amount": 150 } } },
         { "key": "desire", "text": "He wants Coral to look at him once.", "line": "I want Coral to look at me. Just once." },
         { "key": "sorrow", "guard": "shame", "text": "He burned the wedding boats himself, drunk. Coral ran from the fire.", "line": "I burned the wedding boats. She ran from me." }
@@ -129,6 +131,7 @@
     {
       "name": "Tide-Priestess Marena",
       "personality": "devoted",
+      "magicHeart": true,
       "relations": { "arcane": { "to": "neutral", "why": "She and Hierophant Aurelia both pray for balance." } },
       "lines": {
         "start": "Be still, landwalker. Let the tide read you.",
@@ -136,16 +139,16 @@
         "lose": "Poor drowned thing. The tide doesn't hate you. Rest."
       },
       "secrets": [
-        { "key": "magic", "text": "She can read a stranger's whole life in the tide they stand in.", "line": "Be still. The tide is reading you.",
+        { "key": "magic", "reach": "close", "reachWhy": "The tide-folk know she has read them. They stand in shallow water when they lie.", "side": "brain", "depth": 2, "stage": 2, "text": "She can read a stranger's whole life in the tide they stand in.", "line": "Be still. The tide is reading you.",
           "mission": { "task": "Let the tide read you: finish a Water mission without breaking it.", "reward": { "kind": "loyalty", "amount": 30 } } },
-        { "key": "hate", "text": "She hates Leviathan-Binder Morgause, who would wake what the deep keeps asleep.", "line": "Morgause would wake the deep. It must sleep." },
+        { "key": "hate", "twist": "She hates me because I would wake what she keeps asleep, and it would thank me.", "text": "She hates Leviathan-Binder Morgause, who would wake what the deep keeps asleep.", "line": "Morgause would wake the deep. It must sleep." },
         { "key": "share", "text": "She shares the shoal-shrine's offerings, freely, with anyone who keeps the balance.", "line": "Keep the balance, and the shrine gives freely.",
           "mission": { "task": "Win Rime map 6 at three stars.", "reward": { "kind": "resource", "item": "glacier-breath", "amount": 2 } } },
         { "key": "love", "guard": "loyalty", "who": "Hierophant Aurelia", "text": "She loves Hierophant Aurelia of the Arcane, her tribe's oldest enemy.", "line": "Aurelia prays to fire. I pray for her anyway." },
         { "key": "want", "item": "glacier-breath", "text": "She wants Glacier Breath, to cool the trench where the leviathan sleeps.", "line": "Glacier Breath. The trench is growing warm." },
         { "key": "treasure", "guard": "loyalty", "text": "The tide-tablets, which say the deep once chose a different tribe.", "line": "The tide-tablets say we weren't first. Bring them.",
           "mission": { "task": "Recover the tide-tablets from the drowned shrine on Rime map 6.", "reward": { "kind": "xp", "amount": 300 } } },
-        { "key": "sense", "text": "She feels the leviathan's breath as a slow pulse in the sea floor.", "line": "Feel that? The deep breathed. Slowly, still." },
+        { "key": "sense", "side": "body", "depth": 1, "stage": 1, "text": "She feels the leviathan's breath as a slow pulse in the sea floor.", "line": "Feel that? The deep breathed. Slowly, still." },
         { "key": "desire", "text": "She wants the leviathan to sleep past her lifetime, and long after.", "line": "Let it sleep until I'm gone. Then longer." },
         { "key": "sorrow", "guard": "loyalty", "text": "She gave Kael to the tide once, for his raids. The sea returned him worse.", "line": "I gave Kael to the tide. It sent him back." }
       ]
@@ -163,10 +166,10 @@
         { "key": "share", "text": "There is no sharing. The price of waking the leviathan is a commander's base.", "line": "The price of waking is your base. Sorry.",
           "lie": { "text": "She offers to share the leviathan's power with whoever helps wake it.", "line": "Help me wake it, and we share the power.", "until": 60 },
           "mission": { "task": "Dredge the trench: harvest 30 Glacier Breath on one map.", "reward": { "kind": "gold", "amount": 400 } } },
-        { "key": "sense", "text": "She hears debts. Every unpaid promise hums like struck glass.", "line": "Somebody owes somebody. I can hear it hum." },
+        { "key": "sense", "side": "soul", "depth": 1, "stage": 1, "text": "She hears debts. Every unpaid promise hums like struck glass.", "line": "Somebody owes somebody. I can hear it hum." },
         { "key": "want", "item": "leviathan-scale", "text": "She wants a Leviathan Scale, to write the binding on.", "line": "A Leviathan Scale. Contracts need good paper." },
         { "key": "hate", "text": "She hates Tide-Priestess Marena, who keeps the deep asleep for nothing.", "line": "Marena gives the deep away for free. Waste." },
-        { "key": "magic", "guard": "control", "text": "Any bargain she seals binds the sea itself to its terms.", "line": "Bargain with me. The sea will enforce it.",
+        { "key": "magic", "side": "soul", "depth": 2, "stage": 1, "guard": "control", "text": "Any bargain she seals binds the sea itself to its terms.", "line": "Bargain with me. The sea will enforce it.",
           "mission": { "task": "Seal a bargain: keep three Water missions in a row.", "reward": { "kind": "resource", "item": "leviathan-scale", "amount": 1 } } },
         { "key": "love", "guard": "control", "who": "Abyssal Sovereign Thal", "text": "She loves Abyssal Sovereign Thal, the one weight she cannot move.", "line": "Thal can't be bought. I find that unbearable.",
           "lie": { "text": "She says she wakes the leviathan as a gift for Thal.", "line": "The leviathan is a gift for my Sovereign.", "until": 80 } },
@@ -178,7 +181,7 @@
     },
     {
       "name": "Abyssal Sovereign Thal",
-      "personality": "proud",
+      "personality": "schemer",
       "relations": { "arcane": { "to": "wary", "why": "He respects the Ordained Prime's Law as kindred order." } },
       "lines": {
         "start": "Kneel to the weight, landwalker.",
@@ -186,16 +189,16 @@
         "lose": "As ordered. Sink, and be corrected."
       },
       "secrets": [
+        { "key": "share", "text": "He gives a fallen trench-lord's hoard to commanders who obey.", "line": "Obey, and a trench-lord's hoard is yours.",
+          "mission": { "task": "Win Rime map 8 without a wave reaching the base.", "reward": { "kind": "gold", "amount": 500 } } },
         { "key": "desire", "text": "He wants the surface to kneel, and then the sky.", "line": "The surface will kneel. Then the sky.",
           "lie": { "text": "He says he wants only order in the deep.", "line": "I want order, landwalker. Nothing more.", "until": 30 } },
         { "key": "hate", "text": "He hates The Undertow, which takes everything and makes nothing kneel.", "line": "The Undertow takes all and rules nothing. Obscene." },
-        { "key": "share", "text": "He gives a fallen trench-lord's hoard to commanders who obey.", "line": "Obey, and a trench-lord's hoard is yours.",
-          "mission": { "task": "Win Rime map 8 without a wave reaching the base.", "reward": { "kind": "gold", "amount": 500 } } },
         { "key": "want", "item": "dreadnought-core", "text": "He wants a Dreadnought Core. He likes things heavier than himself.", "line": "A Dreadnought Core. I like a worthy weight." },
-        { "key": "sense", "text": "He feels every bowed head in the ocean as weight on his crown.", "line": "Fewer heads bowed today. I feel it." },
-        { "key": "treasure", "guard": "shame", "text": "His crown is hollow. The Undertow took the real one.", "line": "My crown is hollow. The Undertow has the real one.",
+        { "key": "sense", "side": "soul", "depth": 1, "stage": 1, "text": "He feels every bowed head in the ocean as weight on his crown.", "line": "Fewer heads bowed today. I feel it." },
+        { "key": "treasure", "guard": "control", "text": "His crown is hollow. The Undertow took the real one.", "line": "My crown is hollow. The Undertow has the real one.",
           "mission": { "task": "Dive for the drowned crown on Rime map 9.", "reward": { "kind": "resource", "item": "leviathan-scale", "amount": 1 } } },
-        { "key": "magic", "text": "Pressure obeys his voice. He can make a wall kneel.", "line": "Walls kneel when I speak. Watch.",
+        { "key": "magic", "side": "body", "depth": 2, "stage": 1, "text": "Pressure obeys his voice. He can make a wall kneel.", "line": "Walls kneel when I speak. Watch.",
           "mission": { "task": "Bear the weight: win a Rime map with every wall standing.", "reward": { "kind": "xp", "amount": 250 } } },
         { "key": "love", "guard": "shame", "who": "Leviathan-Binder Morgause", "text": "He loves Morgause, who plots to drown him. He knows, and lets her.", "line": "Morgause plots to drown me. I let her." },
         { "key": "sorrow", "guard": "shame", "text": "He was born a fisherman's son on the surface, and sank himself to rule.", "line": "I was a fisherman's son. I sank to rule." }
@@ -214,11 +217,11 @@
         { "key": "sorrow", "text": "It was a drowned fleet once: the sailors of both tribes, lost in the first tribal war.", "line": "We were a fleet. Both tribes. Nobody came." },
         { "key": "love", "who": "Ferryman Old Brack", "text": "It loves Ferryman Old Brack, the only one who always rows away from it.", "line": "Brack rows away from us. We wait for him.",
           "lie": { "text": "It says it loves everyone the same.", "line": "We love you all the same, landwalker.", "until": 42 } },
-        { "key": "sense", "text": "It feels every held breath in the sea, and counts them.", "line": "Someone is holding their breath. Not for long." },
+        { "key": "sense", "side": "body", "depth": 1, "stage": 1, "text": "It feels every held breath in the sea, and counts them.", "line": "Someone is holding their breath. Not for long." },
         { "key": "share", "text": "Those who let go are never let back up.", "line": "Nobody who lets go comes back up.",
           "lie": { "text": "It offers rest: let go, and the fighting stops.", "line": "Let go, and the fighting stops. Promise.", "until": 60 },
           "mission": { "task": "Win a Rime map after the base takes damage.", "reward": { "kind": "gold", "amount": 200 } } },
-        { "key": "magic", "text": "Anything it touches forgets its name.", "line": "Touch the water. Forget your name.",
+        { "key": "magic", "side": "brain", "depth": 2, "stage": 1, "text": "Anything it touches forgets its name.", "line": "Touch the water. Forget your name.",
           "mission": { "task": "Erase the marks: destroy 60 enemies in one wave on Rime.", "reward": { "kind": "xp", "amount": 200 } } },
         { "key": "want", "item": "choir-lily", "text": "It wants a Choir Lily. Even a flower's song should drown.", "line": "Bring us a Choir Lily. It sings too much." },
         { "key": "hate", "text": "It hates the surface, where people still keep things.", "line": "Up there, people keep things. Names. Grudges." },

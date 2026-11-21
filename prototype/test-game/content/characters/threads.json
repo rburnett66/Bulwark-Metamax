@@ -501,7 +501,9 @@
    "to": "CFO Julian Vance",
    "kind": "love",
    "public": false,
-   "note": "Artillery love secret"
+   "note": "Artillery love secret",
+   "tag": "star-crossed",
+   "why": "the logistician loves the rival CFO who audits him"
   },
   {
    "from": "Spotter \"Ricochet\" Deacon",
@@ -620,7 +622,9 @@
    "to": "Tide-Priestess Marena",
    "kind": "love",
    "public": false,
-   "note": "Water love secret"
+   "note": "Water love secret",
+   "tag": "star-crossed",
+   "why": "he has carried her drowned for forty years"
   },
   {
    "from": "Corsair Finn Saltmoor",
@@ -648,14 +652,18 @@
    "to": "Corsair Finn Saltmoor",
    "kind": "love",
    "public": false,
-   "note": "Water love secret"
+   "note": "Water love secret",
+   "tag": "star-crossed",
+   "why": "a chieftain bound to the shoal, in love with a corsair who never stays"
   },
   {
    "from": "Raider-Chief Drowned Kael",
    "to": "Chieftain Coral of the Reef-Born",
    "kind": "love",
    "public": false,
-   "note": "Water love secret"
+   "note": "Water love secret",
+   "tag": "TW",
+   "why": "the raider still loves the bride who fled"
   },
   {
    "from": "Raider-Chief Drowned Kael",
@@ -711,14 +719,18 @@
    "to": "Ferryman Old Brack",
    "kind": "love",
    "public": false,
-   "note": "Water love secret"
+   "note": "Water love secret",
+   "tag": "star-crossed",
+   "why": "the drowned love the ferryman who brings them everyone"
   },
   {
    "from": "Archivist Balthus",
    "to": "Hierophant Aurelia",
    "kind": "love",
    "public": false,
-   "note": "Arcane / Energy love secret"
+   "note": "Arcane / Energy love secret",
+   "tag": "star-crossed",
+   "why": "the archivist who keeps her heresies on file loves the Hierophant who would burn the file"
   },
   {
    "from": "Heretic Isolde",
@@ -781,7 +793,9 @@
    "to": "Heretic Isolde",
    "kind": "love",
    "public": false,
-   "note": "Arcane / Energy love secret"
+   "note": "Arcane / Energy love secret",
+   "tag": "RE",
+   "why": "she hunts the heretic she loves"
   },
   {
    "from": "Inquisitor Mordane",
@@ -793,9 +807,11 @@
   {
    "from": "Inquisitor Mordane",
    "to": "Heretic Isolde",
-   "kind": "love",
+   "kind": "kin",
    "public": false,
-   "note": "Arcane / Energy love secret"
+   "note": "Arcane / Energy love secret",
+   "tag": "RE",
+   "why": "his sister, the heretic he hunts (Isolde misses the brother inside him)"
   },
   {
    "from": "The Ordained Prime, Vaelith",
@@ -919,9 +935,10 @@
   {
    "from": "Admiral Sarn",
    "to": "Cadet-Prodigy Ezra \"Comet\" Lin",
-   "kind": "love",
+   "kind": "kin",
    "public": false,
-   "note": "Space Tech love secret"
+   "note": "Space Tech love secret",
+   "why": "his son"
   },
   {
    "from": "Grand-Cartographer Ophir",
@@ -942,7 +959,9 @@
    "to": "Navigator AI \"Vector\"",
    "kind": "love",
    "public": false,
-   "note": "Space Tech love secret"
+   "note": "Space Tech love secret",
+   "tag": "star-crossed",
+   "why": "the Signal wants the navigator that carried the colony to it"
   },
   {
    "from": "The Signal",
@@ -963,7 +982,9 @@
    "to": "The Reformer Elias",
    "kind": "love",
    "public": false,
-   "note": "Dark Energy love secret"
+   "note": "Dark Energy love secret",
+   "tag": "star-crossed",
+   "why": "she edits the reformer she cannot follow"
   },
   {
    "from": "Firebrand Lux",
@@ -1089,7 +1110,9 @@
    "to": "Delegate Fenn",
    "kind": "love",
    "public": false,
-   "note": "Greenies (Chem) love secret"
+   "note": "Greenies (Chem) love secret",
+   "tag": "star-crossed",
+   "why": "the composter loves the voice that carries every count"
   },
   {
    "from": "Splinter \"Wildseed\" Ovo",
@@ -1188,6 +1211,41 @@
    "kind": "rival",
    "public": false,
    "note": "Greenies (Chem) hate secret"
+  },
+  {
+   "from": "Enforcer Grael",
+   "to": "Black-ops broker Sable Reyes",
+   "kind": "uses",
+   "public": false,
+   "note": "High Tech map 5 secondary: Sable sold him a name"
+  },
+  {
+   "from": "CEO Adrian Sterling",
+   "to": "Chancellor Wilhelmina Graf",
+   "kind": "uses",
+   "public": false,
+   "note": "High Tech map 8 secondary: his money keeps her order"
+  },
+  {
+   "from": "Ferryman Old Brack",
+   "to": "Navigator AI \"Vector\"",
+   "kind": "comrade",
+   "public": true,
+   "note": "Space map 1 secondary: their charts agree"
+  },
+  {
+   "from": "The Hollow Prophet",
+   "to": "The Signal",
+   "kind": "confidant",
+   "public": false,
+   "note": "Space map 9 secondary: one silence"
+  },
+  {
+   "from": "Sergeant \"Bricks\" Malloy",
+   "to": "Corsair Finn Saltmoor",
+   "kind": "comrade",
+   "public": true,
+   "note": "Water map 2 secondary: a bar tab between them"
   }
  ]
 }

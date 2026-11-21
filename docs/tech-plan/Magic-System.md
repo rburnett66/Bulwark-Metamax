@@ -209,8 +209,24 @@ pattern and has to read each faction fresh:
 - the heart's magic secret is reachable as a rumour from at least one other character in its faction (close reach),
   so the player can work out who it is before meeting them.
 
-The hearts are chosen in the cast rework (MM-story_mwohmp8n_30), listed for the owner. Powder's is a natural first
-proposal: Seraphine's standard (Soul, group motivation).
+**Chosen in the cast rework** (MM-story_mwpredwp_3u), in campaign order. Neighbours alternate between the thirds:
+
+| Homeworld | Magic heart | Map | Third | Magic |
+|---|---|---|---|---|
+| Powder | Field-Marshal Seraphine von Halbrecht | 6 | middle | Soul: her standard keeps troops standing |
+| Air | The Nightingale (ghost squadron) | 9 | late | Soul: fliers it marks cannot be heard |
+| High Tech | Actuary Devlin Cho | 1 | early | Soul: the odds he writes come true ("science calls it luck") |
+| Artillery | Grand-Bombardier Seline Voss | 8 | late | Soul: every crater she digs is answered in her enemy's house |
+| Water | Tide-Priestess Marena | 6 | middle | Brain: she reads a stranger's whole life in the tide |
+| Arcane | The Unmade Choir (extreme) | 9 | late | Soul: where it passes, sound stops |
+| Space | Cadet-Prodigy Ezra "Comet" Lin | 2 | early | Foresight: four moves ahead, when no one watches |
+| Dark | The Reformer Elias | 6 | middle | Soul: no one who hears him out can hate him |
+| Greenies | Splinter "Wildseed" Ovo | 2 | early | Soul: a thing he names leaves the bloom |
+
+Each heart's magic secret is known to their circle (reach close), so it can come out as a rumour before the player
+meets them. **Extremes** (depth 3, each with its cost written): the Unmade Choir (Soul), the Signal (Brain), the Hollow
+Prophet (Brain: a name it speaks is forgotten) and the Root-Mind (Craft). **Balance clues** (stage 5) sit in six
+Balance-Keepers' sense secrets: Reiko Kurogane, Seline Voss, Vaelith, Ophir, Malis and Mother-Spore Ilya.
 
 ## 7. Magic in play: the MAGIC tree and three skills
 
