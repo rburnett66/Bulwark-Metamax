@@ -75,3 +75,15 @@ export function unlockProgress(s, cropId) {
   const need = unlockUnits(), delivered = cropDelivered(s, cropId);
   return { delivered, need, open: podsUnlocked(s, cropId) };
 }
+
+/**
+ * How to unlock a crop's pods, in the player's words (owner 2026-11-21: "the tree can hint at how to unlock crops")
+ * [MM-story_mwpyr9zs_44]. A battle crop: harvest it on its planet's maps (its tier names which deposit), and farm sales
+ * count too. A farm-only new material (Helium-4): no battle carries it, so its pods come from a farming contract.
+ */
+export function unlockHint(cropId) {
+  const c = cropOf(cropId);
+  if (!c) return '';
+  if (c.newMaterial) return `${c.name} is a farm-only material: ${c.planet}'s battles carry a different one, so its first pods will come from a farming contract.`;
+  return `Deliver ${unlockUnits().toLocaleString('en-US')} ${c.name}, the ${c.tier} resource on ${c.planet}'s maps: every unit your harvesters bring home counts, and every farm sale or delivery.`;
+}

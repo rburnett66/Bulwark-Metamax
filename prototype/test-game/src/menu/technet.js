@@ -474,6 +474,11 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
     const pr = n.progress ? cropsUnlockedOf(n, ctx) + ' / ' + n.crops.length + ' CROPS' : n.soon ? 'COMING SOON' : n.milestone ? (st === 'owned' ? (sandbox ? '✓ CLEARED' : '✓ WON') : 'MILESTONE')
       : st === 'owned' ? '✓ ' + (n.free ? 'OWNED' : 'RESEARCHED') : n.free ? 'FREE' : priceOf(n).toLocaleString() + 'g';
     v.lbl.innerHTML = n.name + '<small>' + pr + '</small>';
+    if (v.seeds) for (const sd of v.seeds) {   // each pod: unlocked or not, and its crop's level colour (read on refresh, not per frame)
+      sd.on = !!(ctx.cropsUnlocked && ctx.cropsUnlocked.has(sd.id));
+      const info = sd.on && ctx.cropInfo ? ctx.cropInfo(sd.id) : null;
+      sd.col = info ? col(info.colour) : null;
+    }
     v.lblW = n.name.length * 8 + 14;
   }
   const tmpV = new THREE.Vector3(), lblOff = new THREE.Vector3();
@@ -560,6 +565,18 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
   }).join('') + '</div>';
   const refBtn = (id) => { const st = vv(id).st; return '<button class="ref" data-go="' + id + '"><i class="dot s-' + st + '"></i>' + BY[id].name + '<span class="rp">' + STATUS_TXT[st] + '</span></button>'; };
   let panelMsg = '';
+  // one crop in a planet's SEED PODS panel (owner 2026-11-21 [MM-story_mwpyr9zs_44]): its level and mastery once its pods
+  // are unlocked; before that, how to unlock it. Crop levels are presented here, never bought.
+  const cropSub = (t) => '<div class="gate s-locked" style="padding-left:16px;font-size:11px;opacity:.85">' + t + '</div>';
+  function cropRow(id) {
+    const on = !!(ctx.cropsUnlocked && ctx.cropsUnlocked.has(id)), info = ctx.cropInfo ? ctx.cropInfo(id) : null;
+    if (!info) return '<div class="gate ' + (on ? 's-owned' : 's-locked') + '">' + (on ? '◆ ' : '◇ ') + id + (on ? ' · pods unlocked' : ' · locked') + '</div>';
+    if (!info.unlocked) return '<div class="gate s-locked">◇ <b>' + info.name + '</b> · locked · ' + info.delivered.toLocaleString() + ' / ' + info.need.toLocaleString() + ' delivered</div>' + cropSub(info.hint);
+    const lv = '<b style="color:' + info.colour + '">L' + info.level + ' ' + info.levelName + '</b>';
+    const nx = info.next ? 'Mastery ' + Math.floor(Math.min(info.next.have, info.next.need)).toLocaleString() + ' / ' + info.next.need.toLocaleString() + ' to L' + info.next.level
+      + (info.next.machineName ? ' · needs the ' + info.next.machineName : '') : 'Fully mastered (L' + info.mastered + ')';
+    return '<div class="gate s-owned">◆ <b>' + info.name + '</b> · ' + lv + '</div>' + cropSub(nx) + (info.why ? cropSub('Held at L' + info.level + ': ' + info.why) : '');
+  }
   function renderPanel() {
     if (!selId) { panel.classList.remove('open'); return; }
     const n = BY[selId], st = vv(selId).st, c = n.kind === 'ult' ? '#ffd34a' : DIV[n.div].color;
@@ -571,8 +588,7 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
     h += '<div class="srow"><span class="badge s-' + st + '">' + (n.progress ? k + ' / ' + n.crops.length + ' CROPS UNLOCKED' : STATUS_TXT[st]) + '</span><span class="price">' + pr + '</span></div>';
     h += '<p class="desc">' + n.desc + '</p>';
     if (n.progress) {
-      h += '<h4>CROPS</h4>' + n.crops.map((id) => { const on = !!(ctx.cropsUnlocked && ctx.cropsUnlocked.has(id)), c = ctx.cropName ? ctx.cropName(id) : id;
-        return '<div class="gate ' + (on ? 's-owned' : 's-locked') + '">' + (on ? '◆ ' : '◇ ') + c + (on ? ' · pods unlocked' : ctx.cropProgress ? ' · ' + ctx.cropProgress(id) : ' · locked') + '</div>'; }).join('');
+      h += '<h4>CROPS</h4>' + n.crops.map((id) => cropRow(id)).join('');
       h += '<div class="msg">' + panelMsg + '</div>';
       panel.innerHTML = h; panel.classList.add('open');
       return;
@@ -729,8 +745,9 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
       if (v.spin && v.mesh) v.mesh.rotation.y += v.spin * 0.016;
       if (v.seeds) v.body.emissiveIntensity = Math.min(v.body.emissiveIntensity, 0.3 * v.dim);   // the pad stays low: its pods carry the count
       if (v.seeds) for (const sd of v.seeds) {
-        const on = !!(ctx.cropsUnlocked && ctx.cropsUnlocked.has(sd.id));
-        sd.m.emissive.copy(on ? v.color : tc.copy(v.color).lerp(LOCKED_C, 0.7)); sd.m.emissiveIntensity = (on ? 1.5 : 0.12) * v.dim; sd.m.opacity = 0.3 + 0.7 * v.dim;
+        const on = sd.on;
+        sd.m.emissive.copy(on ? (sd.col || v.color) : tc.copy(v.color).lerp(LOCKED_C, 0.7));   // lit in the crop's level colour
+        sd.m.emissiveIntensity = (on ? 0.7 : 0.12) * v.dim;   // low enough that bloom keeps the level's colour sd.m.opacity = 0.3 + 0.7 * v.dim;
       }
       if (n.kind === 'ult') { v.g.rotation.y += 0.004; v.g.position.y = ULT_Y + Math.sin(t * 0.8) * 0.6; if (v.beam) v.beam.material.opacity = (st === 'owned' ? 0.35 : 0.08 + 0.05 * pulse) * v.dim; }
       if (n.kind === 'craft') v.g.position.y = v.pos.y + Math.sin(t * 1.3 + v.pos.x) * 0.25;

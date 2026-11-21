@@ -91,3 +91,25 @@ test('old saves: bought crop nodes are refunded and become mastery, so the level
   assert.equal(m.carry.gold, 1500);
   assert.equal(m.mastery['elder-bloom'], 100);
 });
+
+// [MM-story_mwpyr9zs_44] owner 2026-11-21: "The crop upgrades are presented in the tech tree, and the tree can hint at how
+// to unlock crops."
+test('the tech tree presents each crop: locked with a hint and progress, else its level, mastery and the next machine', async () => {
+  const { cropInfo } = await import('../menu/techSave.js');
+  const { unlockHint } = await import('./unlock.js');
+  const s = defaultSave();
+  s.cropDelivered['petal-silk'] = 120;
+  let i = cropInfo(s, 'petal-silk');
+  assert.deepEqual([i.unlocked, i.delivered, i.need], [false, 120, 500]);
+  assert.equal(i.hint, 'Deliver 500 Petal Silk, the common resource on Florael\'s maps: every unit your harvesters bring home counts, and every farm sale or delivery.');
+  assert.match(unlockHint('helium-4'), /farm-only material.*farming contract/);
+  s.podUnlocks['loam-grain'] = true; s.mastery['loam-grain'] = 450;
+  i = cropInfo(s, 'loam-grain');
+  assert.deepEqual([i.unlocked, i.level, i.levelName, i.mastered, i.why], [true, 2, 'Uncommon', 3, 'level 3 needs the Fertilizer Machine']);
+  assert.deepEqual([i.next.level, i.next.need, i.next.machineName], [4, 800, 'Agrobots']);
+  s.tech.owned.mc_fertilizer = true;
+  i = cropInfo(s, 'loam-grain');
+  assert.deepEqual([i.level, i.levelName, i.colour, i.why], [3, 'Rare', '#4da6ff', null]);
+  const ctx = techCtxFromSave(s);
+  assert.equal(ctx.cropInfo('loam-grain').level, 3, 'the tree reads it from its context');
+});
