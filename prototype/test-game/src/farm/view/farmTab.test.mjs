@@ -7,7 +7,7 @@ import { defaultSave } from '../../save/save.js';
 import { referenceOutpost, confirmOnline } from '../../outpost/model.js';
 import { outpostMapFromForge } from '../../outpost/outpostMap.js';
 import { createSession } from '../../outpost/view/session.js';
-import { FARM, growSec, yieldOf } from '../../data/farm.js';
+import { FARM, growSec, yieldOf, cropOf } from '../../data/farm.js';
 import { podCount } from '../pods.js';
 import { acceptFarmContract, measureCropDelivered } from '../contract.js';
 import { cellRule } from '../cells.js';
@@ -89,7 +89,8 @@ test('the loop through the outpost session: place, prep, plant from the Pod Crat
   assert.ok(r.ok, r.error);
   const planted = Math.min(FARM.Pod_Crate, FARM.Pods_Per_Plot), units = Math.floor(yieldOf('loam-grain', 'traditional', 1) * planted / FARM.Pods_Per_Plot);
   assert.equal(podCount(store.load(), 'loam-grain'), FARM.Pod_Crate - planted, 'one pod per plant spent (owner 2026-11-12)');
-  assert.equal(r.farm.level, 1, 'no crop level bought yet: level 1');
+  assert.equal(r.farm.level, 1, 'no mastery yet: level 1');
+  assert.equal(store.load().mastery['loam-grain'], planted, 'mastery: a point per pod planted (owner rule 12)');
   const t2 = t1 + growSec('loam-grain') * 1000 + MIN;
   const panel = farmPanelModel(ses.outpost(), map, { plot: plotId }, ses.ctx(t2));
   r = ses.act({ type: 'harvest', plot: plotId }, t2);
@@ -103,6 +104,8 @@ test('the loop through the outpost session: place, prep, plant from the Pod Crat
   r = ses.act({ type: 'deliver', crop: 'loam-grain' }, t2 + MIN);
   assert.ok(r.ok, r.error);
   assert.equal(measureCropDelivered(store.load(), 'loam-grain'), units);
+  const per = FARM.Pods_Per_Plot / cropOf('loam-grain').yield;   // a unit counts as the plants that grew it
+  assert.ok(Math.abs(store.load().mastery['loam-grain'] - (planted + 2 * units * per)) < 1e-9, 'harvested, then delivered: both add mastery');
   assert.equal(store.load().stores.farm.ground['loam-grain'] || 0, 0);
   assert.match(ses.act({ type: 'farmSell' }, t2 + 2 * MIN).error, /nothing to sell/);
   assert.ok(panel);
@@ -144,11 +147,11 @@ test('a full store blocks HARVEST in the panel and the session; plants keep grow
   assert.ok(p.warnings[0].text.includes('Silo full'));
 });
 
-// ── owner rule 9 (2026-11-10) [MM-story_mwai5f8t_1g]: crop levels from the tech tree; pods have no level ─────────────
-test('PLANT grows at the crop\'s tech level; a plot keeps its level when the tree is upgraded later', () => {
+// ── owner rules 9, 12-13 [MM-story_mwatmww5_1l]: a crop's level is its mastery, with machinery; pods have no level ──
+test('PLANT grows at the crop\'s level; a plot keeps its level when the crop levels up later; planting adds mastery', () => {
   const s0 = farmSave();
   s0.pods = { ...s0.pods, 'loam-grain': 40 };   // two plots' worth (1 pod = 1 plant, 16 a plot)
-  s0.tech.owned.crop_loam_grain_2 = true;
+  s0.mastery = { 'loam-grain': 100 };
   const store = memStore(s0), ses = createSession({ store, planet: 'ground', map, catalog: CATALOG, raidHook: noRaid });
   assert.equal(ses.ctx(T0).levels['loam-grain'], 2, 'the session hands the FARM tab every crop\'s level');
   const targets = farmSpots(ses.outpost(), ses.ctx(T0));
@@ -158,7 +161,8 @@ test('PLANT grows at the crop\'s tech level; a plot keeps its level when the tre
   assert.ok(p1.ok, p1.error);
   assert.equal(p1.farm.level, 2);
   assert.equal(ses.outpost().farm.plots[a].level, 2);
-  store.update((sv) => { sv.tech.owned.crop_loam_grain_3 = true; sv.tech.owned.crop_loam_grain_4 = true; });   // upgraded on the tech tree
+  assert.equal(store.load().mastery['loam-grain'], 100 + FARM.Pods_Per_Plot, 'a point per pod planted');
+  store.update((sv) => { sv.mastery['loam-grain'] = 800; sv.tech.owned.mc_fertilizer = true; sv.tech.owned.mc_agrobots = true; });   // mastered to 4, machines bought
   const spot = farmSpots(ses.live(t1).outpost, ses.ctx(t1))[0];
   const b = ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: spot.cell }, t1).farm.placed;
   const t2 = t1 + FARM.Prep_Sec * 1000;
@@ -185,7 +189,8 @@ test('PLANT on a Traditional plot shows the level-5 cap and why', () => {
   assert.equal(ch.levelName, 'Epic');
   // the panel's PLANT button says the level the plot will grow at and why it is capped
   const s0 = farmSave();
-  for (const L of [2, 3, 4, 5]) s0.tech.owned['crop_loam_grain_' + L] = true;
+  s0.mastery = { 'loam-grain': 2000 };
+  for (const id of ['mc_fertilizer', 'mc_agrobots', 'mc_irrigation']) s0.tech.owned[id] = true;
   const store = memStore(s0), ses = createSession({ store, planet: 'ground', map, catalog: CATALOG, raidHook: noRaid });
   const spot = farmSpots(ses.outpost(), ses.ctx(T0))[0];
   const id = ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: spot.cell }, T0).farm.placed;
@@ -257,4 +262,20 @@ test("a prepped plot: the selected crop's details show; a crop button selects, P
   assert.deepEqual(cropDetails('heartwood-amber', 'traditional').find((x) => x[0] === 'Sells for'), ['Sells for', '2g each']);
   const view = readFileSync(new URL('../../outpost/view/sessionView.js', import.meta.url), 'utf8');
   assert.match(view, /if \(a === 'pickCrop'\) \{ if \(farmSel\) farmSel = \{ \.\.\.farmSel, crop: arg \}; panelSince = 1; return; \}/, 'a crop button selects, it does not plant');
+});
+
+test('PLANT names a missing machine: mastered to level 4 with no machinery grows at level 2 (owner rule 13)', () => {
+  const s0 = farmSave();
+  s0.mastery = { 'loam-grain': 800 };
+  const store = memStore(s0), ses = createSession({ store, planet: 'ground', map, catalog: CATALOG, raidHook: noRaid });
+  assert.equal(ses.ctx(T0).levels['loam-grain'], 2);
+  assert.equal(ses.ctx(T0).levelWhy['loam-grain'], 'level 3 needs the Fertilizer Machine');
+  const spot = farmSpots(ses.outpost(), ses.ctx(T0))[0];
+  const id = ses.act({ type: 'farmPlace', what: 'plot', id: 'traditional', cell: spot.cell }, T0).farm.placed;
+  const t1 = T0 + FARM.Prep_Sec * 1000;
+  const btn = farmPanelModel(ses.live(t1).outpost, map, { plot: id }, ses.ctx(t1)).actions.find((x) => x.act === 'plant');
+  assert.equal(btn.level, 2);
+  assert.equal(btn.why, 'Level 2: level 3 needs the Fertilizer Machine');
+  const r = ses.act({ type: 'plant', plot: id, pick: 'loam-grain' }, t1);
+  assert.deepEqual([r.farm.level, r.farm.capped], [2, 'level 3 needs the Fertilizer Machine']);
 });

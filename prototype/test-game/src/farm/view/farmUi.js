@@ -8,7 +8,8 @@
  *
  * Pure: (outpost, map, ctx) → plain objects the HUD renders. ctx: { gold, now, methods, cellOk, pods, levels, held,
  * room, delivered, f1 } — pods: the save's s.pods ({ cropId: count }; pods have no level, owner rule 9); levels: every
- * crop's tech-tree level ({ cropId: 1–5 }, src/farm/levels.js cropLevels); held: the farm store for this planet.
+ * crop's level ({ cropId: 1–5 }, its mastery with the machinery owned: src/farm/levels.js cropLevels); levelWhy: what
+ * holds a crop below its mastery ({ cropId: 'level 3 needs the Fertilizer Machine' }); held: the farm store for this planet.
  */
 import { methodOf, farmBuildingOf, cropOf, podLevel, prepCost, growSec, CROPS } from '../../data/farm.js';
 import { plotState, storeCapacity, farmStatus, plantLevel, plotPlants, plotFull, plotYield } from '../model.js';
@@ -41,17 +42,18 @@ const clock = (sec) => { sec = Math.max(0, Math.round(sec)); const h = Math.floo
 
 /**
  * The crops this plot could be planted with now (owner rule 9): one choice per crop with a plot's worth of pods (one
- * per row), each at the level it would actually grow at — the crop's tech-tree level (levels[crop], default 1), capped
- * by the plot (level 5 needs an Irrigated plot with water: model.plantLevel).
+ * per row), each at the level it would actually grow at — the crop's level (levels[crop], default 1: its mastery with
+ * the machinery owned; why[crop] names a missing machine), capped by the plot (level 5 needs an Irrigated plot with
+ * water: model.plantLevel).
  * → [{ crop, n, name, level, techLevel, levelName, colour, capped, why }]
  */
-export function plantChoices(o, map, plot, pods = {}, levels = {}) {
+export function plantChoices(o, map, plot, pods = {}, levels = {}, why = {}) {
   const need = 1, full = methodOf(plot.method).pods, out = [];
   for (const c of CROPS) {
     const n = podRowCount(pods[c.id]);
     if (n < need) continue;
     const techLevel = levels[c.id] || 1, g = plantLevel(o, map, plot, techLevel), L = podLevel(g.level);
-    out.push({ crop: c.id, n: Math.min(n, full), name: c.name, level: g.level, techLevel, levelName: L.name, colour: L.colour, capped: g.capped, why: g.why });
+    out.push({ crop: c.id, n: Math.min(n, full), name: c.name, level: g.level, techLevel, levelName: L.name, colour: L.colour, capped: g.capped || !!why[c.id], why: g.why || why[c.id] || null });
   }
   return out;
 }
@@ -120,7 +122,7 @@ export function farmPanelModel(o, map, sel, ctx = {}) {
     } else if (st === 'prepped') {
       // owner 2026-11-17 [MM-task_mwlc3c6b_6]: a crop is SELECTED first (sel.crop; the first held crop by default) and
       // the panel shows its details; PLANT plants the selected crop. With more than one crop, a button per crop picks.
-      const choices = plantChoices(o, map, p, ctx.pods, ctx.levels).slice(0, 6);
+      const choices = plantChoices(o, map, p, ctx.pods, ctx.levels, ctx.levelWhy || {}).slice(0, 6);
       const ch = choices.find((x) => x.crop === sel.crop) || choices[0];
       if (ch) {
         out.crop = ch.crop;
@@ -161,7 +163,7 @@ export function farmPanelModel(o, map, sel, ctx = {}) {
       const need = Math.max(0, ctx.f1.deliver - (ctx.delivered || 0)), have = Math.floor((ctx.held || {})[ctx.f1.crop] || 0);
       if (need > 0) out.actions.push({ act: 'deliver', arg: ctx.f1.crop, label: `DELIVER ${cropOf(ctx.f1.crop).name} · ${fmt(Math.min(need, have))}/${fmt(need)}`, enabled: have > 0, why: have ? null : `Harvest ${cropOf(ctx.f1.crop).name} first` });
     }
-    out.note = 'The farm\'s hub. Crop levels are researched in the Tech Tree (OUTPOST & FARM › SEED PODS); seed pods are bought at STORES › Seed pods.';
+    out.note = 'The farm\'s hub. A crop\'s level grows with your mastery of it (planting, harvesting, selling) and needs farm machinery from level 3 (Tech Tree › MACHINERY); seed pods are bought at STORES › Seed pods.';
   }
   if (b.kind === 'pump') out.stats.push(['Water reach', `${def.waterReach} cells`]);
   out.actions.push(moveAction(ctx));

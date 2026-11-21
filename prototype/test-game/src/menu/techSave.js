@@ -7,7 +7,9 @@
  */
 import { TECH_BY_ID, startingOwned, settleFree, techStatus, techPrice, refundBlock, PORTALS } from '../data/techtree.js';
 import { outpostUnlocks } from '../outpost/contract.js';
-import { cropTechUnlocked } from '../farm/levels.js';
+import { machineryUnlocked } from '../farm/levels.js';
+import { podsUnlocked, cropDelivered, unlockUnits } from '../farm/unlock.js';
+import { CROPS, cropOf } from '../data/farm.js';
 
 /**
  * The Outpost nodes the player's outpost contracts have unlocked, on any planet (Outpost-Design §7, story O10): a
@@ -16,8 +18,8 @@ import { cropTechUnlocked } from '../farm/levels.js';
 export function outpostTechUnlocked(s) {
   const out = new Set();
   for (const key of Object.keys((s && s.outposts) || {})) for (const t of outpostUnlocks(s, key).unlocks) out.add(t);
-  // the crop levels (owner rule 9): a farming contract unlocks a crop's next level node, gold buys it
-  for (const t of cropTechUnlocked(s)) out.add(t);
+  // the farm machinery (owner rule 13, 2026-11-21): a crop mastered to a level unlocks that level's machine, gold buys it
+  for (const t of machineryUnlocked(s)) out.add(t);
   return out;
 }
 
@@ -36,6 +38,10 @@ export function techCtxFromSave(s, factionOfPlanet = (p) => p, opts = {}) {
   settleFree(owned);
   return {
     owned, bank: (s.carry && s.carry.gold) || 0, paid: (s.tech && s.tech.paid) || {},
+    // SEED PODS shows each planet's crops unlocked (owner 2026-11-21, rule 10)
+    cropsUnlocked: new Set(CROPS.filter((c) => podsUnlocked(s, c.id)).map((c) => c.id)),
+    cropName: (id) => (cropOf(id) || { name: id }).name,
+    cropProgress: (id) => Math.min(cropDelivered(s, id), unlockUnits()).toLocaleString('en-US') + ' / ' + unlockUnits().toLocaleString('en-US') + ' delivered',
     ...(opts.missionGate ? { unlocked: new Set([...Object.keys((s.tech && s.tech.unlocked) || {}), ...outpostTechUnlocked(s)]), unlockedBy: opts.unlockedBy || null } : {}),
     hasWin: (planet) => {
       const fr = s.factionRecords && s.factionRecords[factionOfPlanet(planet)];

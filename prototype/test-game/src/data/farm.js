@@ -7,10 +7,10 @@
  * Design: docs/16 Bulwark MM/design/Farming-Design.md §4–§9 · Tech plan: docs/tech-plan/Farming.md §3.1–§3.2.
  * Pure data; no DOM, no clock. Every number is a proposed default until the owner rules on it (Farming-Design D14).
  *
- * Words: a crop LEVEL is 1–5 (Common … Legendary): researched per crop in the tech tree and kept by each plot it was
+ * Words: a crop LEVEL is 1–5 (Common … Legendary): earned per crop by mastery (with machinery) and kept by each plot it was
  * planted on (owner rule 9, 2026-11-10; seed pods have no level). A crop TIER is the resource's battle tier (common …
  * epic, how hard it is to grow). They share names on purpose and never mix (Farming-Design §8.2, D4).
- * Crop_Levels (the tech tree's crop chains) → MAPDATA.cropLevels → CROP_LEVEL_NODES.
+ * Crop_Levels (each level's mastery and machine, owner 2026-11-21) → MAPDATA.cropLevels → CROP_LEVEL_RULES.
  */
 import { MAPDATA } from '../../content/maps/mapdata.js';
 
@@ -48,8 +48,8 @@ export const methodOf = (id) => METHODS.find((m) => m.id === id) || null;
 
 /**
  * The five CROP levels, 1 (Common) … 5 (Legendary) — a plot's level (owner rule 9, 2026-11-10). The names keep "pod"
- * for history (the workbook's Pod_Levels sheet); seed pods themselves have no level: a crop's level comes from the tech
- * tree (src/farm/levels.js cropLevel) and a plot keeps the level it was planted at.
+ * for history (the workbook's Pod_Levels sheet); seed pods themselves have no level: a crop's level comes from its
+ * mastery and the machinery owned (src/farm/levels.js cropLevel) and a plot keeps the level it was planted at.
  */
 export const POD_LEVELS = Object.freeze((MAPDATA.podLevels || []).map((r) => Object.freeze({
   level: r.Level, name: r.Name, colour: r.Colour, value: num(r.Value_Mult), yieldBonus: num(r.Yield_Bonus),
@@ -69,18 +69,28 @@ export const podLevel = (n) => POD_LEVELS.find((l) => l.level === n) || null;
 export const MAP_CROP_LEVEL = 3;
 
 /**
- * The tech tree's crop level nodes (owner rule 9): per crop a chain II … V in the OUTPOST & FARM tree's SEED PODS
- * division, from the workbook's Crop_Levels sheet. Level 1 is the base and has no node. unlock: the farming contract
- * and the state it must reach on the crop's planet ({ contract: 'F1', state: 'accepted' | 'complete' }) — rule D7, a
- * contract unlocks and gold buys. Prices and the III–V gates are proposed (D14).
+ * How a crop's levels 2–5 open (owner rules 12–13) [MM-story_mwatmww5_1l]: by MASTERY of that crop, and from level 3
+ * by a machine. Owner 2026-11-21: "We don't need to create a tree for the crop upgrades, only the farm equipment." So
+ * there are no crop nodes in the tech tree: every crop climbs the same thresholds (the workbook's Crop_Levels, proposed),
+ * and `machine` names the MACHINERY node each level also needs (src/data/techtree.js). → [{ level, name, mastery, machine }]
  */
-export const CROP_LEVEL_NODES = Object.freeze((MAPDATA.cropLevels || []).map((r) => {
-  const [contract, state] = String(r.Unlock || '').split(':');
-  return Object.freeze({ id: r.Node, crop: r.Crop_Id, planetKey: r.Planet_Key, level: r.Level, name: r.Name, price: num(r.Price),
-    unlock: Object.freeze({ contract, state }), proposed: r.Status === 'proposed' });
-}));
-/** A crop's chain, level 2 up: [node…] (empty for a crop with no chain yet). */
-export const cropLevelChain = (cropId) => CROP_LEVEL_NODES.filter((n) => n.crop === cropId).sort((a, b) => a.level - b.level);
+export const CROP_LEVEL_RULES = Object.freeze((MAPDATA.cropLevels || []).map((r) => Object.freeze({
+  level: r.Level, name: r.Name, mastery: num(r.Mastery), machine: r.Machine || null, proposed: r.Status === 'proposed',
+})));
+/** A level's rule (2–5), or null (level 1 is every crop's start and has none). */
+export const cropLevelRule = (level) => CROP_LEVEL_RULES.find((r) => r.level === level) || null;
+/** Mastery a crop needs for a level: 0 for level 1. */
+export const masteryFor = (level) => (level <= 1 ? 0 : (cropLevelRule(level) || { mastery: Infinity }).mastery);
+
+/**
+ * Mastery points for units of a crop harvested, sold or delivered: the plants that grew them (units × Pods_Per_Plot ÷
+ * the crop's Traditional yield), so one full plot planted, harvested and sold is worth the same for every tier.
+ */
+export function plantsFor(c, units) {
+  c = typeof c === 'string' ? cropOf(c) : c;
+  if (!c || !(units > 0) || !(c.yield > 0)) return 0;
+  return (units * num(FARM.Pods_Per_Plot)) / c.yield;
+}
 
 /** The farm buildings this build ships (farmhouse, silo, pump). */
 export const FARM_BUILDINGS = Object.freeze((MAPDATA.farmBuildings || []).map((r) => Object.freeze({
@@ -134,7 +144,7 @@ export function yieldOf(c, m, level) {
 }
 
 /**
- * The level a plot actually grows a crop at (owner rule 9): the crop's tech-tree level, except that level 5 always
+ * The level a plot actually grows a crop at (owner rule 9): the crop's level (mastery with machinery), except that level 5 always
  * needs a trick or machinery. A method's level5Needs says which: 'water' — level 5 on a plot with water in reach (an
  * Irrigated plot by a water cell or a powered Pump); 'never' — a plain plot grows a level-5 crop at level 4.
  * Fertilizer and hydroponics join as more methods / equipment later. → { level, capped, why }

@@ -133,25 +133,21 @@ for i, (name, colour, value) in enumerate([("Common", "#ffffff", 0.5), ("Uncommo
 # PODS division. Level 1 is the base (no node); each node needs the one before. Rule D7: a contract unlocks, gold buys.
 # Unlock "F1:accepted" = the planet's F1 accepted; "F1:complete" = F1 collected. Verdance first; other planets' chains
 # are more rows. Prices and the III–V gates are PROPOSED (D14): III–V tie to F2/F3 once those contracts exist.
-CROP_LEVEL_COLS = ["Planet_Key", "Crop_Id", "Level", "Node", "Name", "Price", "Unlock", "Status"]
-CROP_LEVEL_PRICE = {2: 500, 3: 1200, 4: 2500, 5: 5000}                    # a common-tier crop's price per level
-CROP_LEVEL_TIER = {"common": 1, "uncommon": 1.5, "rare": 2, "epic": 3}     # dearer for the harder crops
-ROMAN = {2: "II", 3: "III", 4: "IV", 5: "V"}
-CROP_LEVEL_PLANETS = ("ground",)                                           # Verdance first
+# How a crop's level 2-5 opens (owner rule 12, 2026-11-21 [MM-story_mwatmww5_1l]): "We don't need to create a tree for
+# the crop upgrades, only the farm equipment." A crop's level is its MASTERY, the same thresholds for all 36 crops:
+# every pod planted is a point, and harvests, sales and deliveries count as the plants that grew them. Each level from
+# 3 also needs its machine (rule 13), a node in the tech tree's MACHINERY division. Thresholds PROPOSED (D14).
+CROP_LEVEL_COLS = ["Level", "Name", "Mastery", "Machine", "Status"]
+CROP_LEVELS = [
+    [2, "Uncommon", 100, "", "proposed"],
+    [3, "Rare", 300, "mc_fertilizer", "proposed"],
+    [4, "Epic", 800, "mc_agrobots", "proposed"],
+    [5, "Legendary", 2000, "mc_irrigation", "proposed"],
+]
 
 
 def crop_level_rows():
-    rows = []
-    for key, _planet, crops in CROPS:
-        if key not in CROP_LEVEL_PLANETS:
-            continue
-        for tier, name, *_ in crops:
-            cid = slug(name)
-            for lv in (2, 3, 4, 5):
-                price = int(round(CROP_LEVEL_PRICE[lv] * CROP_LEVEL_TIER[tier] / 50) * 50)
-                rows.append([key, cid, lv, "crop_" + cid.replace("-", "_") + "_" + str(lv), f"{name} {ROMAN[lv]}", price,
-                             "F1:accepted" if lv == 2 else "F1:complete", "proposed"])
-    return rows
+    return [list(r) for r in CROP_LEVELS]
 
 # Farming-Design §6: Phase A's buildings. Cost/Build_Sec proposed (D14), sized like the outpost's pads.
 # Power_Priority: who a short grid serves first (lower first), as on Outpost_Structures (patch_power_priority.py).
@@ -302,8 +298,9 @@ def main():
                                  BUILDING_COLS, BUILDINGS)),
         ("Farm_Contracts", block("Farming contracts (Phase A: Verdance F1)", "Distribution §5; Farming-Design §2.2.",
                                  CONTRACT_COLS, CONTRACTS)),
-        ("Crop_Levels", block("Crop level nodes (tech tree, SEED PODS)", "Owner rule 9 (2026-11-10). One chain per crop, "
-                              "II-V; each needs the one before. Prices and the III-V gates are PROPOSED (D14).",
+        ("Crop_Levels", block("Crop levels 2-5: mastery and machine", "Owner rules 12-13; 2026-11-21: no tree for crop "
+                              "upgrades, only the farm equipment. Mastery is per crop, the same thresholds for every crop; "
+                              "Machine is the MACHINERY node each level also needs. PROPOSED (D14).",
                               CROP_LEVEL_COLS, crop_level_rows())),
     ])
 

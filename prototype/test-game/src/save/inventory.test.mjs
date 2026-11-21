@@ -126,8 +126,9 @@ test('the INVENTORY chip sits right of MISSIONS and shows what is new', () => {
 });
 
 // ── tech nodes unlock through missions, then are bought (D7)
-test('every buyable node is unlocked by exactly one mission, at the game\'s own price', () => {
+test('every buyable node is unlocked by exactly one mission, at the game\'s own price (the farm machines by mastery)', () => {
   for (const id of BUYABLE) {
+    if (TECH_BY_ID[id].machine) { assert.equal(CATALOG.techUnlocks[id], undefined, id + ': unlocked by crop mastery, not a mission'); continue; }
     const t = CATALOG.techUnlocks[id];
     assert.ok(t && t.by, id + ' has a mission');
     assert.ok(def(t.by), id + ' mission exists');

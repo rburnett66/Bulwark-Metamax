@@ -29,11 +29,13 @@
  *   pendingRewards   the last battle(s)' rewards, waiting to fly into the menu widget [MM-story_mvkhegop_j]
  *   battleLog        played campaign battles, newest first, capped (save/battleLog.js) [MM-story_mw1azvh8_d]
  *   pods             { [cropId]: count } seed pods, an OUTPOST & FARM holding (farm/pods.js) [MM-story_mwabgh3x_b]; no level
- *                    (owner rule 9, 2026-11-10: a crop's level is the tech tree's, farm/levels.js) [MM-story_mwai5f8t_1g]
+ *                    (owner rule 9, 2026-11-10: a crop's level is the player's, farm/levels.js) [MM-story_mwai5f8t_1g]
  *   podCarry         { [cropId]: units } delivered units not yet worth a pod (farm/chest.js, owner rule 11)
  *   podChests        [{ id, planet, mapId, at, pods }] Pod Reward Chests held, unopened (farm/chest.js); podChestSeq the ids
  *   cropDelivered    { [cropId]: units } every unit of a crop delivered, lifetime; podUnlocks { [cropId]: true } the crops
  *                    whose seed pods are unlocked (owner rule 10: 500 delivered; farm/unlock.js) [MM-story_mwatmukb_1j]
+ *   mastery          { [cropId]: points } a crop's mastery, which opens its levels 2-5 (owner rule 12; farm/levels.js)
+ *                    [MM-story_mwatmww5_1l]
  *
  * Determinism contract: any field that CHANGES A BATTLE (carry, tech, harvesterLevel, contract
  * buffs) must be injected at createSim time — never mid-battle — so replays stay reproducible.
@@ -42,6 +44,7 @@
 import { emptyStats } from './battleTally.js';
 import { collectiveOf } from './collective.js';
 import { emptyStores, emptyStoresNew, migrateStores } from './stores.js';
+import { migrateCropNodes } from '../farm/levels.js';
 
 const KEY = 'bulwark:save';
 
@@ -88,6 +91,7 @@ export function defaultSave() {
     podChestSeq: 0,
     cropDelivered: {},   // owner rule 10 (farm/unlock.js): a crop's pods unlock at 500 delivered
     podUnlocks: {},
+    mastery: {},         // owner rule 12 (farm/levels.js): a crop's mastery opens its levels 2-5
   };
 }
 
@@ -143,6 +147,10 @@ export function migrate(s) {
   // owner rule 10 (2026-11-10): a crop's pods unlock at 500 delivered. A save from before keeps what it already farms:
   // every crop it holds pods of, or has planted, counts as unlocked (nothing it has is stranded).
   if (!s.cropDelivered || typeof s.cropDelivered !== 'object') s.cropDelivered = {};
+  // owner 2026-11-21: no tree for crop levels. Crop nodes an old save bought are refunded and become mastery
+  // (farm/levels.js migrateCropNodes) [MM-story_mwatmww5_1l]
+  if (!s.mastery || typeof s.mastery !== 'object') s.mastery = {};
+  migrateCropNodes(s);
   if (!Array.isArray(s.podChests)) s.podChests = [];
   if (!Number.isInteger(s.podChestSeq)) s.podChestSeq = 0;
   if (!s.podUnlocks || typeof s.podUnlocks !== 'object') {

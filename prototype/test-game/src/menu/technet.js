@@ -14,7 +14,7 @@
  *
  * The data and the rules are src/data/techtree.js — this file only draws them. Presentation only: no sim, no save.
  */
-import { DIVISIONS as DIV, TREES, TREE_ORDER, TREE_TOTAL, treeOf, GROUPS, STAT_KEYS, STAT_NAMES, TECH_NODES as ALL_NODES, TECH_BY_ID as BY, BUYABLE,
+import { cropsUnlockedOf, DIVISIONS as DIV, TREES, TREE_ORDER, TREE_TOTAL, treeOf, GROUPS, STAT_KEYS, STAT_NAMES, TECH_NODES as ALL_NODES, TECH_BY_ID as BY, BUYABLE,
   techPrice, techGates, techStatus, portalsOwned } from '../data/techtree.js';
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Rajdhani:wght@500;600;700&family=JetBrains+Mono:wght@500;700&display=swap';
@@ -143,7 +143,8 @@ const CSS = `
 
 const STATUS_TXT = { owned: 'RESEARCHED', ready: 'AVAILABLE', short: 'NEEDS GOLD', locked: 'LOCKED', soon: 'COMING SOON' };
 const KIND_TXT = { core: 'BASE MODEL · EQUIPPED', ult: 'CAPSTONE', tier: 'TOWER TIER', tower: 'NEW TOWER', pod: 'DEFENSE POD SLOT', podw: 'POD WEAPON', weapon: 'SUPER-CANNON',
-  harv: 'HARVESTER', item: 'COMMAND', craft: 'BASE MODEL', milestone: 'MILESTONE', portal: 'PORTAL CODE', ghost: 'OUTPOST', shipghost: 'SHIP UPGRADE' };
+  harv: 'HARVESTER', item: 'COMMAND', craft: 'BASE MODEL', milestone: 'MILESTONE', portal: 'PORTAL CODE', ghost: 'OUTPOST', shipghost: 'SHIP UPGRADE',
+  cropplanet: 'PLANET' };
 const R0 = 8, STEP = 5, ULT_Y = 24;
 
 export function mountTechNet(THREE, addons, host, adapter) {
@@ -312,7 +313,8 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
     tower: new THREE.CylinderGeometry(0.75, 1.0, 1.1, 6), pod: new THREE.CylinderGeometry(0.8, 0.95, 0.7, 8),
     podw: new THREE.DodecahedronGeometry(0.72), weapon: new THREE.ConeGeometry(0.75, 1.3, 6), harv: new THREE.BoxGeometry(1.35, 0.6, 0.95),
     item: new THREE.IcosahedronGeometry(0.8), craft: new THREE.OctahedronGeometry(1.3), mile: new THREE.OctahedronGeometry(0.9),
-    ghost: new THREE.IcosahedronGeometry(0.9, 0), halo: new THREE.RingGeometry(1.35, 1.5, 48), hit: new THREE.SphereGeometry(1.7, 10, 8),
+    ghost: new THREE.IcosahedronGeometry(0.9, 0), pad: new THREE.CylinderGeometry(1.05, 1.15, 0.22, 24), seed: new THREE.SphereGeometry(0.3, 16, 12),
+    halo: new THREE.RingGeometry(1.35, 1.5, 48), hit: new THREE.SphereGeometry(1.7, 10, 8),
   };
   GEO.halo.rotateX(-Math.PI / 2);
   const hitMeshes = [];
@@ -371,6 +373,16 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
         break;
       }
       case 'ghost': case 'shipghost': geo = GEO.ghost; spin = 0.2; body.wireframe = true; break;
+      // a planet's seed pods (owner 2026-11-21): a pad with its four crops as four pods, each lit once that crop is unlocked
+      case 'cropplanet': {
+        geo = GEO.pad; v.seeds = [];
+        (n.crops || []).forEach((id, i) => {
+          const m = new THREE.MeshStandardMaterial({ color: 0x0a1424, emissive: c.clone(), emissiveIntensity: 0.1, metalness: 0.3, roughness: 0.4, transparent: true });
+          const pod = new THREE.Mesh(GEO.seed, m), a = Math.PI / 4 + i * Math.PI / 2;
+          pod.position.set(Math.cos(a) * 0.55, 0.4, Math.sin(a) * 0.55); g.add(pod); v.seeds.push({ id, m });
+        });
+        break;
+      }
     }
     let mesh = null;
     if (geo) {
@@ -459,7 +471,7 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
   function labelText(v) {
     const n = v.n, st = v.st;
     v.lbl.classList.toggle('own', st === 'owned');
-    const pr = n.soon ? 'COMING SOON' : n.milestone ? (st === 'owned' ? (sandbox ? '✓ CLEARED' : '✓ WON') : 'MILESTONE')
+    const pr = n.progress ? cropsUnlockedOf(n, ctx) + ' / ' + n.crops.length + ' CROPS' : n.soon ? 'COMING SOON' : n.milestone ? (st === 'owned' ? (sandbox ? '✓ CLEARED' : '✓ WON') : 'MILESTONE')
       : st === 'owned' ? '✓ ' + (n.free ? 'OWNED' : 'RESEARCHED') : n.free ? 'FREE' : priceOf(n).toLocaleString() + 'g';
     v.lbl.innerHTML = n.name + '<small>' + pr + '</small>';
     v.lblW = n.name.length * 8 + 14;
@@ -552,11 +564,19 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
     if (!selId) { panel.classList.remove('open'); return; }
     const n = BY[selId], st = vv(selId).st, c = n.kind === 'ult' ? '#ffd34a' : DIV[n.div].color;
     panel.style.setProperty('--c', c);
-    let h = '<div class="p-top"><span class="chip" style="--c:' + DIV[n.div].color + ';pointer-events:none">' + DIV[n.div].label + '</span><span class="kind">' + (n.kind === 'core' && tree === 'outpost' ? 'THE CENTRE' : n.crop ? 'CROP LEVEL' : KIND_TXT[n.kind]) + '</span><button class="x" data-close aria-label="Close">✕</button></div>';
+    let h = '<div class="p-top"><span class="chip" style="--c:' + DIV[n.div].color + ';pointer-events:none">' + DIV[n.div].label + '</span><span class="kind">' + (n.kind === 'core' && tree === 'outpost' ? 'THE CENTRE' : n.machine ? 'FARM MACHINE' : KIND_TXT[n.kind]) + '</span><button class="x" data-close aria-label="Close">✕</button></div>';
     h += '<h2>' + n.name + '</h2>' + (n.sub ? '<div class="subl">' + n.sub + '</div>' : '');
-    const pr = n.soon || n.milestone ? '' : n.free ? 'FREE' : priceOf(n).toLocaleString() + 'g';
-    h += '<div class="srow"><span class="badge s-' + st + '">' + STATUS_TXT[st] + '</span><span class="price">' + pr + '</span></div>';
+    const pr = n.soon || n.milestone || n.progress ? '' : n.free ? 'FREE' : priceOf(n).toLocaleString() + 'g';
+    const k = n.progress ? cropsUnlockedOf(n, ctx) : 0;
+    h += '<div class="srow"><span class="badge s-' + st + '">' + (n.progress ? k + ' / ' + n.crops.length + ' CROPS UNLOCKED' : STATUS_TXT[st]) + '</span><span class="price">' + pr + '</span></div>';
     h += '<p class="desc">' + n.desc + '</p>';
+    if (n.progress) {
+      h += '<h4>CROPS</h4>' + n.crops.map((id) => { const on = !!(ctx.cropsUnlocked && ctx.cropsUnlocked.has(id)), c = ctx.cropName ? ctx.cropName(id) : id;
+        return '<div class="gate ' + (on ? 's-owned' : 's-locked') + '">' + (on ? '◆ ' : '◇ ') + c + (on ? ' · pods unlocked' : ctx.cropProgress ? ' · ' + ctx.cropProgress(id) : ' · locked') + '</div>'; }).join('');
+      h += '<div class="msg">' + panelMsg + '</div>';
+      panel.innerHTML = h; panel.classList.add('open');
+      return;
+    }
     if (n.stats) h += '<h4>BONUS PROFILE</h4>' + radar(n.stats, c) + bars(n.stats);
     if (n.ws) h += '<h4>POD WEAPON</h4><table class="ws">' + n.ws.map(([a, b]) => '<tr><td>' + a + '</td><td>' + b + '</td></tr>').join('') + '</table>';
     if (n.portal && !ctx.owned.has(n.id)) { const k = portalsOwned(ctx.owned); h += '<h4>PRICE BY COUNT</h4><div class="none">You hold ' + k + ' code' + (k === 1 ? '' : 's') + ' — the next costs ' + priceOf(n).toLocaleString() + 'g.</div>'; }
@@ -572,7 +592,7 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
       else if (n.free) h += '<div class="actions"><button class="act" disabled>' + (ctx.owned.has(n.id) ? 'INCLUDED' : 'COMES WITH ' + BY[n.req[0]].name.toUpperCase()) + '</button></div>';
       else if (st === 'owned') h += '<div class="actions"><button class="act ghost" data-refund>REFUND ' + ((ctx.paid && ctx.paid[n.id]) || 0).toLocaleString() + 'g</button></div>';
       else h += '<div class="actions"><button class="act" data-buy ' + (st === 'ready' ? '' : 'disabled') + '>' + (st === 'short' ? 'NEED ' + (priceOf(n) - ctx.bank).toLocaleString() + 'g MORE' : st === 'locked' ? 'LOCKED' : 'RESEARCH · ' + priceOf(n).toLocaleString() + 'g') + '</button></div>';
-      if (!sandbox && n.crop) h += '<div class="note">Takes effect at once: new plantings of this crop grow at this level; plots already growing keep theirs.</div>';
+      if (!sandbox && n.machine) h += '<div class="note">Takes effect at once: new plantings of crops mastered to level ' + n.cropLevel + ' grow at it; plots already growing keep theirs.</div>';
       else if (!sandbox && !n.milestone && !n.free) h += '<div class="note">Research is recorded now; its effect reaches battle with the Tech Tree build.</div>';
     }
     h += '<div class="msg">' + panelMsg + '</div>';
@@ -593,9 +613,9 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
     $('[data-ring]').style.strokeDashoffset = (100.5 * (1 - own / TECH_TOTAL)).toFixed(1);
     $('.spent').innerHTML = 'SPENT <b>' + Object.entries(ctx.paid || {}).reduce((a, [id, g]) => a + (ctx.owned.has(id) ? g : 0), 0).toLocaleString() + 'g</b>';
     for (const k of DIV_ORDER) {
-      const dv = DIV[k], o = countOwned(ctx.owned, k);
+      const dv = DIV[k], o = dv.progress ? (ctx.cropsUnlocked ? ctx.cropsUnlocked.size : 0) : countOwned(ctx.owned, k);
       root.querySelector('[data-cnt="' + k + '"]').textContent = dv.soon ? '' : o + '/' + dv.total;   // a soon chip is greyed; its title says COMING SOON
-      TITLES.find((t) => t.k === k).el.querySelector('span').textContent = dv.soon ? 'COMING SOON' : o + ' / ' + dv.total + ' RESEARCHED';
+      TITLES.find((t) => t.k === k).el.querySelector('span').textContent = dv.soon ? 'COMING SOON' : o + ' / ' + dv.total + (dv.progress ? ' CROPS UNLOCKED' : ' RESEARCHED');
     }
     for (const v of V.values()) { v.st = status(v.n); labelText(v); }
     renderPanel();
@@ -682,7 +702,8 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
       if (hovId) {
         const n = BY[hovId], st = vv(hovId).st;
         tip.style.setProperty('--c', n.kind === 'ult' ? '#ffd34a' : DIV[n.div].color);
-        tip.innerHTML = '<b>' + n.name + '</b><span>' + STATUS_TXT[st] + (n.soon || n.milestone || n.free || st === 'owned' ? '' : ' · ' + priceOf(n).toLocaleString() + 'g') + '</span>';
+        tip.innerHTML = '<b>' + n.name + '</b><span>' + (n.progress ? cropsUnlockedOf(n, ctx) + ' of ' + n.crops.length + ' crops unlocked'
+          : STATUS_TXT[st] + (n.soon || n.milestone || n.free || st === 'owned' ? '' : ' · ' + priceOf(n).toLocaleString() + 'g')) + '</span>';
         tip.style.opacity = 1;
       } else tip.style.opacity = 0;
     }
@@ -706,6 +727,11 @@ function mountTree(THREE, addons, host, adapter, tree, opts) {
       else if (st === 'owned') { v.halo.scale.setScalar(big); hm.opacity = 0.35 * v.dim; hm.color.copy(c); }
       else hm.opacity = 0;
       if (v.spin && v.mesh) v.mesh.rotation.y += v.spin * 0.016;
+      if (v.seeds) v.body.emissiveIntensity = Math.min(v.body.emissiveIntensity, 0.3 * v.dim);   // the pad stays low: its pods carry the count
+      if (v.seeds) for (const sd of v.seeds) {
+        const on = !!(ctx.cropsUnlocked && ctx.cropsUnlocked.has(sd.id));
+        sd.m.emissive.copy(on ? v.color : tc.copy(v.color).lerp(LOCKED_C, 0.7)); sd.m.emissiveIntensity = (on ? 1.5 : 0.12) * v.dim; sd.m.opacity = 0.3 + 0.7 * v.dim;
+      }
       if (n.kind === 'ult') { v.g.rotation.y += 0.004; v.g.position.y = ULT_Y + Math.sin(t * 0.8) * 0.6; if (v.beam) v.beam.material.opacity = (st === 'owned' ? 0.35 : 0.08 + 0.05 * pulse) * v.dim; }
       if (n.kind === 'craft') v.g.position.y = v.pos.y + Math.sin(t * 1.3 + v.pos.x) * 0.25;
       for (const [type, o, val] of v.extras) {

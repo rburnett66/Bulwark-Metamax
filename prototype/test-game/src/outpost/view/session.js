@@ -31,7 +31,8 @@ import { trample, placePlot, placeFarmBuilding, prep, plant, harvest, harvestAll
 import { cellRule } from '../../farm/cells.js';
 import { farmUnlocks, recordDelivery, measureCropDelivered } from '../../farm/contract.js';
 import { podCount, spendPods, addPods } from '../../farm/pods.js';
-import { cropLevel, cropLevels } from '../../farm/levels.js';
+import { cropLevels, cropLevelInfo, notePlanted, noteGrown } from '../../farm/levels.js';
+import { TECH_BY_ID } from '../../data/techtree.js';
 import { podsUnlocked, recordDelivered } from '../../farm/unlock.js';
 import { addToStore, takeFromStore } from '../../save/stores.js';
 import { farmContractOf, cropOf } from '../../data/farm.js';
@@ -83,6 +84,11 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
    * the player OWNS (a contract unlocks a node, the Tech Tree sells it, tech plan D7); techOwned every owned tree id
    * (tower tiers and docks reach the outpost through its Upgrade Bay); Cargo Shuttle II sets the shuttle tier.
    */
+  const levelWhyOf = (s) => {   // what holds each crop below its mastery: a missing machine (owner rule 13)
+    const out = {};
+    for (const id of Object.keys(cropLevels(s))) { const i = cropLevelInfo(s, id, (m) => (TECH_BY_ID[m] || { name: m }).name); if (i.why) out[id] = i.why; }
+    return out;
+  };
   const ctxFor = (s, now) => {
     const u = outpostUnlocks(s, planet), owned = startingOwned();
     for (const [id, on] of Object.entries((s.tech && s.tech.owned) || {})) if (on) owned.add(id);
@@ -92,9 +98,9 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
       map, now, gold: bankOf(s), raid: hookFor(s), shuttleTier: unlocks.has('cargo_shuttle_2') ? 2 : 1, farDiscovered: false,
       unlockedTiers: u.unlockedTiers, unlocks, techOwned: owned, contractUnlocks: u.unlocks, farBuyer: u.farBuyer,
       // the farm (story A7): its methods, the map's ground rule, the pods and the store, for the FARM tab and its actions;
-      // levels: every crop's tech-tree level, the level new plantings grow at (owner rule 9, farm/levels.js)
+      // levels: every crop's level, the level new plantings grow at (mastery and machinery, farm/levels.js)
       methods: farmUnlocks(s, planet).methods, cellOk: cellRule(map, s.outposts && s.outposts[planet]), pods: s.pods || {},
-      levels: cropLevels(s),
+      levels: cropLevels(s), levelWhy: levelWhyOf(s),
       held, heldTotal: sumOf(held),
       f1: f1 && ((s.farmContracts || {})[planet] || {}).state === 'active' ? f1 : null, delivered: f1 ? measureCropDelivered(s, f1.crop) : 0,
     };
@@ -251,11 +257,14 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
       }
       case 'prep': return prep(o, a.plot, ctx);
       case 'plant': {
-        // pods have no level: the plot grows at the crop's tech-tree level now, capped by the plot (owner rule 9)
+        // pods have no level: the plot grows at the crop's level now (its mastery, with the machinery owned; owner rules
+        // 12-13), capped by the plot (level 5 needs water). Every pod planted adds to the crop's mastery [MM-story_mwatmww5_1l]
         const crop = String(a.pick).split(':')[0];
         if (!podsUnlocked(s, crop)) return { error: `${(cropOf(crop) || { name: crop }).name} seed pods are locked` };   // owner rule 10
-        const r = plant(o, a.plot, { crop, level: cropLevel(s, crop) }, { ...ctx, podsHeld: podCount(s, crop) });
-        return r.error ? r : { outpost: r.outpost, after: (sv) => spendPods(sv, crop, r.spend.n), farm: { planted: crop, level: r.level, capped: r.why } };
+        const lv = cropLevelInfo(s, crop, (id) => (TECH_BY_ID[id] || { name: id }).name);
+        const r = plant(o, a.plot, { crop, level: lv.level }, { ...ctx, podsHeld: podCount(s, crop) });
+        return r.error ? r : { outpost: r.outpost, after: (sv) => { spendPods(sv, crop, r.spend.n); notePlanted(sv, crop, r.spend.n); },
+          farm: { planted: crop, level: r.level, capped: r.why || lv.why } };
       }
       case 'harvest': case 'harvestAll': {
         const r = a.type === 'harvest' ? harvest(o, a.plot, { map, held: ctx.heldTotal }) : harvestAll(o, { map, held: ctx.heldTotal });
@@ -267,7 +276,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         // which plots were harvested, how, at what level and cycle: the harvest effect (farm/view/embers.js) [MM-story_mwabh2oc_j]
         const plots = results.map((x) => { const id = x.plot || a.plot; return { plot: id, kind: x.kind, level: x.level, cycle: r.outpost.farm.plots[id].cycle }; });
         return { outpost: r.outpost, farm: { harvested: got, pods, blocked: r.blocked || [], plots }, after: (sv) => {
-          for (const [id, u] of Object.entries(got)) addToStore(sv, 'farm', planet, id, u);
+          for (const [id, u] of Object.entries(got)) { addToStore(sv, 'farm', planet, id, u); noteGrown(sv, id, u); }   // mastery (rule 12)
           for (const p of pods) addPods(sv, p.crop, p.n);
         } };
       }
@@ -275,7 +284,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         if (!ctx.f1 || ctx.f1.crop !== a.crop) return { error: 'no contract asks for that' };
         const n = Math.min(Math.max(0, ctx.f1.deliver - ctx.delivered), Math.floor(ctx.held[a.crop] || 0));
         if (!n) return { error: `harvest ${cropOf(a.crop).name} first` };
-        return { outpost: o, farm: { delivered: n }, after: (sv) => { takeFromStore(sv, 'farm', planet, a.crop, n); recordDelivery(sv, planet, a.crop, n); recordDelivered(sv, { [a.crop]: n }); } };
+        return { outpost: o, farm: { delivered: n }, after: (sv) => { takeFromStore(sv, 'farm', planet, a.crop, n); recordDelivery(sv, planet, a.crop, n); recordDelivered(sv, { [a.crop]: n }); noteGrown(sv, a.crop, n); } };
       }
       case 'farmSell': {   // the farm store's crops at the battle's price (common 1, uncommon 2; rare and epic are kept)
         const sale = sellable(ctx.held);
@@ -283,7 +292,7 @@ export function createSession({ store, planet, map, catalog = null, raidHook, fl
         return { outpost: o, gold: sale.gold, farm: { sold: sale.units }, after: (sv) => {
           for (const [id, u] of Object.entries(ctx.held)) {
             const c = cropOf(id);
-            if (c && (c.tier === 'common' || c.tier === 'uncommon') && Math.floor(u) > 0) { takeFromStore(sv, 'farm', planet, id, Math.floor(u)); recordDelivered(sv, { [id]: Math.floor(u) }); }
+            if (c && (c.tier === 'common' || c.tier === 'uncommon') && Math.floor(u) > 0) { takeFromStore(sv, 'farm', planet, id, Math.floor(u)); recordDelivered(sv, { [id]: Math.floor(u) }); noteGrown(sv, id, Math.floor(u)); }
           }
         } };
       }

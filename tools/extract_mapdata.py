@@ -403,27 +403,18 @@ def farm_problems(data, planets):
         vals = [r.get("Value_Mult") for r in levels]
         if not all(isinstance(v, (int, float)) for v in vals) or vals != sorted(vals) or len(set(vals)) != 5:
             out.append("Pod_Levels: Value_Mult must rise with every level")
-    # the tech tree's crop chains (owner rule 9): per crop, levels 2..n in order, each node priced and gated
-    by_crop = {r.get("Resource_Id"): r for r in crops}
-    nodes, chains = set(), {}
-    for r in data["cropLevels"]:
-        tag = f"Crop_Levels {r.get('Crop_Id')} {r.get('Level')}"
-        c = by_crop.get(r.get("Crop_Id"))
-        if not c:
-            out.append(f"{tag}: not a crop")
-        elif c.get("Planet_Key") != r.get("Planet_Key"):
-            out.append(f"{tag}: the crop is not {r.get('Planet_Key')}'s")
-        if not (isinstance(r.get("Price"), int) and r["Price"] > 0):
-            out.append(f"{tag}: Price must be a positive whole number")
-        if not (isinstance(r.get("Node"), str) and r["Node"].isidentifier()) or r.get("Node") in nodes:
-            out.append(f"{tag}: Node must be a unique identifier")
-        nodes.add(r.get("Node"))
-        if not re.fullmatch(r"F\d+:(accepted|complete)", str(r.get("Unlock") or "")):
-            out.append(f"{tag}: Unlock must be F<n>:accepted or F<n>:complete")
-        chains.setdefault(r.get("Crop_Id"), []).append(r.get("Level"))
-    for cid, lv in chains.items():
-        if lv != list(range(2, 2 + len(lv))) or len(lv) > 4:
-            out.append(f"Crop_Levels {cid}: levels must run 2, 3, … 5 in order, got {lv}")
+    # how a crop's levels 2-5 open (owner rules 12-13; 2026-11-21: mastery, and a machine from level 3)
+    rules = data["cropLevels"]
+    if [r.get("Level") for r in rules] != [2, 3, 4, 5]:
+        out.append(f"Crop_Levels: expected levels 2-5 in order, got {[r.get('Level') for r in rules]}")
+    else:
+        m = [r.get("Mastery") for r in rules]
+        if not all(isinstance(v, int) and v > 0 for v in m) or m != sorted(m) or len(set(m)) != 4:
+            out.append("Crop_Levels: Mastery must be positive whole numbers rising with every level")
+        for r in rules:
+            mc = r.get("Machine") or ""
+            if r["Level"] >= 3 and not re.fullmatch(r"mc_[a-z_]+", str(mc)):
+                out.append(f"Crop_Levels {r['Level']}: from level 3 a Machine node (mc_...) is needed (owner rule 13)")
     kinds = {r.get("Kind") for r in data["farmBuildings"]}
     for need in ("farmhouse", "silo", "pump"):
         if need not in kinds:
@@ -486,9 +477,9 @@ def main():
                                     header_row_probe=("Kind",)),
         "farmContracts": sheet_rows(wb["Farm_Contracts"], lambda v: isinstance(v, str) and v.isidentifier(),
                                     header_row_probe=("Planet_Key",)),
-        # the tech tree's crop level chains (owner rule 9, 2026-11-10) [MM-story_mwai5f8t_1g]
-        "cropLevels": sheet_rows(wb["Crop_Levels"], lambda v: isinstance(v, str) and v.isidentifier(),
-                                 header_row_probe=("Planet_Key",)) if "Crop_Levels" in wb.sheetnames else [],
+        # how a crop's levels 2-5 open: mastery, and a machine from level 3 (owner 2026-11-21) [MM-story_mwatmww5_1l]
+        "cropLevels": sheet_rows(wb["Crop_Levels"], _is_int,
+                                 header_row_probe=("Level",)) if "Crop_Levels" in wb.sheetnames else [],
     }
 
     apply_rework(data)

@@ -21,7 +21,7 @@
  * ({ crop, units } for the farm store, story A13; pods for s.pods, story A4); the caller banks them. `ctx.held` is
  * what the farm store already holds for this planet (units), so the Silo can be checked.
  *
- * Crop levels (owner rule 9, 2026-11-10): seed pods have no level. A plot is planted at its crop's tech-tree level (the
+ * Crop levels (owner rule 9, 2026-11-10): seed pods have no level. A plot is planted at its crop's level (mastery with machinery; the
  * caller reads it with src/farm/levels.js cropLevel), capped by growLevel (level 5 needs a trick: an Irrigated plot with
  * water), and keeps that level until it is harvested — a later upgrade only reaches new plantings.
  *
@@ -123,7 +123,7 @@ export function prep(outpost, plotId, ctx) {
 }
 
 /**
- * The level a plot would grow a crop at if planted now (owner rule 9): the crop's tech-tree level `techLevel`, capped by
+ * The level a plot would grow a crop at if planted now (owner rule 9): the crop's level `techLevel` (mastery with machinery), capped by
  * the plot's method (growLevel: level 5 needs an Irrigated plot with water — a water cell or a finished, powered Pump
  * in reach at time t). map: the outpost map (no map: no water). → { level, capped, why }
  */
@@ -145,7 +145,7 @@ export const plotYield = (p) => yieldOf(p.crop, p.method, p.level) * (plotPlants
 
 /**
  * Plant a prepped plot with one crop, one pod per plant: as many pods as the player holds, up to the method's Pods_Per. Pods have no level: `level` is the
- * crop's tech-tree level (src/farm/levels.js cropLevel), and the plot stores the level it actually grows at
+ * crop's level (src/farm/levels.js cropLevel), and the plot stores the level it actually grows at
  * (plantLevel) until it is harvested. The caller spends the pods (story A4): ctx.podsHeld is how many of that crop the
  * player holds. ctx: { now, map, podsHeld }.
  * → { outpost, level, capped, why, spend: { crop, n } } or { error }
