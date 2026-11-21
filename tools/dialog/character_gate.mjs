@@ -43,7 +43,7 @@ const findings = characterFindings(model, files, ranks);
 
 const byCheck = {};
 for (const f of findings) (byCheck[f.check] || (byCheck[f.check] = [])).push(f);
-const CHECK_TITLE = { files: 'Characters files', personality: 'Personality outside the table (Character-System §4)', love: 'Loves without a thread (§5)',
+const CHECK_TITLE = { files: 'Characters files', personality: 'Personality outside the table (Character-System §4)', love: 'Loves with no thread, or against the matrix with no drama tag (§5)',
   hate: 'Hates that name no one (§5)', knowers: 'Secrets no one is in a position to know (§6)', twist: 'Secrets an evil enemy can tell, with no twist (§7.2)',
   secondary: 'Secondaries who know nothing about the map character (§9 check 8)', traits: 'Faction traits (§2a)', magic: 'Magic tags and magic hearts (Magic-System §6.1, §9)' };
 

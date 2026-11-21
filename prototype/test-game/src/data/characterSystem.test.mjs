@@ -70,7 +70,6 @@ test('3. threads name real characters and real kinds, and every GDD §12 thread 
   for (const t of threads.threads) {
     assert.ok(model.chars.has(t.from), `unknown ${t.from}`); assert.ok(model.chars.has(t.to), `unknown ${t.to}`);
     assert.ok(kinds.has(t.kind), t.kind);
-    if (t.kind === 'love' && model.baseRelation(t.from, t.to) <= 0) assert.ok(t.tag || t.note, `${t.from} → ${t.to}: a love against the matrix must say why`);
   }
   const has = (from, to, kind) => threads.threads.some((t) => t.from === from && t.to === to && t.kind === kind && t.gdd);
   assert.ok(has('Captain Otto von Halbrecht', 'Rei "Skylark" Tanaka', 'love') && has('Rei "Skylark" Tanaka', 'Captain Otto von Halbrecht', 'love'), '[DL]');

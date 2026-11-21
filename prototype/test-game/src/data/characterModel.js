@@ -112,6 +112,9 @@ export function buildModel({ packs, files = {}, threads = { threads: [] } }) {
   const reachOf = (n, secret) => {
     if (secret.reach) return secret.reach;
     let r = DEFAULT_REACH[secret.key] || 'private';
+    // a hate of a group (no one they rival or hunt) is not known across the line; the people around them hear it
+    // (owner 2026-11-20: "hate groups or individuals .. hate could be dislike or dont trust")
+    if (secret.key === 'hate' && !list.some((t) => t.from === n && (t.kind === 'rival' || t.kind === 'hunts'))) r = 'close';
     const p = personalityOf(n).personality;
     const flaws = flawsFor(flawInput(n));
     if (p === 'whimsical' && (secret.key === 'magic' || secret.key === 'sense')) r = 'close';

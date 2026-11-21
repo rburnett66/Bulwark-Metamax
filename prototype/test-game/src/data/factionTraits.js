@@ -3,7 +3,10 @@
  *
  * Owner 2026-11-20: "Each faction might also possess a set of common strengths as characteristics. Everyone knows
  * Powder is resourceful and heavily armored, but lacking in science and strategic planning." Powder's are the owner's
- * words; the other eight were drafted and confirmed by the owner the same day ("confirm traits").
+ * words; the other eight were drafted and confirmed by the owner the same day ("confirm traits"). Where a draft trait
+ * disagreed with the unit data, the owner chose to change the wording, not the units ("change wording for units"):
+ * Air lacks thrift (was staying power), High Tech is known for precision at range and lacks speed (was precision /
+ * numbers), Arcane lacks reach (was hardiness).
  * docs/tech-plan/Character-System.md §2a. Authored world input, public.
  *
  * Each trait may name:
@@ -22,11 +25,11 @@ export const FACTION_TRAITS = Object.freeze({
   },
   air: {
     knownFor: [{ word: 'speed', stat: 'speed' }, { word: 'daring aces' }],
-    knownToLack: [{ word: 'staying power', stat: 'hp' }, { word: 'patience', push: { axis: 'courage', by: 1 } }],
+    knownToLack: [{ word: 'thrift (the costliest units)', stat: 'cost' }, { word: 'patience', push: { axis: 'courage', by: 1 } }],
   },
   hightech: {
-    knownFor: [{ word: 'precision', stat: 'dps' }, { word: 'shields' }],
-    knownToLack: [{ word: 'numbers (every unit is expensive)', stat: 'cost' }, { word: 'adaptability', push: { axis: 'mind', by: 1 } }],
+    knownFor: [{ word: 'precision at range', stat: 'range' }, { word: 'shields' }],
+    knownToLack: [{ word: 'speed (heavy kit)', stat: 'speed' }, { word: 'adaptability', push: { axis: 'mind', by: 1 } }],
   },
   artillery: {
     knownFor: [{ word: 'range', stat: 'range' }, { word: 'siege patience' }],
@@ -38,7 +41,7 @@ export const FACTION_TRAITS = Object.freeze({
   },
   arcane: {
     knownFor: [{ word: 'discipline of faith' }, { word: 'energy weapons', stat: 'dps' }],
-    knownToLack: [{ word: 'open minds (dogma)', push: { axis: 'mind', by: 1 } }, { word: 'hardiness', stat: 'hp' }],
+    knownToLack: [{ word: 'open minds (dogma)', push: { axis: 'mind', by: 1 } }, { word: 'reach (short-ranged weapons)', stat: 'range' }],
   },
   space: {
     knownFor: [{ word: 'advanced science' }, { word: 'long sight (orbital)', stat: 'range' }],

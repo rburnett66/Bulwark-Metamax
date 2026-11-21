@@ -30,6 +30,14 @@ export function statRanks(units, packs) {
   return { avg, rank, n: Object.keys(avg).length };
 }
 
+/** The distinctive words a hate would use for a character: the full name and the last name (not titles). */
+function namesIn(name) {
+  const bare = name.replace(/\s*\(.*?\)/g, '').replace(/"[^"]*"/g, '').trim();
+  const parts = bare.split(/\s+/);
+  const last = parts[parts.length - 1];
+  return [bare, ...(last && last.length >= 4 && /^[A-Z]/.test(last) ? [last] : [])];
+}
+
 const short = (n) => n.replace(/^(Captain|Colonel|Field-Marshal|General|Chancellor|Quartermaster|Sergeant|Freikorps raider) /, '');
 
 /**
@@ -52,8 +60,16 @@ export function characterFindings(model, files, ranks) {
         const t = model.threads.find((x) => x.from === c.name && x.to === s.who && (x.kind === 'love' || x.kind === 'kin'));
         if (!t) add(`love:${c.name}`, 'love', c.faction, c.name, `loves ${s.who}, with no love or kin thread`);
       }
-      if (s.key === 'hate' && !model.threads.some((x) => x.from === c.name && (x.kind === 'rival' || x.kind === 'hunts'))) {
-        add(`hate:${c.name}`, 'hate', c.faction, c.name, `the hate names no one they hunt or rival: "${String(s.text).slice(0, 70)}"`);
+      // a hate may be of a group or a person, and may be dislike or distrust (owner 2026-11-20); a hate that names a
+      // character needs a rival or hunts thread to them
+      if (s.key === 'hate') {
+        const text = String(s.text), others = [...model.chars.values()].filter((o) => o.name !== c.name);
+        const lastCount = {}; for (const o of model.chars.values()) { const l = namesIn(o.name)[1]; if (l) lastCount[l] = (lastCount[l] || 0) + 1; }
+        const named = others.find((o) => text.includes(namesIn(o.name)[0]))
+          || others.find((o) => namesIn(o.name)[1] && lastCount[namesIn(o.name)[1]] === 1 && text.includes(namesIn(o.name)[1]));
+        if (named && !model.threads.some((x) => x.from === c.name && x.to === named.name && (x.kind === 'rival' || x.kind === 'hunts'))) {
+          add(`hate:${c.name}`, 'hate', c.faction, c.name, `hates ${named.name}, with no rival or hunts thread to them`);
+        }
       }
       const reach = model.reachOf(c.name, s);
       const knowers = model.knowersOf(c.name, s);
@@ -65,6 +81,13 @@ export function characterFindings(model, files, ranks) {
         if (missing.length) add(`magic-tags:${c.name}:${s.key}`, 'magic', c.faction, c.name, `${s.key} has no ${missing.join(', ')}`);
       }
     }
+  }
+
+  // a love against the matrix (base ≤ 0) is a drama thread and must say which one (Character-System §5)
+  for (const t of model.threads) {
+    if (t.kind !== 'love' || t.tag) continue;
+    const b = model.baseRelation(t.from, t.to);
+    if (b !== null && b <= 0) add(`love-matrix:${t.from}->${t.to}`, 'love', model.chars.get(t.from).faction, t.from, `loves ${t.to} against the matrix (base ${b}) with no drama tag`);
   }
 
   for (const [key, file] of Object.entries(files)) {
