@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { moodFor, standingOf, shiftMood, moodShiftOf, spendMoodCall, noteRapport, MOOD_SHIFTS, MOOD_ORDER } from './standings.js';
+import { moodFor, standingOf, shiftMood, moodShiftOf, spendMoodCall, noteRapport, noteMoodSeen, moodChangeOf, MOOD_SHIFTS, MOOD_ORDER } from './standings.js';
 import { withMood } from '../comm/mapCast.js';
 
 const wary = () => ({ rapport: { X: { score: -30, kept: 0, broken: 1 } } });
@@ -46,5 +46,19 @@ test('map dialogs carry the speaker\'s portrait; main.js spends a shift only in 
   assert.match(main, /withMood\(open\.spec, loadSave\(\)\)/);
   assert.match(main, /withMood\(secondaryCall\(matchCast\(\), voicePacks\), loadSave\(\)\)/);
   assert.match(main, /withMood\(closing, loadSave\(\)\)/);
-  assert.match(main, /if \(closing && mode === 'play'\) moodShown\(closing\.name\)/);
+  assert.match(main, /if \(closing && mode === 'play'\) moodShown\(closing\.name, call\.mood\)/);
+  assert.match(main, /noteMoodSeen\(sv, name, mood\)/);
+});
+
+test('a portrait that changed since it was last seen is flagged up (hearts) or down (bolts)', () => {
+  const s = wary();
+  assert.equal(withMood({ name: 'X' }, s).moodChange, null, 'never seen: nothing to compare');
+  noteMoodSeen(s, 'X', 'antagonistic');
+  assert.equal(withMood({ name: 'X' }, s).moodChange, null, 'unchanged');
+  shiftMood(s, 'X', 'gift');
+  assert.equal(withMood({ name: 'X' }, s).moodChange, 'up');
+  noteMoodSeen(s, 'X', 'neutral'); s.moodShift = {}; s.rapport.X.score = -80;
+  assert.equal(moodChangeOf(s, 'X', standingOf(s, 'X').mood), 'down');
+  noteMoodSeen(s, 'X', 'bogus');
+  assert.equal(s.moodSeen.X, 'neutral', 'only real moods are remembered');
 });

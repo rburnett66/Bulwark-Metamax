@@ -22,7 +22,7 @@ import {
   initAudio, audioReady, paramsFor, playUtterance, startStatic, playSweep, playDrop, utterDuration,
   isMuted, setMuted, getChannelVolume, setChannelVolume, onAudioChange,
 } from './voice.js';
-import { MOOD_PORTRAITS } from '../data/portraitMoods.js';
+import { MOOD_PORTRAITS, PLACEHOLDER_PORTRAITS } from '../data/portraitMoods.js';
 
 /* Authored portrait lookup: content/dialog/portraits/<slug(name)>.png, silhouette SVG fallback
    (same authored-art-with-fallback pattern as unitArt.js). */
@@ -41,6 +41,35 @@ export function portraitImg(name, mood = null, dir = PORTRAIT_DIR) {
   if (!mood || mood === 'neutral' || !MOODS.includes(mood) || !MOOD_PORTRAITS.has(portraitSlug(name))) return '<img alt="" src="' + base + '" onerror="this.remove()">';
   const first = dir + portraitSlug(name) + '-' + mood + '.png';
   return '<img alt="" src="' + first + '" data-base="' + base + '" onerror="if(this.dataset.base){this.src=this.dataset.base;this.removeAttribute(\'data-base\')}else{this.remove()}">';
+}
+
+/**
+ * The relationship status printed over a PLACEHOLDER portrait (owner 2026-11-20: "copy the current image into the other
+ * two slots as new images (flag to be replaced) and print the relationship status over the image - neutral friendly
+ * antagonistic"). Placeholders are byte copies of the base portrait (tools/dialog/expression_prompts.py lists them);
+ * final art speaks for itself and carries no label. → html ('' when no label)
+ */
+export function relationLabel(name, mood) {
+  if (!mood || !MOODS.includes(mood) || !PLACEHOLDER_PORTRAITS.has(portraitSlug(name))) return '';
+  return '<span class="bw-rel bw-rel-' + mood + '">' + mood.toUpperCase() + '</span>';
+}
+
+const HEART = '<svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.2C.9 8.3 3 4.5 6.7 4.5c2.1 0 3.6 1.2 5.3 3.2 1.7-2 3.2-3.2 5.3-3.2 3.7 0 5.8 3.8 4.3 7.3C19.5 16.4 12 21 12 21z"/></svg>';
+const BOLT = '<svg viewBox="0 0 24 24"><path d="M13.5 1.5 4 13.5h6l-1.5 9 9.5-12h-6z"/></svg>';
+/**
+ * Doobers over the portrait when the relationship changed since the player last saw this character (owner 2026-11-20:
+ * "draw animation doobers over the image with heart icons for improved and lightening bolt icons for worsens").
+ * change: 'up' (hearts) | 'down' (bolts). Positions come from the icon's index, not chance. → html ('' for no change)
+ */
+export function doobersHTML(change, n = 7) {
+  if (change !== 'up' && change !== 'down') return '';
+  const icon = change === 'up' ? HEART : BOLT;
+  let h = '<div class="bw-doobers bw-doobers-' + change + '" aria-hidden="true">';
+  for (let i = 0; i < n; i++) {
+    const x = 18 + ((i * 37) % 64), drift = ((i % 3) - 1) * 14, size = 18 + (i % 3) * 6;
+    h += '<i style="left:' + x + '%;--dx:' + drift + 'px;--sz:' + size + 'px;animation-delay:' + (i * 90) + 'ms">' + icon + '</i>';
+  }
+  return h + '</div>';
 }
 
 /* Tool card skin (comm.html) at corner scale — same class names/roles, bw-comm prefixed. */
@@ -71,6 +100,21 @@ const CSS = `
 .bw-comm-portrait img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
   object-position:50% 10%;filter:saturate(.9) contrast(1.05)}   /* full-body art: frame the head */
 .bw-comm-portrait.speaking>svg,.bw-comm-portrait.speaking img{animation:bwCommBreathe .18s infinite alternate}
+/* relationship status over a placeholder portrait, and hearts / bolts when it changed [MM-story_mwpni0v4_3m] */
+.bw-rel{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);z-index:3;padding:2px 7px;border-radius:4px;
+  font-size:9.5px;font-weight:700;letter-spacing:1.2px;background:rgba(4,8,12,.78);border:1px solid currentColor;white-space:nowrap}
+.bw-rel-antagonistic{color:#ff7a6b}.bw-rel-neutral{color:#b8c8d8}.bw-rel-friendly{color:#6fe39a}
+.bw-doobers{position:absolute;inset:0;z-index:4;pointer-events:none;overflow:hidden}
+.bw-doobers i{position:absolute;bottom:18%;width:var(--sz);height:var(--sz);opacity:0;animation:bwDoober 1.5s ease-out forwards}
+.bw-doobers i svg{width:100%;height:100%;display:block}
+.bw-doobers-up i svg{fill:#ff5d8f;filter:drop-shadow(0 0 6px #ff5d8f)}
+.bw-doobers-down i svg{fill:#ffd23f;filter:drop-shadow(0 0 6px #ffb020)}
+@keyframes bwDoober{0%{opacity:0;transform:translate(0,10px) scale(.4)}15%{opacity:1;transform:translate(0,0) scale(1.15)}
+  100%{opacity:0;transform:translate(var(--dx),-90px) scale(.9)}}
+.bw-doobers-down i{animation-name:bwDooberZap}
+@keyframes bwDooberZap{0%{opacity:0;transform:translate(0,-60px) scale(.5) rotate(-10deg)}12%{opacity:1;transform:translate(0,0) scale(1.2)}
+  22%{transform:translate(-3px,0) scale(1)}30%{transform:translate(3px,0)}100%{opacity:0;transform:translate(var(--dx),10px) scale(.8)}}
+@keyframes bwDooberStill{0%{opacity:0}20%{opacity:1}80%{opacity:1}100%{opacity:0}}
 @keyframes bwCommBreathe{from{opacity:.75}to{opacity:1;transform:scale(1.01)}}
 .bw-comm-pscan{position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0 3px,rgba(0,0,0,.4) 3px 4px);
   mix-blend-mode:overlay;pointer-events:none;z-index:2}
@@ -114,6 +158,7 @@ canvas.bw-comm-static.on{opacity:.85}
 @media (prefers-reduced-motion: reduce){
   .bw-comm.flash{animation:none}
   .bw-comm-portrait.speaking>svg,.bw-comm-portrait.speaking img{animation:none}
+  .bw-doobers i{animation:bwDooberStill 1.2s linear forwards!important}
 }
 .bw-audio{position:fixed;right:14px;bottom:88px;z-index:61;display:flex;align-items:center;gap:6px;padding:3px 8px 3px 3px;
   border:1px solid #26333f;border-radius:6px;background:rgba(11,17,25,.92);color:#8ea0b0}
@@ -235,8 +280,8 @@ function cardHTML(d, f) {
     '<div class="bw-comm-bars"><i></i><i></i><i></i><i></i><i></i></div></div>' +
     '<div class="bw-comm-body">' +
     '<div class="bw-comm-portrait">' + (f.portrait || PORTRAIT) +
-    portraitImg(d.name, d.mood) +
-    '<div class="bw-comm-pscan"></div><div class="bw-comm-veil"></div></div>' +
+    portraitImg(d.name, d.mood) + relationLabel(d.name, d.mood) +
+    '<div class="bw-comm-pscan"></div><div class="bw-comm-veil"></div><div class="bw-comm-dslot"></div></div>' +
     '<div class="bw-comm-right"><div class="bw-comm-meta"></div><div class="bw-comm-text"></div>' +
     '<div class="bw-comm-foot"><span class="bw-comm-foot-l"></span>' + crumbsHTML(d.crumbs) + '<span class="bw-comm-qchip">◇ QUEST OFFER</span><span class="bw-comm-end">— END —</span></div>' +
     '</div></div>' +
@@ -365,8 +410,9 @@ export function createComm(doc) {
     // S3 translator boot
     sub.textContent = 'DECODING…';
     await delay(rm ? 60 : 340); if (!live()) return;
-    // S4 portrait resolve
+    // S4 portrait resolve; the relationship changed since they were last seen: hearts or bolts over the portrait
     veil.style.opacity = 0;
+    if (d.moodChange) { const slot = card.querySelector('.bw-comm-dslot'); if (slot) slot.innerHTML = doobersHTML(d.moodChange); }
     await delay(rm ? 60 : 460); if (!live()) return;
     // S5 header populate
     sub.textContent = d.sub || f.name;

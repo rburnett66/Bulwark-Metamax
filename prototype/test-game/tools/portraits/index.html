@@ -31,7 +31,7 @@ main{padding:14px 16px;display:grid;grid-template-columns:repeat(auto-fill,minma
 .flag.ok{color:var(--ok)}
 .row{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .slot{display:flex;flex-direction:column;gap:4px;align-items:stretch}
-.slot .pic{aspect-ratio:3/4;border-radius:6px;background:#0b141d;border:2px solid var(--line);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:11px;text-align:center}
+.slot .pic{position:relative;aspect-ratio:3/4;border-radius:6px;background:#0b141d;border:2px solid var(--line);overflow:hidden;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:11px;text-align:center}
 .slot .pic img{width:100%;height:100%;object-fit:cover;display:block}
 .slot.on .pic{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
 .slot .nm{font-size:11px;text-transform:uppercase;letter-spacing:.5px}
@@ -41,13 +41,16 @@ main{padding:14px 16px;display:grid;grid-template-columns:repeat(auto-fill,minma
 .slot button{background:#16273a;border:1px solid #2f4a66;color:var(--ink);border-radius:5px;font:inherit;font-size:11px;padding:3px 4px;cursor:pointer}
 .slot button:hover{background:#1e3a49}
 .empty{padding:40px;color:var(--dim)}
+.rel{position:absolute;left:50%;bottom:6px;transform:translateX(-50%);padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:1px;background:rgba(4,8,12,.8);border:1px solid currentColor}
+.rel.antagonistic{color:var(--ant)}.rel.neutral{color:var(--neu)}.rel.friendly{color:var(--fri)}
+.slot.ph .st{color:var(--warn)}
 </style>
 </head>
 <body>
 <script src="../toolhead.js"></script>
 <div class="bar">
   <label>Faction <select id="fac"><option value="">All</option></select></label>
-  <label>Show <select id="show"><option value="all">All</option><option value="todo">Missing a portrait</option><option value="ready">Both ready</option><option value="base">Base art problems</option></select></label>
+  <label>Show <select id="show"><option value="all">All</option><option value="todo">Missing a portrait</option><option value="ready">Both final</option><option value="ph">On placeholders</option><option value="base">Base art problems</option></select></label>
   <label>Rating <input id="score" type="range" min="-100" max="100" step="5" value="0"><b id="scoreV">0</b></label>
   <label>Mood shift <select id="shift"><option value="">None</option><option value="gift">Gift (+1)</option><option value="info">News (+1)</option><option value="kept">Promise kept (+1)</option><option value="broken">Promise broken (−1)</option><option value="slight">Slighted (−1)</option></select></label>
   <span class="sum" id="sum"></span>
@@ -67,9 +70,9 @@ function gameMood() {
   return moodFor(rapportBand(score, true).key, sh ? sh.step : 0);
 }
 
-function slot(kind, label, src, status, prompt) {
-  return `<div class="slot ${kind}" data-kind="${kind}">
-    <div class="pic"><img alt="" src="${esc(ROOT + src)}" data-src="${esc(src)}" onerror="this.parentNode.textContent='missing'"></div>
+function slot(kind, label, src, status, prompt, ph = false) {
+  return `<div class="slot ${kind}${ph ? ' ph' : ''}" data-kind="${kind}">
+    <div class="pic"><img alt="" src="${esc(ROOT + src)}" data-src="${esc(src)}" onerror="this.parentNode.textContent='missing'">${ph ? `<span class="rel ${kind}">${kind.toUpperCase()}</span>` : ''}</div>
     <span class="nm">${label}</span><span class="st">${esc(status)}</span>
     ${prompt ? `<button data-prompt="${esc(prompt)}">Copy prompt</button>` : ''}</div>`;
 }
@@ -80,20 +83,20 @@ function card(c) {
   return `<article class="card"><h3>${esc(c.name)}</h3>
     <div class="meta">${esc(c.factionName)} · ${esc(c.alignName)} · ${esc(c.personality)} <span title="${esc(c.personalitySource)}">ⓘ</span></div>
     <div class="flags">${flags}</div>
-    <div class="row">${slot('neutral', 'Neutral (base)', c.base, '', '')}
-      ${data.moods.map((m) => slot(m, m, c.moods[m].file, c.moods[m].problems.join(', ') || 'ready', c.moods[m].prompt)).join('')}</div></article>`;
+    <div class="row">${slot('neutral', 'Neutral (base)', c.base, '', '', data.moods.some((m) => c.moods[m].placeholder))}
+      ${data.moods.map((m) => slot(m, m, c.moods[m].file, c.moods[m].problems.join(', ') || 'ready', c.moods[m].prompt, c.moods[m].placeholder)).join('')}</div></article>`;
 }
 
 function render() {
   const fac = $('fac').value, show = $('show').value;
   const list = data.characters.filter((c) => (!fac || c.faction === fac)
-    && (show === 'all' || (show === 'ready' && c.ready) || (show === 'todo' && !c.ready) || (show === 'base' && c.baseProblems.length)));
+    && (show === 'all' || (show === 'ready' && c.ready) || (show === 'todo' && !c.ready) || (show === 'ph' && data.moods.some((m) => c.moods[m].placeholder)) || (show === 'base' && c.baseProblems.length)));
   $('grid').innerHTML = list.length ? list.map(card).join('') : '<div class="empty">Nothing matches.</div>';
   const ready = data.characters.filter((c) => c.ready).length;
-  $('sum').textContent = `${ready} of ${data.characters.length} characters have both · showing ${list.length}`;
+  $('sum').textContent = `${ready} of ${data.characters.length} characters have both final · showing ${list.length}`;
   highlight();
   // live size check: the file on disk may be newer than prompts.json
-  for (const img of $('grid').querySelectorAll('.slot:not(.neutral) img')) {
+  for (const img of $('grid').querySelectorAll('.slot:not(.neutral):not(.ph) img')) {
     img.addEventListener('load', () => {
       const st = img.closest('.slot').querySelector('.st');
       const okSize = img.naturalWidth === data.size[0] && img.naturalHeight === data.size[1];

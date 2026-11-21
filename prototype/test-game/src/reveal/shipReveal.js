@@ -42,7 +42,8 @@ import { PLANETS } from '../data/planets.js';
 import '../data/factions.js';
 import { createStandingsScreen } from '../menu/standingsScreen.js';
 import { loadSave, updateSave } from '../save/save.js';
-import { noteRapportEvent, standingOf } from '../save/standings.js';
+import { noteRapportEvent, noteMoodSeen } from '../save/standings.js';
+import { withMood as callWithMood } from '../comm/mapCast.js';
 import { FACTOR_ROOM, factorOf, factorDesk, factorLines, factorCard, noteFactorTalk } from '../farm/factor.js';
 
 const CSS = `
@@ -132,7 +133,11 @@ async function openShipStage({ planet, tier, reduce, mount, label }) {
 /** A call with the character's portrait expression from the player's rating with them (standings.js). */
 function withMood(call, name) {
   if (!call) return call;
-  try { return { ...call, mood: standingOf(loadSave(), name).mood }; } catch (e) { return call; }
+  try {
+    const c = callWithMood({ ...call, name }, loadSave());   // the portrait, and hearts or bolts if it changed
+    updateSave((sv) => { noteMoodSeen(sv, name, c.mood); });
+    return c;
+  } catch (e) { return call; }
 }
 
 async function speak(doc, calls) {

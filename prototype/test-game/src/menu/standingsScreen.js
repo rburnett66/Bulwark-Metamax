@@ -15,7 +15,7 @@ import { characterStandings, factionStandings, ensureRapport, LOYALTY_TIERS } fr
 import { alignWord } from '../save/contracts.js';
 import { ensureMissionStyle } from './missionLog.js';
 import { esc, fsvg, factionColor } from './missionView.js';
-import { portraitImg } from '../comm/commCard.js';
+import { portraitImg, relationLabel } from '../comm/commCard.js';
 import { revealSecrets, PERSONALITIES } from '../save/secrets.js';
 import { characterRelations, factionRelationRow } from '../data/factionRelations.js';
 import { loadCharacterFiles, characterEntry } from '../comm/mapCast.js';
@@ -26,7 +26,7 @@ const PORTRAITS = new URL('../../content/dialog/portraits/', import.meta.url).hr
 export const BAND_VAR = Object.freeze({ trusted: '--s-ready', allied: '--s-ready', friendly: '--cyan2', neutral: '--s-active', wary: '--s-risk', hostile: '--s-failed', unmet: '--s-locked' });
 const ALIGN_NAME = Object.freeze({ AG: 'Absolute good', PG: 'Principled good', G: 'Good', CG: 'Chaotic good', N: 'Neutral', CE: 'Chaotic evil', E: 'Evil', PE: 'Principled evil', DE: 'Dark evil' });
 const signed = (n) => (n > 0 ? '+' : '') + Math.round(n).toLocaleString('en-US');
-const portrait = (name, cls, mood = null) => `<span class="${cls}">${portraitImg(name, mood, PORTRAITS)}</span>`;   // the rating's expression (angry / neutral / happy) when drawn
+const portrait = (name, cls, mood = null) => `<span class="${cls}">${portraitImg(name, mood, PORTRAITS)}${cls === 'bigpt' ? relationLabel(name, mood) : ''}</span>`;   // the relationship portrait (antagonistic / neutral / friendly); the big one prints the status over a placeholder
 
 const STYLE = String.raw`
 .bwm-ml .stand .rt{grid-template-columns:34px 1fr auto;border-top-color:var(--rc)}
@@ -39,7 +39,9 @@ const STYLE = String.raw`
 .bwm-ml .stand .frow[aria-selected=true]{background:color-mix(in srgb,var(--fc) 14%,#12161d)}
 .bwm-ml .stand .frow .bar{grid-column:1 / span 2;height:8px}
 .bwm-ml .stand .frow b{font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--rc)}
-.bwm-ml .stand .rdet .bigpt{width:96px;height:96px;display:block;border:2px solid var(--rc);background:#0b0e13;overflow:hidden}
+.bwm-ml .stand .rdet .bigpt{position:relative;width:96px;height:96px;display:block;border:2px solid var(--rc);background:#0b0e13;overflow:hidden}
+.bwm-ml .stand .bigpt .bw-rel{position:absolute;left:50%;bottom:4px;transform:translateX(-50%);padding:1px 5px;border-radius:3px;font-size:8.5px;font-weight:700;letter-spacing:1px;background:rgba(4,8,12,.8);border:1px solid currentColor;white-space:nowrap}
+.bwm-ml .stand .bigpt .bw-rel-antagonistic{color:#ff7a6b}.bwm-ml .stand .bigpt .bw-rel-neutral{color:#b8c8d8}.bwm-ml .stand .bigpt .bw-rel-friendly{color:#6fe39a}
 .bwm-ml .stand .rdet .bigpt img{width:100%;height:100%;object-fit:cover}
 .bwm-ml .stand .rdet .rdn{color:var(--rc)}
 .bwm-ml .stand .rdet .band{display:inline-block;margin-top:6px;font-size:11px;font-weight:800;letter-spacing:.2em;text-transform:uppercase;color:var(--rc)}

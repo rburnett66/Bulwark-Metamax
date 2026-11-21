@@ -139,6 +139,24 @@ export function spendMoodCall(s, name) {
   if (m.calls <= 0) delete s.moodShift[name];
 }
 
+/**
+ * Did the relationship portrait change since the player last saw this character? (owner 2026-11-20: "When a relationship
+ * status changes draw animation doobers over the image with heart icons for improved and lightening bolt icons for
+ * worsens".) s.moodSeen = { [name]: mood } is written when a call is shown in play (noteMoodSeen).
+ * → 'up' (warmer: hearts) | 'down' (colder: bolts) | null (same, or never seen)
+ */
+export function moodChangeOf(s, name, mood) {
+  const seen = s && s.moodSeen && s.moodSeen[name];
+  if (!seen || !mood || seen === mood) return null;
+  return MOOD_ORDER.indexOf(mood) > MOOD_ORDER.indexOf(seen) ? 'up' : 'down';
+}
+
+/** The player has now seen this character with this portrait. */
+export function noteMoodSeen(s, name, mood) {
+  if (!s || !name || !MOOD_ORDER.includes(mood)) return;
+  (s.moodSeen || (s.moodSeen = {}))[name] = mood;
+}
+
 /** A character's rating band and relationship portrait from the save. → { band, mood } */
 export function standingOf(s, name) {
   const r = s && s.rapport && s.rapport[name], met = hasMet(r), band = rapportBand(r ? r.score : 0, met);

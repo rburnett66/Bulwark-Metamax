@@ -17,6 +17,11 @@ What this tool does, from content/dialog/voicepacks.json, content/characters/<fa
      disappointment, a schemer's is a thin smile that does not reach the eyes.
   2. A status for every character: base art final or placeholder, base file format and size, and which of the two
      relationship files exist and are the right size (864 x 1152 PNG).
+  2b. PLACEHOLDERS (owner 2026-11-20: "In place of new images copy the current image into the other two slots as new
+     images (flag to be replaced) and print the relationship status over the image"): a missing relationship file is
+     created as a byte copy of the base portrait. A file that is still byte-identical to its base IS a placeholder:
+     flagged here, listed in PLACEHOLDER_PORTRAITS (the game prints NEUTRAL / FRIENDLY / ANTAGONISTIC over it), and
+     replaced by saving the final art over it. Git stores identical copies once. --no-placeholders skips the copy.
   3. Writes src/data/portraitMoods.js: every slug whose two files are present, so a committed set switches on with
      no hand edit.
 
@@ -32,7 +37,9 @@ Review page (served):    python serve_prototype.py prototype/test-game/tools/por
 import json
 import os
 import re
+import shutil
 import struct
+import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.join(HERE, '..', '..')
@@ -182,13 +189,20 @@ def main():
                      'baseProblems': problems(base, need_png=False) + (['placeholder base art'] if art.get(name, 'Placeholder') != 'Final' else []),
                      'moods': {}}
             expr_set = EXPRESSION.get(personality, EXPRESSION['wary'])
+            base_path = os.path.join(PORTRAITS, sl + '.png')
+            base_bytes = open(base_path, 'rb').read() if base['exists'] else None
             for mood in MOODS:
                 file = f'content/dialog/portraits/{sl}-{mood}.png'
-                info = image_info(os.path.join(GAME, file))
+                path = os.path.join(GAME, file)
+                if base_bytes is not None and not os.path.exists(path) and '--no-placeholders' not in sys.argv:
+                    shutil.copyfile(base_path, path)
+                info = image_info(path)
+                placeholder = bool(info['exists'] and base_bytes is not None and open(path, 'rb').read() == base_bytes)
                 prompt = (f'{STYLE} The character is {name}, {fac["name"]} faction, {ALIGN_NAME.get(align, align)}, '
                           f'{personality}. Relationship: {mood}, {FRAME[mood]}. New expression: {expr_set[mood]}.'
                           f'{TINT[family(align)] if mood == "friendly" else ""}')
-                entry['moods'][mood] = {'file': file, 'info': info, 'problems': problems(info), 'prompt': prompt}
+                entry['moods'][mood] = {'file': file, 'info': info, 'placeholder': placeholder,
+                                        'problems': ['placeholder: replace'] if placeholder else problems(info), 'prompt': prompt}
                 rows.append({'faction': key, 'name': name, 'slug': sl, 'align': align, 'personality': personality,
                              'mood': mood, 'file': file, 'base': entry['base'], 'baseArt': entry['baseArt'],
                              'prompt': prompt})
@@ -196,7 +210,9 @@ def main():
             chars.append(entry)
 
     ready = sorted(c['slug'] for c in chars if c['ready'])
-    have_any = sum(1 for c in chars if any(c['moods'][m]['info']['exists'] for m in MOODS))
+    present = sorted(c['slug'] for c in chars if all(c['moods'][m]['info']['exists'] for m in MOODS))
+    placeholders = sorted(c['slug'] for c in chars if any(c['moods'][m]['placeholder'] for m in MOODS))
+    have_any = sum(1 for c in chars if any(c['moods'][m]['info']['exists'] and not c['moods'][m]['placeholder'] for m in MOODS))
 
     # 1. the prompt sheet
     md = ['# Character relationship portraits (prompts)\n',
@@ -213,8 +229,11 @@ def main():
           'otherwise, shifted one step by a kept or broken promise, a gift or news (save/standings.js).\n',
           '**Review page:** `tools/portraits/index.html` shows every character\'s neutral (base) portrait and its two '
           'other relationship portraits side by side, flags what is missing or the wrong size, and copies each prompt.\n',
-          f'**Status:** {len(chars)} characters, {len(ready)} with both relationship portraits, {have_any} with at '
-          f'least one.\n',
+          f'**Status:** {len(chars)} characters, {len(ready)} with both final relationship portraits, {have_any} with at '
+          f'least one final; {len(placeholders)} still on placeholders (copies of the base, labelled in game).\n',
+          '**Placeholders:** a missing portrait is created as a copy of the base portrait and flagged "placeholder: '
+          'replace" below; the game prints the relationship status over it. Save the final art over the placeholder file '
+          'and re-run this tool.\n',
           f'**Shared instruction (inside every prompt):** {STYLE}\n']
     for key, fac in packs['factions'].items():
         md.append(f'\n## {fac["name"]}\n')
@@ -246,13 +265,19 @@ def main():
                 ' * draws content/dialog/portraits/<slug>-<antagonistic|friendly>.png by the player\'s rating with them and any mood\n'
                 ' * shift (save/standings.js moodFor); for any other it keeps the one portrait it has. The tool lists a slug once both\n'
                 ' * files are in content/dialog/portraits/; portraitMoods.test.mjs checks they are there and are 864 × 1152.\n'
+                ' * PLACEHOLDER_PORTRAITS: slugs whose relationship files are still byte copies of the base portrait (owner\n'
+                ' * 2026-11-20: "flag to be replaced"); the game prints the relationship status over them (commCard relationLabel).\n'
                 ' * Review page: tools/portraits/index.html.\n'
                 ' */\n'
                 'export const MOOD_PORTRAITS = new Set([\n')
-        for s in ready:
+        for s in present:
+            f.write(f"  '{s}',\n")
+        f.write(']);\n\nexport const PLACEHOLDER_PORTRAITS = new Set([\n')
+        for s in placeholders:
             f.write(f"  '{s}',\n")
         f.write(']);\n')
-    print(f'{len(rows)} prompts for {len(chars)} characters; {len(ready)} ready, {have_any} started -> {OUT}')
+    print(f'{len(rows)} prompts for {len(chars)} characters; {len(ready)} final, {len(placeholders)} on placeholders, '
+          f'{len(present)} switched on -> {OUT}')
 
 
 if __name__ == '__main__':

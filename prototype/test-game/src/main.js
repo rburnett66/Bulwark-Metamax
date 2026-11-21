@@ -39,7 +39,7 @@ import { loadVoicePacks, challengeCall, winCall, defeatCall, fallbackCall, tipsC
 import { RARE_OFFER, rareOfferEarned, rareContractFor, pickBuyer, settleRareContract, bankRareSale, rareResultLine } from './data/rareContract.js';
 import { addLoyalty, rivalOf } from './save/contracts.js';
 import { loadCharacterFiles, mapCast, openingCall, secondaryCall, closingCall, withMood, SECONDARY_AFTER_WAVE } from './comm/mapCast.js';
-import { spendMoodCall } from './save/standings.js';
+import { spendMoodCall, noteMoodSeen } from './save/standings.js';
 import { noteSecretTold } from './save/secrets.js';
 import { showContractModal } from './render/contractModal.js';
 import { ensureReveals, newlyDue, revealLine, shipArrived } from './save/reveals.js';
@@ -814,7 +814,7 @@ export function boot(mountEl, seed) {
     const call = (open && withMood(open.spec, loadSave()))
       || challengeCall(voicePacks, faction, wave, currentSeed, factionVisits[faction])
       || fallbackCall(faction, wave, currentSeed);
-    if (open && open.spec && hold && mode === 'play') moodShown(open.spec.name);
+    if (open && open.spec && hold && mode === 'play') moodShown(open.spec.name, call.mood);
     if (!call) return Promise.resolve();
     return comm.showCall(hold ? { ...call, hold: true, center: true } : call);   // held = interlude: centre stage, 2× [MM-story_mvempsla_q]
   }
@@ -822,13 +822,14 @@ export function boot(mountEl, seed) {
   /** After wave 3: the secondary from another faction, held centre stage. */
   function commSecondary() {
     const call = withMood(secondaryCall(matchCast(), voicePacks), loadSave());
-    if (call && mode === 'play') moodShown(call.name);
+    if (call && mode === 'play') moodShown(call.name, call.mood);
     return call ? comm.showCall({ ...call, hold: true, center: true }) : null;
   }
 
-  /** A character's call was shown in play: one fewer call on any mood shift they carry (save/standings.js). */
-  function moodShown(name) {
-    if (name) updateSave((sv) => { spendMoodCall(sv, name); });
+  /** A character's call was shown in play: one fewer call on any mood shift they carry, and the portrait they were seen
+   *  with is remembered, so the next change draws hearts or bolts (save/standings.js). */
+  function moodShown(name, mood) {
+    if (name) updateSave((sv) => { spendMoodCall(sv, name); noteMoodSeen(sv, name, mood); });
   }
 
   // ── PRE-BATTLE dialog sequence (owner: ALL dialog before the battle) ──
@@ -1163,7 +1164,7 @@ export function boot(mountEl, seed) {
                 || (S.result === 'win'
                   ? winCall(voicePacks, lastWaveFaction, S.waves ? S.waves.current : 0, currentSeed, commOutcome(), true)
                   : defeatCall(voicePacks, lastWaveFaction, currentSeed));
-              if (closing && mode === 'play') moodShown(closing.name);
+              if (closing && mode === 'play') moodShown(closing.name, call.mood);
               setTimeout(async () => {
                 if (openPodChest) await openPodChest();
                 if (S !== sim) return;

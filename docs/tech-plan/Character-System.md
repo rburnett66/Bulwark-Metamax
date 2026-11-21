@@ -474,6 +474,14 @@ the teller gets the lied-before mark.
   their back, or a Read or Coerce hardens. Kept and broken promises are wired now; gifts and news arrive with the
   payoff and rumours stories.
 - Every map dialog (the opening, the wave 3 secondary, the closing) and the Standings show the portrait.
+- **Placeholders** (owner: "copy the current image into the other two slots as new images (flag to be replaced) and
+  print the relationship status over the image"): until the art is made, each relationship file is a byte copy of the
+  base portrait, listed in `PLACEHOLDER_PORTRAITS`, with NEUTRAL / FRIENDLY / ANTAGONISTIC printed over it. Saving the
+  final art over the file and re-running the tool clears the flag and the label.
+- **Doobers** (owner: "When a relationship status changes draw animation doobers over the image with heart icons for
+  improved and lightening bolt icons for worsens"): the game remembers the portrait each character was last seen with
+  (`s.moodSeen`); when it next appears warmer, hearts rise over it; colder, lightning bolts strike. Reduced motion
+  shows them still.
 - The expression is generated from the character's personality and alignment by `tools/dialog/expression_prompts.py`,
   which also writes the switch-on list from the files present. `tools/portraits/index.html` reviews all 81.
 
