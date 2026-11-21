@@ -1,7 +1,8 @@
 # Tech Plan — The magic system: three neutral magics, intent, cost and a slow discovery
 
 **Repo copy is canonical:** `docs/tech-plan/Magic-System.md`.
-**Status:** v0.3, 2026-11-20, agent-proposed for owner review. v0.2 added the MAGIC tree and skills (§7); v0.3
+**Status:** v0.4, 2026-11-20. v0.3 approved by the owner (#351); v0.4 records the owner's decisions: the names,
+Powder on Soul, separate skill pools, and magic hidden at a different depth in each faction (§6.1). v0.2 added the MAGIC tree and skills (§7); v0.3
 makes the three Brain, Soul and Body, with names derived from the fields, and magic as emotion (§1–§2). Ticket: MM-story_mwpdkocr_3g.
 **Builds on:** `Character-System.md` (§8 reserves the hooks), `Character-Secrets.md` (the `magic` and `sense`
 secrets).
@@ -62,6 +63,9 @@ lacking in science (Character-System §2a).
 
 ## 2. Names, derived from the three fields
 
+**Chosen (owner 2026-11-20, "Names yes"): set A, Electrum · Quantum · Organum; Valor for Soul + Body; the Bulwark
+as the hidden whole.** The other sets are kept below as the record of what was weighed.
+
 The names come from the field words, so the three read as one family. Every option was checked against the
 content and the GDD for clashes.
 
@@ -72,7 +76,7 @@ through people.
 
 | Set | Brain (electric) | Soul (quantum) | Body (organic) | Reads as |
 |---|---|---|---|---|
-| **A (recommended)** | **Electrum** | **Quantum** | **Organum** | one Latin family; Electrum is also an old alloy, Organum an old word for a tool and an instrument |
+| **A (chosen)** | **Electrum** | **Quantum** | **Organum** | one Latin family; Electrum is also an old alloy, Organum an old word for a tool and an instrument |
 | B | Electris | Quantis | Organis | invented, no clash anywhere, softer |
 | C | the Electric | the Quantic | the Organic | plain, almost scientific; suits High Tech and Space speakers |
 | (avoid) | Electra | Quanta | Organa | "Organa" is a Star Wars surname, the comparison the owner wants to avoid |
@@ -93,7 +97,7 @@ through people.
 | **Craft** | Brain + Body | the trained hand: grafts, living armour, bred beasts, a body taught past its limits |
 | **Valor** (was Miracle) | Soul + Body | the will driving the body past death: the last stand, the impossible recovery |
 
-**The hidden whole** (never said until late): **the Bulwark** (recommended; the three hold each other up, and the
+**The hidden whole** (never said until late): **the Bulwark** (chosen; the three hold each other up, and the
 game's own name turns out to be the truth), the Brace, or the Weft.
 
 ## 3. Intent: good, neutral and evil on all three
@@ -114,7 +118,7 @@ magic used two ways, and take them for two different magics.
 
 ## 4. Where characters stand: home side, depth, conviction
 
-- **Home side by faction** (revised for Brain, Soul and Body):
+- **Home side by faction** (confirmed by the owner 2026-11-20: "Powder is soul"):
   - **Brain (Electrum):** High Tech, Artillery, Space;
   - **Soul (Quantum):** Powder, Arcane, Air;
   - **Body (Organum):** Greenies, Water, Dark.
@@ -179,6 +183,35 @@ Rules that keep the tease honest:
 - Stage 5 pieces exist only in T3 characters' secrets, at least one in each of 5 factions, so no single faction
   gives it away.
 
+### 6.1 Where the magic hides in each faction (owner 2026-11-20)
+
+> "Magic characters should be distributed in each faction. This is part of the mystery to solve. In some factions the
+> most magical might be the last you meet, while in another faction the presiding secret might be the Magic in the
+> first character you meet."
+
+Every faction has magic users spread through its nine characters, and one **magic heart**: its most magical
+character (the deepest `depth`), whose magic is the faction's **presiding secret**, the one its story turns on.
+
+**Where the heart sits in the faction's map order changes from faction to faction**, so the player cannot learn a
+pattern and has to read each faction fresh:
+
+- In some factions the heart is the **first character met** (map 1). Their magic is the presiding secret from the
+  start, so the mystery is what it costs and who else shares it.
+- In others the heart is the **last character met** (map 9). The other eight hint at it, half-know it or lie about
+  it, so the mystery is who it is.
+- The rest sit between, so "first" and "last" never become the rule either.
+
+**Rules** (checked by the gate, Magic-System §9 check 10):
+- every faction has at least two magic users (depth ≥ 1) and exactly one heart;
+- across the nine factions, the hearts include **map 1** and **map 9**, with at least two factions in each third
+  (maps 1–3, 4–6, 7–9);
+- two homeworlds next to each other in campaign order never put their heart in the same third;
+- the heart's magic secret is reachable as a rumour from at least one other character in its faction (close reach),
+  so the player can work out who it is before meeting them.
+
+The hearts are chosen in the cast rework (MM-story_mwohmp8n_30), listed for the owner. Powder's is a natural first
+proposal: Seraphine's standard (Soul, group motivation).
+
 ## 7. Magic in play: the MAGIC tree and three skills
 
 > **owner** (2026-11-20): "Magic should be part of the very high level unit itemization. Magic could impact story and
@@ -211,7 +244,7 @@ off-side character in the enemy's ranks.
 So nothing changes in the sim for them; they gain a side tag, and in the story the player learns that the enemy's
 "tricks" were magic all along (stage 2).
 
-### 7.2 The tree, and the limit of three
+### 7.2 The tree, the limit of three, and the separate story skills
 
 The MAGIC tree has three divisions, one per magic, with the blends on the borders between them and the hidden whole
 at the centre.
@@ -227,12 +260,13 @@ at the centre.
 The owner's four battle effects are there: heal (Body), DPS (Brain, and Soul's Last Stand), range (Brain) and speed
 (Body). Group motivation is Soul's own: Rally and Last Stand.
 
-**The limit:** a player may **develop three skills**, no more.
+**The limit:** a player may **develop three battle skills**, no more.
 - Learning a skill is cheap; **developing** it (levels 1–5) is where the gold and story progress go.
-- Story skills count against the same three. A player who takes Read gives up a battle skill. That is the trade:
-  combat power against story power.
-- The three developed skills are the player's **magic slots**: the three casts they bring into battle and the
-  powers they can use in dialog.
+- The three developed battle skills are the player's **magic slots**: the three casts they bring into battle.
+- **Story skills are a separate track** (owner 2026-11-20: "character skills and combat skills can be separate").
+  Read, Sway and Coerce do not use a battle slot. Each is developed on its own (levels 1–3) through the story:
+  a level opens when the player has learned enough about its magic (discovery stage 3 for level 1, stage 4 for
+  level 2, stage 5 for level 3). Their price is paid in rapport and alignment (§7.4), not in slots.
 - **Respec** is allowed at a real cost (gold, and a level lost on the skill dropped), so the choice is a commitment,
   not a menu toggle.
 
@@ -294,7 +328,7 @@ The tree itself teases simplicity, then reveals depth (§6):
 |---|---|
 | 1. Two kinds | Two branches, **Blessings** and **Curses**. One skill can be developed. |
 | 2. Three sources | The tree redraws as a triangle, Brain, Soul and Body; the player's skill is shown on its real side. Three slots. |
-| 3. Intent | Story skills appear, with their alignment pull visible. |
+| 3. Intent | The story-skill track appears beside the battle tree, with each skill's alignment pull visible. |
 | 4. Blends, extremes and fields | Blends open on the borders; the field names appear under the faculties; the first backlash in battle is the player's lesson. |
 | 5. Balance | **Balance**, the centre node, appears only for a player who has developed one skill on each side. It is never listed beforehand. While equipped, every cast also helps the other two sides a little, and backlash never triggers. |
 
@@ -329,24 +363,28 @@ to `characterSystem.test.mjs`:
 6. Stage 5 pieces only in T3 characters, at least one in each of 5 factions.
 7. Before stage 2, lines say only "blessing" and "curse"; Brain, Soul and Body from stage 2; field names
    (Electrum, Quantum, Organum) only from stage 4.
-8. MAGIC tree: every skill names its magic; a player's developed skills are never more than three; Balance
-   is never shown to a save without one developed skill on each side.
+8. MAGIC tree: every skill names its magic; a player's developed battle skills are never more than three; story
+   skills never take a battle slot, and each level is gated by its discovery stage; Balance is never shown to a save
+   without one developed battle skill on each side.
+10. Magic hidden in each faction (§6.1): every faction has at least two magic users and one magic heart; the nine
+   hearts' map positions include map 1 and map 9, and at least two factions in each third (maps 1–3, 4–6, 7–9);
+   no two neighbouring homeworlds in campaign order put their heart in the same third.
 9. Sim: every cast is a replay-logged command; a replay with casts and a backlash reproduces its final hash;
    the starter loadout with no magic still wins Maps 1–3 (`balanceSim.js`); the extreme, balanced and mixed
    three-skill builds stay within ±10% of each other over a mixed map set.
 
-## 10. Open for the owner
+## 10. Decisions and what is still open
 
-1. **Names:** choose a set (§2). I recommend A: Electrum, Quantum, Organum; Valor for Soul + Body; the Bulwark as
-   the hidden whole.
-2. **Home sides:** Brain: High Tech, Artillery, Space · Soul: Powder, Arcane, Air · Body: Greenies, Water, Dark.
-   Powder moved to Soul because its secrets are mostly group motivation and it lacks science. Keep or move?
-3. **The limit of three:** do story skills (Read, Coerce, Sway) count against the same three as battle skills?
-   I recommend yes, so story power costs combat power.
-4. **Extremes:** confirm which existing characters are extremes (the Signal, the Unmade Choir, the Hollow Prophet,
-   the Root-Mind).
-5. **Item hierarchy:** I read "very high level unit itemization" as MAGIC being a third top-level tree beside
-   BATTLE and OUTPOST & FARM. If you meant magic as an item that units carry, §7.1 changes.
+Decided by the owner, 2026-11-20:
+- **Names:** Electrum (Brain), Quantum (Soul), Organum (Body); Valor; the Bulwark.
+- **Home sides:** Brain: High Tech, Artillery, Space · Soul: Powder, Arcane, Air · Body: Greenies, Water, Dark.
+- **Skills:** battle skills limited to three developed; story skills a separate track.
+- **Magic in each faction:** spread through every faction, its depth part of the mystery (§6.1).
+- **Item hierarchy:** MAGIC as a third top-level tree (not contradicted).
+
+Still open:
+1. **Extremes:** which existing characters are extremes (the Signal, the Unmade Choir, the Hollow Prophet,
+   the Root-Mind)? This is settled in the cast rework, with the magic hearts (§6.1).
 
 ## 11. Order of work
 

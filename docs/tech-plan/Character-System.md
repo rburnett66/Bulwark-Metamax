@@ -66,18 +66,18 @@ reads from it.
 
 | Faction | Known for | Known to lack | Status |
 |---|---|---|---|
-| **Powder** | resourceful · heavily armoured | science · strategic planning | owner |
-| Air | speed · daring aces | staying power (fragile) · patience | draft |
-| High Tech | precision · shields | numbers (every unit is expensive) · adaptability | draft |
-| Artillery | range · siege patience | speed · close defence | draft |
-| Water | endurance in the cold · adaptability | unity (rival tribes) · reach away from water | draft |
-| Arcane | discipline of faith · energy weapons | open minds (dogma) · hardiness | draft |
-| Space | advanced science · long sight (orbital) | ground sense (detached) · speed of decision (bureaucracy) | draft |
-| Dark | strength at night · endurance past death | trust (everyone distrusts them) · restraint | draft |
-| Greenies | numbers (the swarm) · recovery | individual initiative (the hive) · strength alone | draft |
+| **Powder** | resourceful · heavily armoured | science · strategic planning | owner's words |
+| Air | speed · daring aces | staying power (fragile) · patience | confirmed |
+| High Tech | precision · shields | numbers (every unit is expensive) · adaptability | confirmed |
+| Artillery | range · siege patience | speed · close defence | confirmed |
+| Water | endurance in the cold · adaptability | unity (rival tribes) · reach away from water | confirmed |
+| Arcane | discipline of faith · energy weapons | open minds (dogma) · hardiness | confirmed |
+| Space | advanced science · long sight (orbital) | ground sense (detached) · speed of decision (bureaucracy) | confirmed |
+| Dark | strength at night · endurance past death | trust (everyone distrusts them) · restraint | confirmed |
+| Greenies | numbers (the swarm) · recovery | individual initiative (the hive) · strength alone | confirmed |
 
-The drafts come from each faction's identity in Special-Abilities-Design and the GDD; the owner confirms or
-rewrites them.
+Powder's are the owner's words; the other eight were drafted from each faction's identity in
+Special-Abilities-Design and the GDD, and the owner confirmed them all on 2026-11-20 ("confirm traits").
 
 **What reads from the traits:**
 
