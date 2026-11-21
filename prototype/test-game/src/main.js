@@ -36,7 +36,7 @@ import { createComm } from './comm/commCard.js';
 import { setChannelVolume, initAudio } from './comm/voice.js';
 import { musicPlay, musicIntensity, musicSting, musicResume } from './audio/music.js';
 import { loadVoicePacks, challengeCall, winCall, defeatCall, fallbackCall, tipsCall, classifyOutcome } from './comm/dialog.js';
-import { RARE_OFFER, rareOfferEarned, rareContractFor, pickBuyer, settleRareContract, bankRareSale, rareResultLine, openOfferOn, setOpenOffer } from './data/rareContract.js';
+import { RARE_OFFER, rareOfferEarned, rareContractFor, pickBuyer, settleRareContract, bankRareSale, rareResultLine, openOfferOn, setOpenOffer, acceptEffects, acceptEffectsText } from './data/rareContract.js';
 import { addLoyalty, rivalOf } from './save/contracts.js';
 import { loadCharacterFiles, mapCast, openingCall, secondaryCall, closingCall, withMood, SECONDARY_AFTER_WAVE, contractOfferScene, characterEntry } from './comm/mapCast.js';
 import { spendMoodCall, noteMoodSeen } from './save/standings.js';
@@ -995,10 +995,13 @@ export function boot(mountEl, seed) {
     if (!calls.length || mode !== 'play') return;
     moodShown(contact.name, calls[0].mood);
     const ship = cs.ship || 'The ' + BP.name + ' ship';
+    // accepting takes a side: the buyer gains, its rivals lose, shown before the choice (owner 2026-11-21) [MM-story_mwq11to8_1]
+    const sides = acceptEffects(buyer, (k) => (voicePacks && voicePacks.factions && voicePacks.factions[k] || {}).name || null);
     const choice = await comm.playScene(calls, {
       center: true,
       terms: `${ship} buys up to <b>${terms.quota}</b> ${rareName} at <b>${terms.pricePerUnit}</b> gold each, paid when the map ends, win or lose.` +
-        ` Something sold: <b>+${terms.loyalty} loyalty</b> with ${fac ? fac.name : BP.name}. Decline: no cost; the offer stays open for your next map here.`,
+        ` Something sold: <b>+${terms.loyalty} loyalty</b> with ${fac ? fac.name : BP.name}.` +
+        (sides.length ? ` Accepting now: <b>${acceptEffectsText(sides)}</b>.` : '') + ' Decline: no cost; the offer stays open for your next map here.',
       choices: [{ label: 'ACCEPT', value: 'accept', primary: true }, { label: 'DECLINE', value: 'decline' }],
       replies: { accept: mood(scene.replies.accept), decline: mood(scene.replies.decline) },
       after: scene.after.map(mood),
@@ -1006,6 +1009,7 @@ export function boot(mountEl, seed) {
     // declined (or cut short): the offer stays open on this planet; accepted: it is closed (owner 2026-11-21)
     updateSave((s) => setOpenOffer(s, here, choice === 'accept' ? null : { contact: contact.name, buyer }));
     if (choice === 'accept' && mode === 'play') {
+      updateSave((s) => { for (const e of sides) addLoyalty(s, e.name, e.delta); });
       rareRun.contract = { ...terms, buyer, buyerFaction: fac ? fac.name : null, ship: cs.ship || BP.name, contact: contact.name, rareName };
       // the contact greets the player aboard on the first visit (Q4): remembered per ship
       updateSave((s) => { const r = ensureReveals(s).reveals; (r.contacts || (r.contacts = {}))[buyer] = r.contacts[buyer] || contact.name; });

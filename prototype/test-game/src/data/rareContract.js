@@ -13,6 +13,7 @@
  * Pure data + predicates; no DOM, no clock, no Math.random (the buyer pick takes a seed).
  */
 import { MAPDATA } from '../../content/maps/mapdata.js';
+import { FACTION_KEYS, relationOf } from './factionRelations.js';
 
 /** The offer rule: after this wave is cleared at this many stars or more. */
 export const RARE_OFFER = Object.freeze({ wave: 3, minStars: 3 });
@@ -35,6 +36,26 @@ export function rareContractFor(planet, mapId) {
 export function rareOfferEarned({ clearedWave, waveStars, alreadyOffered = false, open = false }, R = RARE_OFFER) {
   return !alreadyOffered && clearedWave === R.wave && (!!open || Number(waveStars) >= R.minStars);
 }
+
+/**
+ * ACCEPTING takes a side (owner 2026-11-21 [MM-story_mwq11to8_1]: "accepting offers from rival factions might increase
+ * alignment with one while hurting alignment with another rival faction"). The moment an offer is accepted the faction
+ * that made it gains a little loyalty and every faction Hostile to it (factionRelations.js) loses as much; the sale's
+ * reward still comes when the goods sell. Proposed values (owner to tune).
+ */
+export const ACCEPT_LOYALTY = Object.freeze({ giver: 2, hostile: -2 });
+/**
+ * The loyalty an accepted offer moves now. buyerKey: the offering faction's key; nameOf(key): its display name (the
+ * loyalty ledger's key). → [{ key, name, delta }], the giver first.
+ */
+export function acceptEffects(buyerKey, nameOf = (k) => k, A = ACCEPT_LOYALTY) {
+  if (!FACTION_KEYS.includes(buyerKey)) return [];
+  const out = [{ key: buyerKey, name: nameOf(buyerKey), delta: A.giver }];
+  for (const k of FACTION_KEYS) if (k !== buyerKey && relationOf(buyerKey, k) === 'hostile') out.push({ key: k, name: nameOf(k), delta: A.hostile });
+  return out.filter((e) => e.name && e.delta);
+}
+/** Those effects in words for the offer's terms: "+2 loyalty with Ground / Powder; −2 with Air". */
+export const acceptEffectsText = (effects) => effects.map((e, i) => `${e.delta > 0 ? '+' : '−'}${Math.abs(e.delta)}${i ? '' : ' loyalty'} with ${e.name}`).join('; ');
 
 /** The offer left open on a planet (s.openOffers[planetKey]: { contact, buyer }), or null. */
 export const openOfferOn = (s, planetKey) => ((s && s.openOffers) || {})[planetKey] || null;

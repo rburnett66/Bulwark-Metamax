@@ -65,3 +65,16 @@ test('a declined offer stays open: it comes again at wave 3 on the planet\'s nex
   setOpenOffer(s, 'air', null);
   assert.equal(openOfferOn(s, 'air'), null, 'accepted: closed');
 });
+
+// [MM-story_mwq11to8_1] owner 2026-11-21: "accepting offers from rival factions might increase alignment with one while
+// hurting alignment with another rival faction"
+test('accepting takes a side: the offering faction gains, every faction hostile to it loses, before any sale', async () => {
+  const { acceptEffects, acceptEffectsText, ACCEPT_LOYALTY } = await import('./rareContract.js');
+  const name = { ground: 'Ground / Powder', air: 'Air', hightech: 'High Tech', artillery: 'Artillery', greenies: 'Greenies (Chem)' };
+  const g = acceptEffects('ground', (k) => name[k] || k);
+  assert.deepEqual(g.map((e) => [e.key, e.delta]), [['ground', ACCEPT_LOYALTY.giver], ['air', ACCEPT_LOYALTY.hostile]], 'Powder and its rival Air');
+  assert.equal(acceptEffectsText(g), '+2 loyalty with Ground / Powder; −2 with Air');
+  const h = acceptEffects('hightech', (k) => name[k] || k);
+  assert.deepEqual(h.map((e) => e.key).sort(), ['artillery', 'greenies', 'hightech'], 'High Tech has two hostile factions');
+  assert.deepEqual(acceptEffects('nobody'), []);
+});
