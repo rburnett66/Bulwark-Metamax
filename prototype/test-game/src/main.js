@@ -40,7 +40,6 @@ import { RARE_OFFER, rareOfferEarned, rareContractFor, pickBuyer, settleRareCont
 import { addLoyalty, rivalOf } from './save/contracts.js';
 import { loadCharacterFiles, mapCast, openingCall, secondaryCall, closingCall, withMood, SECONDARY_AFTER_WAVE } from './comm/mapCast.js';
 import { spendMoodCall, noteMoodSeen } from './save/standings.js';
-import { noteSecretTold } from './save/secrets.js';
 import { showContractModal } from './render/contractModal.js';
 import { ensureReveals, newlyDue, revealLine, shipArrived } from './save/reveals.js';
 import { noteRapportEvent } from './save/standings.js';
@@ -808,8 +807,7 @@ export function boot(mountEl, seed) {
     const cast = matchCast();
     const fac = REG.find(currentTestFaction || DEFAULT_FACTION);
     const open = cast && openingCall(cast, characterFiles, voicePacks, loadSave(), fac ? fac.name : null);
-    // a secret told in person is told once; a replay (no hold) re-hears it without spending it
-    if (open && open.secret && hold && mode === 'play') updateSave((sv) => { noteSecretTold(sv, cast.primary.name, open.secret); });
+    // secrets are told aboard the faction's capital ship now (owner 2026-11-21) [MM-story_mwpsuo5b_3x]
     // the speaker's relationship portrait (antagonistic / neutral / friendly) [MM-story_mwpni0v4_3m]
     const call = (open && withMood(open.spec, loadSave()))
       || challengeCall(voicePacks, faction, wave, currentSeed, factionVisits[faction])
@@ -878,6 +876,9 @@ export function boot(mountEl, seed) {
           await commSecondary();
           await closed;
         }
+        // one voice at wave 3 (owner 2026-11-21: "Wave 3 introduces a character and offers a contract"): the secondary
+        // who just spoke offers the rare contract when it is earned [MM-story_mwpsuo5b_3x]
+        if (idx === SECONDARY_AFTER_WAVE) await offerRareContract((matchCast() || {}).secondary || null);
       }
       if (!interlude || mode !== 'play') return;
       if (idx === 0) {
@@ -928,9 +929,7 @@ export function boot(mountEl, seed) {
     if (session.view3d && session.mod3d && session.mod3d.focusPlayArea) glide = session.mod3d.focusPlayArea(session.view3d, sim) || 0;
     if (glide > 0) await new Promise((r) => setTimeout(r, glide * 1000 + WAVE_END.afterCameraMs));
     if (!live()) return;
-    await offerRareContract();          // wave 3 at 3★+: a capital ship's contact offers to buy this map's rare
-    if (!live()) return;
-    await playPreBattleDialog(null);    // character dialog → optional dialog → intel → start
+    await playPreBattleDialog(null);    // after wave 3 the secondary introduces themselves and (3★+) offers the contract    // character dialog → optional dialog → intel → start
   }
   /**
    * The RARE contract offer (owner 2026-11-06, Q4/Q6) [MM-story_mw5eozsn_c]. In the frozen interlude after wave 3, if it
@@ -949,22 +948,27 @@ export function boot(mountEl, seed) {
     if (out && out.sold > 0 && c.contact) noteRapportEvent(sv, c.contact, c.buyer, 'sale');
     return out;
   }
-  async function offerRareContract() {
+  async function offerRareContract(secondary = null) {
     if (mode !== 'play' || !currentMapId || rareRun.offered || !missionCatalog) return;
     const cleared = sim.waves ? sim.waves.current : 0;            // waves cleared so far = the wave just cleared
     if (!rareOfferEarned({ clearedWave: cleared, waveStars: rareRun.waveStars[cleared], alreadyOffered: rareRun.offered })) return;
     rareRun.offered = true;
     const sv = loadSave(), here = (REG.find(currentTestFaction || DEFAULT_FACTION) || {}).key;
+    // the wave 3 secondary makes the offer for their own faction's ship (one voice); with no secondary, an arrived
+    // ship's contact calls in as before
+    const own = secondary && secondary.faction && PLANETS[secondary.faction] && secondary.faction !== here ? secondary.faction : null;
     const arrived = Object.keys(PLANETS).filter((k) => shipArrived(sv, k));   // the save keys ships by planet name
-    const buyer = pickBuyer(arrived, here, currentSeed);
+    const buyer = own || pickBuyer(arrived, here, currentSeed);
     const terms = buyer && rareContractFor(here, currentMapId);
     if (!buyer || !terms) return;
     const BP = PLANETS[buyer], cs = (missionCatalog.capitalShips || {})[BP.name] || {};
     const fac = voicePacks && voicePacks.factions && voicePacks.factions[buyer];
-    const contact = fac && fac.characters.find((c) => c.name !== cs.captain && c.phrases && c.phrases.length);
+    const contact = own ? ((fac && fac.characters.find((c) => c.name === secondary.name)) || { name: secondary.name })
+      : fac && fac.characters.find((c) => c.name !== cs.captain && c.phrases && c.phrases.length);
     const rareName = battleResourceNames().rare;
     if (hud && hud.setNextWavePrompt) hud.setNextWavePrompt(false);
-    const call = contact && characterCall(voicePacks, buyer, contact.name, 'phrase', 'NEW CONTACT');
+    // the secondary has just introduced themselves; a contact from an arrived ship calls in first
+    const call = !own && contact && characterCall(voicePacks, buyer, contact.name, 'phrase', 'NEW CONTACT');
     if (call) { const shut = comm.waitForClose(); await comm.showCall({ ...call, hold: true, center: true }); await shut; }
     if (mode !== 'play') return;
     const accepted = await new Promise((res) => showContractModal(mountEl, {

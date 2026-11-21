@@ -68,17 +68,16 @@ export function mapCast(files, packs, factionKey, mapId, rivalKey = null) {
 }
 
 /**
- * The primary's opening at the map's start: a newly revealed secret, told in person, else their start line.
- * → { spec, secret } (secret: the told secret, for noteSecretTold) | null
+ * The primary's opening at the map's start: their start line. Secrets are told aboard the faction's capital ship
+ * (owner 2026-11-21: "Secrets should usually be delivered at the capital ships"; aboardSecretCalls).
+ * → { spec, secret: null } | null
  */
 export function openingCall(cast, files, packs, s, factionName = null) {
   if (!cast || !cast.primary) return null;
   const ch = characterEntry(files, cast.primary.faction, cast.primary.name);
   if (ch) {
-    const secret = untoldSecret(ch, s, factionName);
-    const line = secret ? secret.line : (ch.lines && ch.lines.start);
-    const spec = characterCall(packs, cast.primary.faction, ch.name, say(line), secret ? 'SECRET' : 'CHALLENGE');
-    return spec ? { spec, secret } : null;
+    const spec = characterCall(packs, cast.primary.faction, ch.name, say(ch.lines && ch.lines.start), 'CHALLENGE');
+    return spec ? { spec, secret: null } : null;
   }
   const pc = (packFaction(packs, cast.primary.faction) || { characters: [] }).characters.find((c) => c.name === cast.primary.name);
   const m0 = pc && pc.lines && pc.lines.m0;
@@ -86,7 +85,26 @@ export function openingCall(cast, files, packs, s, factionName = null) {
   return spec ? { spec, secret: null } : null;
 }
 
-/** The secondary's one line after wave 3. → spec | null */
+/**
+ * Aboard a faction's capital ship: the characters of that faction with a newly unlocked secret come forward and tell it,
+ * in the faction's own order, at most `limit` per visit [MM-story_mwpsuo5b_3x]. Owner 2026-11-21: "Secrets should usually
+ * be delivered at the capital ships." → [{ spec, name, secret }] (noteSecretTold each one once it is shown)
+ */
+export function aboardSecretCalls(files, packs, factionKey, s, factionName = null, limit = 3) {
+  const file = files && files[factionKey];
+  if (!file) return [];
+  const out = [];
+  for (const ch of file.characters) {
+    if (out.length >= limit) break;
+    const secret = untoldSecret(ch, s, factionName);
+    if (!secret) continue;
+    const spec = characterCall(packs, factionKey, ch.name, say(secret.line), 'SECRET');
+    if (spec) out.push({ spec, name: ch.name, secret });
+  }
+  return out;
+}
+
+/** The secondary's one line after wave 3: they introduce themselves (and, when it is earned, offer the contract). → spec | null */
 export function secondaryCall(cast, packs) {
   const sc = cast && cast.secondary;
   if (!sc || !sc.line) return null;

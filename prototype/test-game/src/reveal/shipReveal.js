@@ -43,6 +43,8 @@ import '../data/factions.js';
 import { createStandingsScreen } from '../menu/standingsScreen.js';
 import { loadSave, updateSave } from '../save/save.js';
 import { noteRapportEvent, noteMoodSeen } from '../save/standings.js';
+import { loadCharacterFiles, aboardSecretCalls } from '../comm/mapCast.js';
+import { noteSecretTold } from '../save/secrets.js';
 import { withMood as callWithMood } from '../comm/mapCast.js';
 import { FACTOR_ROOM, factorOf, factorDesk, factorLines, factorCard, noteFactorTalk } from '../farm/factor.js';
 
@@ -245,12 +247,24 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
 
   // the captain greets the player on every visit, +1 to their rating once a day (owner 2026-11-09: "greeting the player
   // on a ship visit is +1" · "greeting limit is 1 per day": standings.noteRapportEvent keeps the day). A story boarding has spoken the greeting above; a free boarding shows it now and does not wait on it.
+  // then SECRETS ABOARD (owner 2026-11-21: "Secrets should usually be delivered at the capital ships"): up to three of
+  // the faction's characters with a newly unlocked secret come forward and tell it, once each [MM-story_mwpsuo5b_3x]
+  const secretsAboard = async (pk) => {
+    if (ship.isCollective) return [];
+    const files = await loadCharacterFiles();
+    const told = aboardSecretCalls(files, pk, ship.key, loadSave(), factionNameOf(ship.key));
+    if (told.length) updateSave((sv) => { for (const t of told) noteSecretTold(sv, t.name, t.secret); });
+    return told.map((t) => withMood(t.spec, t.name));
+  };
   if (!ship.isCollective && ship.captain) {
     if (!story) {
-      Promise.all([packs(), revealsData()]).then(([pk, R2]) => {
+      Promise.all([packs(), revealsData()]).then(async ([pk, R2]) => {
         const g = withMood(characterCall(pk, ship.key, ship.captain, R2.factionShip.greet, 'CAPTAIN'), ship.captain);
-        if (g) speak(doc, [g]).catch((e) => console.warn('[reveal] greeting', e));
+        const calls = [g, ...(await secretsAboard(pk))].filter(Boolean);
+        if (calls.length) speak(doc, calls).catch((e) => console.warn('[reveal] greeting', e));
       }).catch((e) => console.warn('[reveal] greeting', e));
+    } else {
+      try { const told = await secretsAboard(await packs()); if (told.length) await speak(doc, told); } catch (e) { console.warn('[reveal] secrets aboard', e); }
     }
     try { updateSave((sv) => noteRapportEvent(sv, ship.captain, ship.key, 'greet')); } catch (e) { console.warn('[reveal] greeting rating', e); }
   }

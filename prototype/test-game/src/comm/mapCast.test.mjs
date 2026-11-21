@@ -4,7 +4,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mapCast, openingCall, secondaryCall, closingCall, firstSentence, SECONDARY_AFTER_WAVE } from './mapCast.js';
+import { mapCast, openingCall, secondaryCall, closingCall, firstSentence, aboardSecretCalls, SECONDARY_AFTER_WAVE } from './mapCast.js';
+import { noteSecretTold } from '../save/secrets.js';
 import { tipsCall } from './dialog.js';
 
 const read = (p) => JSON.parse(readFileSync(new URL(p, import.meta.url), 'utf8'));
@@ -22,15 +23,26 @@ test('a Verdance map has its authored cast: its own Powder character, and the se
   assert.equal(SECONDARY_AFTER_WAVE, 3);
 });
 
-test('the opening: their start line, or a newly revealed secret told in person', () => {
+test('the opening is the start line; secrets are told aboard the capital ship (owner 2026-11-21)', () => {
   const c = mapCast(FILES, PACKS, 'ground', 3, 'air');
-  let o = openingCall(c, FILES, PACKS, {});
-  assert.equal(o.spec.line, 'I carry the name, not its sins. Show me yours.');
-  assert.equal(o.secret, null);
-  o = openingCall(c, FILES, PACKS, { rapport: { 'Captain Otto von Halbrecht': { score: 0, kept: 1, broken: 0 } } });
-  assert.equal(o.spec.line, 'Let the house end with me. Cleanly.', 'the first secret in his order');
-  assert.equal(o.secret.key, 'desire');
-  assert.match(o.spec.sub, /SECRET/);
+  for (const save of [{}, { rapport: { 'Captain Otto von Halbrecht': { score: 30, kept: 1, broken: 0 } } }]) {
+    const o = openingCall(c, FILES, PACKS, save);
+    assert.equal(o.spec.line, 'I carry the name, not its sins. Show me yours.');
+    assert.equal(o.secret, null);
+  }
+});
+
+test('aboard the Powder ship: characters with a newly unlocked secret tell it, three at most, once each', () => {
+  const met = (score) => ({ score, kept: 1, broken: 0 });
+  const s = { rapport: { 'Captain Otto von Halbrecht': met(0), 'Colonel Aldric Vane': met(0), 'Quartermaster Ines Roth': met(0), 'Sergeant "Bricks" Malloy': met(0) } };
+  const told = aboardSecretCalls(FILES, PACKS, 'ground', s, 'Ground / Powder');
+  assert.equal(told.length, 3, 'three per visit');
+  assert.ok(told.every((t) => /SECRET/.test(t.spec.sub) && t.spec.line === t.secret.line));
+  for (const t of told) noteSecretTold(s, t.name, t.secret);
+  const next = aboardSecretCalls(FILES, PACKS, 'ground', s, 'Ground / Powder');
+  assert.ok(next.every((t) => !told.some((u) => u.name === t.name && u.secret.key === t.secret.key)), 'a secret is told once');
+  assert.deepEqual(aboardSecretCalls(FILES, PACKS, 'ground', {}, 'Ground / Powder'), [], 'unmet characters tell nothing');
+  assert.deepEqual(aboardSecretCalls(FILES, PACKS, 'nowhere', s), []);
 });
 
 test('the last word is the map character\'s: win or lose', () => {
@@ -63,5 +75,10 @@ test('main.js: only the map\'s first wave has a character; the secondary after w
   assert.match(main, /if \(wave !== 1\) return Promise\.resolve\(\);/);
   assert.match(main, /if \(idx === SECONDARY_AFTER_WAVE && secondaryCall\(matchCast\(\), voicePacks\)\)/);
   assert.match(main, /closingCall\(matchCast\(\), characterFiles, voicePacks, S\.result\)/);
-  assert.match(main, /noteSecretTold\(sv, cast\.primary\.name, open\.secret\)/, 'a secret told in person is told once');
+  assert.doesNotMatch(main, /noteSecretTold/, 'no secret is told in battle any more');
+  assert.match(main, /if \(idx === SECONDARY_AFTER_WAVE\) await offerRareContract\(\(matchCast\(\) \|\| \{\}\)\.secondary \|\| null\);/, 'one voice at wave 3: the secondary offers the contract');
+  assert.match(main, /const call = !own && contact && characterCall/, 'the secondary is not announced twice');
+  const ship = readFileSync(new URL('../reveal/shipReveal.js', import.meta.url), 'utf8');
+  assert.match(ship, /aboardSecretCalls\(files, pk, ship\.key, loadSave\(\), factionNameOf\(ship\.key\)\)/, 'secrets are told aboard');
+  assert.match(ship, /noteSecretTold\(sv, t\.name, t\.secret\)/, 'and told once');
 });

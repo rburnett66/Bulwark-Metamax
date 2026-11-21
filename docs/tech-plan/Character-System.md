@@ -343,9 +343,12 @@ A knower K tells a rumour about owner O's secret when:
 **Channels:**
 - **across:** the wave 3 cut-in. The secondary is chosen from O's across-knowers where one exists, so the map's
   outsider is the one who knows something.
-- **close:** the map's main character, at the opening, when they have no untold secret of their own. They speak about
-  someone in their circle instead ("Seraphine won't say it, but Otto loves an Air pilot").
-- **close:** a greeting aboard the faction's capital ship.
+- **close:** aboard the faction's capital ship, the main channel (owner 2026-11-21: "Secrets should usually be delivered
+  at the capital ships"). Characters with no untold secret of their own speak about someone in their circle instead
+  ("Seraphine won't say it, but Otto loves an Air pilot").
+- **close:** the faction's wandering visitor on the outpost, once the player's rapport with them has grown (Farming
+  rules 14–18, when the visitor is built).
+- The map opening is the main character's start line only.
 
 ### 7.2 What the knower says: true, twisted or false
 
