@@ -183,6 +183,26 @@ against source.
 - **Not moved yet.** The post-battle chain in `main.js` (verdict → quest close → grant) still chains `showCall`; its
   calls come from different speakers, so a scene would not change what the player sees.
 
+## 10. Pages, swipes and choices (owner 2026-11-21) [MM-story_mwpzbj5c_45]
+
+- *"The contract offers on Wave should be presented as character dialogs since they are often introductions of new
+  characters."* · *"The dialog system should be able to handle this .. just extend it. Consider mobile with no more than
+  two sentences per screen with bread crumbs swipe left and right to continue or back. Final offer allows user to accept
+  or decline."*
+- **Pages.** `comm.playScene` cuts every line into pages of at most two sentences (`commCard.js pagesOf`). A run of dots
+  (a tell's "..") is a pause, not a sentence end. One breadcrumb per page.
+- **Moving.** Tap, swipe left or → goes to the next page; swipe right, ← or the ◂ button goes back. Going back shows the
+  page at once (no second voicing). A new speaker is a new transmission; back stays within one speaker's run.
+- **Choices.** A scene can end on a choice (`choices`, `terms`): the last page stays up with the terms and one button
+  per choice, and only a button answers. Back from the choice returns to the page before. After the choice the speaker
+  answers (`replies`) and says any closing lines (`after`); the answer cannot be undone by going back.
+- **The wave-3 offer** is the first scene built on it (`mapCast.contractOfferScene`): "I hear you're gathering resources
+  on <planet>.", then the offer in the speaker's voice with a close by personality, the terms and ACCEPT / DECLINE, a
+  reply by alignment, and the wave-3 character's own line last. The OPTIONAL CONTRACT panel is gone from battle.
+- **Missions stay findable** (*"Players can always return to find a mission they need"*): a declined offer stays open
+  on that planet (`s.openOffers`). On the next map there the same character makes it again after wave 3 ("Back on
+  <planet>? My offer still stands."), without needing the stars again. Accepting closes it.
+
 ## Dependencies
 
 | relation | document | what it holds that this plan does not restate |

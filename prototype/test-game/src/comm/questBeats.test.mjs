@@ -21,10 +21,11 @@ test('the closing plays only for an accepted contract on a win', () => {
 test('main.js: no contract at map start or between waves, no per-wave field tip, the closing by questClosingDue', () => {
   assert.ok(!/playOptionalTip/.test(MAIN), 'the per-wave FIELD TIP is gone');
   assert.ok(!/offerContract\(|questOfferDue|runContract/.test(MAIN), 'no quest contract during a battle');
-  // the one exception (owner 2026-11-06): the optional RARE contract after wave 3 at 3★ [MM-story_mw5eozsn_c]
-  const uses = MAIN.match(/showContractModal\(/g) || [];
-  assert.equal(uses.length, 1, 'one contract card in battle');
-  assert.ok(MAIN.indexOf('showContractModal(') > MAIN.indexOf('async function offerRareContract'), 'and it is the rare offer');
+  // the one exception (owner 2026-11-06): the optional RARE contract after wave 3 at 3★ [MM-story_mw5eozsn_c], played as a
+  // character dialog with its choice in the card (owner 2026-11-21) [MM-story_mwpzbj5c_45]
+  assert.ok(!/showContractModal\(/.test(MAIN), 'no contract panel in battle');
+  assert.match(MAIN, /const choice = await comm\.playScene\(calls, \{/, 'the offer is a dialog');
+  assert.match(MAIN, /choices: \[\{ label: 'ACCEPT', value: 'accept', primary: true \}, \{ label: 'DECLINE', value: 'decline' \}\]/);
   assert.ok(/questClosingDue\(resolvedFavour, sim\.result\)/.test(MAIN));
 });
 

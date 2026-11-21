@@ -191,3 +191,47 @@ export function withMood(call, s) {
 
 /** The wave whose clear brings the secondary in (owner: "appearing at wave 3"). */
 export const SECONDARY_AFTER_WAVE = 3;
+
+// ── the wave-3 contract offer as a dialog [MM-story_mwpzbj5c_45] ───────────────────────────────────────────────────────
+// Owner 2026-11-21: "The contract offers on Wave should be presented as character dialogs since they are often
+// introductions of new characters." · "I hear you are resource gathering on Florael" · "I'm Chelsea from (faction) and if
+// you can deliver some elder root we will pay, it's always good to have friends in high places."
+
+/** The faction as it is spoken: "the Ground fleet", "the Greenies fleet" (the registry name up to its " / " or " ("). */
+export const spokenFleet = (factionName) => `the ${String(factionName || '').split(/\s*[/(]/)[0].trim()} fleet`;
+
+/** How a character closes an offer, by personality (character files; the six of Character-System §3). */
+const OFFER_CLOSER = {
+  'open-hearted': "It's always good to have friends in high places.",
+  devoted: "Do this for us and we'll remember it.",
+  wary: 'Keep it quiet, and keep it coming.',
+  schemer: 'Friends in high places are worth more than gold. Remember who asked.',
+  cruel: "Don't make me regret asking.",
+  whimsical: 'Think of it as a little adventure. With pay.',
+};
+const OFFER_REPLY = {
+  accept: { good: "Good. We'll be watching for it.", neutral: 'Done, then. Bring it in.', evil: "Good. Don't be late." },
+  decline: { good: "Your call. I'll ask again next time.", neutral: "Your loss. I'll be around.", evil: "Remember you said no. I'll ask once more." },
+};
+const leaning = (align) => (/G$/.test(align || '') ? 'good' : /E$/.test(align || '') ? 'evil' : 'neutral');
+
+/**
+ * The offer scene: the contact introduces themselves and makes the offer in their own voice, the player chooses, the
+ * contact answers. o: { factionKey (the buyer's), name (the contact), factionName, planetName (where the player is),
+ * rareName, quota, price, personality, flavour (their own line, said last, or null), again (an offer declined before) }.
+ * → { calls: [intro, offer], replies: { accept, decline }, after: [flavour] } — comm.playScene's calls and options.
+ */
+export function contractOfferScene(packs, o) {
+  const pc = (packFaction(packs, o.factionKey) || { characters: [] }).characters.find((c) => c.name === o.name) || {};
+  const sub = 'CONTRACT OFFER';
+  const line = (text) => characterCall(packs, o.factionKey, o.name, say(text), sub);
+  const closer = OFFER_CLOSER[o.personality] || OFFER_CLOSER['open-hearted'];
+  const intro = line(o.again ? `Back on ${o.planetName}? My offer still stands.` : `I hear you're gathering resources on ${o.planetName}.`);
+  const offer = line(`I'm ${shortName(o.name)}, from ${spokenFleet(o.factionName)}. If you can deliver some ${o.rareName}, we will pay: ${o.price} gold each, up to ${o.quota}. ${closer}`);
+  const lean = leaning(pc.align);
+  return {
+    calls: [intro, offer].filter(Boolean),
+    replies: { accept: line(OFFER_REPLY.accept[lean]), decline: line(OFFER_REPLY.decline[lean]) },
+    after: o.flavour ? [line(o.flavour)].filter(Boolean) : [],
+  };
+}

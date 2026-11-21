@@ -13,6 +13,7 @@
  * Pure data + predicates; no DOM, no clock, no Math.random (the buyer pick takes a seed).
  */
 import { MAPDATA } from '../../content/maps/mapdata.js';
+import { FACTION_KEYS, relationOf } from './factionRelations.js';
 
 /** The offer rule: after this wave is cleared at this many stars or more. */
 export const RARE_OFFER = Object.freeze({ wave: 3, minStars: 3 });
@@ -28,11 +29,41 @@ export function rareContractFor(planet, mapId) {
 
 /**
  * Is the offer earned now? Only when the wave just cleared is RARE_OFFER.wave, it scored RARE_OFFER.minStars or more,
- * and this run has not already offered it (accepted or declined: a decline is re-earned on a later run, never
- * re-offered in the same one).
+ * and this run has not already offered it. An offer the player declined stays OPEN (owner 2026-11-21: "Players can
+ * always return to find a mission they need" [MM-story_mwpzbj5c_45]): on the next map on that planet it comes again at
+ * wave RARE_OFFER.wave without the stars.
  */
-export function rareOfferEarned({ clearedWave, waveStars, alreadyOffered = false }, R = RARE_OFFER) {
-  return !alreadyOffered && clearedWave === R.wave && Number(waveStars) >= R.minStars;
+export function rareOfferEarned({ clearedWave, waveStars, alreadyOffered = false, open = false }, R = RARE_OFFER) {
+  return !alreadyOffered && clearedWave === R.wave && (!!open || Number(waveStars) >= R.minStars);
+}
+
+/**
+ * ACCEPTING takes a side (owner 2026-11-21 [MM-story_mwq11to8_1]: "accepting offers from rival factions might increase
+ * alignment with one while hurting alignment with another rival faction"). The moment an offer is accepted the faction
+ * that made it gains a little loyalty and every faction Hostile to it (factionRelations.js) loses as much; the sale's
+ * reward still comes when the goods sell. Proposed values (owner to tune).
+ */
+export const ACCEPT_LOYALTY = Object.freeze({ giver: 2, hostile: -2 });
+/**
+ * The loyalty an accepted offer moves now. buyerKey: the offering faction's key; nameOf(key): its display name (the
+ * loyalty ledger's key). → [{ key, name, delta }], the giver first.
+ */
+export function acceptEffects(buyerKey, nameOf = (k) => k, A = ACCEPT_LOYALTY) {
+  if (!FACTION_KEYS.includes(buyerKey)) return [];
+  const out = [{ key: buyerKey, name: nameOf(buyerKey), delta: A.giver }];
+  for (const k of FACTION_KEYS) if (k !== buyerKey && relationOf(buyerKey, k) === 'hostile') out.push({ key: k, name: nameOf(k), delta: A.hostile });
+  return out.filter((e) => e.name && e.delta);
+}
+/** Those effects in words for the offer's terms: "+2 loyalty with Ground / Powder; −2 with Air". */
+export const acceptEffectsText = (effects) => effects.map((e, i) => `${e.delta > 0 ? '+' : '−'}${Math.abs(e.delta)}${i ? '' : ' loyalty'} with ${e.name}`).join('; ');
+
+/** The offer left open on a planet (s.openOffers[planetKey]: { contact, buyer }), or null. */
+export const openOfferOn = (s, planetKey) => ((s && s.openOffers) || {})[planetKey] || null;
+/** Keep a declined offer open on a planet, or close it (contact null) once it is accepted. Mutates s. */
+export function setOpenOffer(s, planetKey, offer) {
+  if (!s.openOffers || typeof s.openOffers !== 'object') s.openOffers = {};
+  if (offer && offer.contact && offer.buyer) s.openOffers[planetKey] = { contact: offer.contact, buyer: offer.buyer };
+  else delete s.openOffers[planetKey];
 }
 
 /**

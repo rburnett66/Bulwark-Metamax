@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { mapCast, openingCall, secondaryCall, closingCall, firstSentence, aboardSecretCalls, SECONDARY_AFTER_WAVE } from './mapCast.js';
+import { mapCast, openingCall, secondaryCall, closingCall, firstSentence, aboardSecretCalls, SECONDARY_AFTER_WAVE, contractOfferScene, spokenFleet } from './mapCast.js';
 import { noteSecretTold } from '../save/secrets.js';
 import { tipsCall } from './dialog.js';
 
@@ -73,12 +73,43 @@ test('the contract tip, star bonus and closing are one short line each', () => {
 test('main.js: only the map\'s first wave has a character; the secondary after wave 3; the map character closes', () => {
   const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
   assert.match(main, /if \(wave !== 1\) return Promise\.resolve\(\);/);
-  assert.match(main, /if \(idx === SECONDARY_AFTER_WAVE && secondaryCall\(matchCast\(\), voicePacks\)\)/);
+  assert.match(main, /if \(idx === SECONDARY_AFTER_WAVE && !\(offer && offer\.bySecondary\) && secondaryCall\(matchCast\(\), voicePacks\)\)/,
+    'the secondary speaks alone only when they make no offer');
   assert.match(main, /closingCall\(matchCast\(\), characterFiles, voicePacks, S\.result\)/);
   assert.doesNotMatch(main, /noteSecretTold/, 'no secret is told in battle any more');
-  assert.match(main, /if \(idx === SECONDARY_AFTER_WAVE\) await offerRareContract\(\(matchCast\(\) \|\| \{\}\)\.secondary \|\| null\);/, 'one voice at wave 3: the secondary offers the contract');
-  assert.match(main, /const call = !own && contact && characterCall/, 'the secondary is not announced twice');
+  assert.match(main, /const offer = idx === SECONDARY_AFTER_WAVE \? prepareRareOffer\(\(matchCast\(\) \|\| \{\}\)\.secondary \|\| null\) : null;/, 'one voice at wave 3: the secondary offers the contract');
+  assert.match(main, /if \(offer\) await playRareOffer\(offer\);/);
   const ship = readFileSync(new URL('../reveal/shipReveal.js', import.meta.url), 'utf8');
   assert.match(ship, /aboardScene\(buildModel\(\{ packs: pk, files, threads \}\), files, pk, ship\.key, loadSave\(\), factionNameOf\(ship\.key\)\)/, 'secrets and rumours are told aboard');
   assert.match(ship, /updateSave\(\(sv\) => scene\.commit\(sv\)\)/, 'and recorded once');
+});
+
+// [MM-story_mwpzbj5c_45] owner 2026-11-21: "The contract offers on Wave should be presented as character dialogs since
+// they are often introductions of new characters." · "I hear you are resource gathering on Florael" · "I'm Chelsea from
+// (faction) and if you can deliver some elder root we will pay, it's always good to have friends in high places."
+test('the wave-3 offer is a dialog: an introduction, the offer in their voice, an answer to the choice, their line last', () => {
+  const sc = contractOfferScene(PACKS, { factionKey: 'ground', name: 'Quartermaster Ines Roth', factionName: 'Ground / Powder',
+    planetName: 'Florael', rareName: 'Dawnpollen', quota: 40, price: 12, personality: 'open-hearted', flavour: 'Tell Sora the powder\'s dry. And nothing else.' });
+  assert.deepEqual(sc.calls.map((c) => c.line), [
+    'I hear you\'re gathering resources on Florael.',
+    'I\'m Ines, from the Ground fleet. If you can deliver some Dawnpollen, we will pay: 12 gold each, up to 40. It\'s always good to have friends in high places.',
+  ]);
+  for (const c of [...sc.calls, sc.replies.accept, sc.replies.decline, ...sc.after]) {
+    assert.equal(c.name, 'Quartermaster Ines Roth'); assert.equal(c.factionKey, 'ground'); assert.match(c.sub, /CONTRACT OFFER$/);
+  }
+  assert.ok(sc.replies.accept.line && sc.replies.decline.line && sc.replies.accept.line !== sc.replies.decline.line);
+  assert.deepEqual(sc.after.map((c) => c.line), ['Tell Sora the powder\'s dry. And nothing else.']);
+  const cruel = contractOfferScene(PACKS, { factionKey: 'ground', name: 'Quartermaster Ines Roth', factionName: 'Ground / Powder',
+    planetName: 'Kessra', rareName: 'Ghost Brass', quota: 10, price: 30, personality: 'cruel', flavour: null });
+  assert.match(cruel.calls[1].line, /Don't make me regret asking\.$/, 'the close follows their personality');
+  assert.deepEqual(cruel.after, []);
+  assert.equal(spokenFleet('Greenies (Chem)'), 'the Greenies fleet');
+  assert.equal(spokenFleet('High Tech'), 'the High Tech fleet');
+});
+
+test('an offer declined before comes back with its own opening, and a decline promises to ask again', () => {
+  const sc = contractOfferScene(PACKS, { factionKey: 'ground', name: 'Quartermaster Ines Roth', factionName: 'Ground / Powder',
+    planetName: 'Florael', rareName: 'Dawnpollen', quota: 40, price: 12, personality: 'wary', flavour: null, again: true });
+  assert.equal(sc.calls[0].line, 'Back on Florael? My offer still stands.');
+  assert.match(sc.replies.decline.line, /ask again|be around|ask once more/);
 });

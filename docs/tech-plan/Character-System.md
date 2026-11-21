@@ -499,6 +499,26 @@ the teller gets the lied-before mark.
 - The expression is generated from the character's personality and alignment by `tools/dialog/expression_prompts.py`,
   which also writes the switch-on list from the files present. `tools/portraits/index.html` reviews all 81.
 
+### 7.9 Order matters (owner 2026-11-21, design open)
+
+*"Sometime the order of acceptance and completion matter to a relationship."* Not built. To decide with the owner:
+- **Accepting a rival's offer first:** for example, taking one faction's contract before its rival's makes the rival
+  think less of the player, even if both are completed.
+- **Completing in order:** a friend's contract finished before the rival's earns a bonus; finished after, a slight.
+- **Keeping one promise by breaking another:** contracts that conflict, where finishing one ends the other.
+
+**Owner 2026-11-21, the first rule:** *"Right now missions/contracts have an offer and a reward. But accepting offers
+from rival factions might increase alignment with one while hurting alignment with another rival faction."* So
+**accepting takes a side**: the moment an offer is accepted, the offering faction gains loyalty and every faction
+Hostile to it (§5 relations) loses as much (proposed ±2, `rareContract.js ACCEPT_LOYALTY`); the reward still comes on
+completion. The terms show it before the choice ("Accepting now: +2 loyalty with Ground / Powder; −2 with Air"). Built
+for the wave-3 offer. Ship missions have no accept step yet (they are logged when their gate opens), so for them this
+waits on one. Because each acceptance moves loyalty at once, the order of acceptances already matters (a tier crossed
+early opens its tech early).
+
+The data it needs is an ordered log of offers (made / accepted / declined / completed, with who and when). The rules
+belong to §5 faction relations and §7.8 mood shifts. Ticket: story_mwq11to8_1.
+
 ## 8. Magic side (hook only; the design is `Magic-System.md`)
 
 The three magics (Brain, the electric field; Soul, the quantum field; Body, the organic field) are neutral; good and evil are how a
