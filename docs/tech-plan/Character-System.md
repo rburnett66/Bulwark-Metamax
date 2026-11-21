@@ -67,17 +67,19 @@ reads from it.
 | Faction | Known for | Known to lack | Status |
 |---|---|---|---|
 | **Powder** | resourceful · heavily armoured | science · strategic planning | owner's words |
-| Air | speed · daring aces | staying power (fragile) · patience | confirmed |
-| High Tech | precision · shields | numbers (every unit is expensive) · adaptability | confirmed |
+| Air | speed · daring aces | thrift (the costliest units) · patience | confirmed |
+| High Tech | precision at range · shields | speed (heavy kit) · adaptability | confirmed |
 | Artillery | range · siege patience | speed · close defence | confirmed |
 | Water | endurance in the cold · adaptability | unity (rival tribes) · reach away from water | confirmed |
-| Arcane | discipline of faith · energy weapons | open minds (dogma) · hardiness | confirmed |
+| Arcane | discipline of faith · energy weapons | open minds (dogma) · reach (short-ranged weapons) | confirmed |
 | Space | advanced science · long sight (orbital) | ground sense (detached) · speed of decision (bureaucracy) | confirmed |
 | Dark | strength at night · endurance past death | trust (everyone distrusts them) · restraint | confirmed |
 | Greenies | numbers (the swarm) · recovery | individual initiative (the hive) · strength alone | confirmed |
 
 Powder's are the owner's words; the other eight were drafted from each faction's identity in
-Special-Abilities-Design and the GDD, and the owner confirmed them all on 2026-11-20 ("confirm traits").
+Special-Abilities-Design and the GDD, and the owner confirmed them all on 2026-11-20 ("confirm traits"). Three drafts
+disagreed with the unit data, and the owner chose to change the wording, not the units ("change wording for units"):
+Air, High Tech and Arcane above.
 
 **What reads from the traits:**
 
@@ -168,8 +170,10 @@ so there is one place that answers "who is tied to whom".
 | `uses` | buys from, funds, exploits | no: across the line |
 
 **Rules:**
-- A `love` secret names its thread's `to`. A `hate` secret names someone the character either hunts or has a rival
-  thread with, or someone whose base relation is −2.
+- A `love` secret names its thread's `to`. A `hate` secret may be of a **group or a person**, and may be dislike or
+  distrust as much as hatred (owner 2026-11-20: "hate groups or individuals .. hate could be dislike or dont trust").
+  A hate that names a character needs a rival or hunts thread to them. A hate of a group is heard by the character's
+  circle (reach close), not across the line.
 - **A love with base ≤ 0 must be a tagged thread.** That is the point of the tragedy: Otto ↔ Rei is +1 privately
   against a hostile war. A love that contradicts the matrix with no tag fails the test.
 - The GDD §12 threads ([DL] [TA] [RE] [RV] [TW] [FL]) must all be present.
@@ -516,6 +520,13 @@ Rules and checks are in `Magic-System.md` §9; the player's own magic skills are
 8. Every homeworld map's secondary is an across-knower of a main-character secret where one exists.
 9. Every faction has two strengths and two weaknesses (§2a) and at least one against-type character; its traits
    agree with its home magic; a strength or weakness that names a battle stat agrees with its units' data.
+
+**Built** (MM-story_mwp61a5f_32): `alignment.js`, `factionTraits.js`, `magic.js`, `flaws.js`, `characterModel.js`,
+`characterGate.js` and `content/characters/threads.json`. The rules (the matrix, the tables, the GDD threads, the worked
+examples) must hold outright. The content's known problems are listed in `content/characters/gate-baseline.json`, and
+the suite fails on any problem not on that list, or on a listed one that no longer happens. The work list is
+`docs/16 Bulwark MM/create/Character-Gate-Report.md` (`node tools/dialog/character_gate.mjs`; add `--write-baseline`
+after fixing content).
 
 ## 10. Data changes
 

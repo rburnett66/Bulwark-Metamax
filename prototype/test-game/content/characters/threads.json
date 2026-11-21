@@ -1,0 +1,1193 @@
+{
+ "_source": "docs/tech-plan/Character-System.md §5 [MM-story_mwp61a5f_32]. Directed, asymmetric relationships above the symmetric alignment matrix (GDD §12). kind: love · kin · confidant · comrade (in the circle) · hunts · rival · uses (across the line). tag: the GDD §12 thread it belongs to, if any. gdd: true marks a thread the GDD names outright (the gate requires it). public: whether others know of it.",
+ "kinds": [
+  "love",
+  "kin",
+  "confidant",
+  "comrade",
+  "hunts",
+  "rival",
+  "uses"
+ ],
+ "threads": [
+  {
+   "from": "Captain Otto von Halbrecht",
+   "to": "Rei \"Skylark\" Tanaka",
+   "kind": "love",
+   "tag": "DL",
+   "gdd": true,
+   "public": false
+  },
+  {
+   "from": "Rei \"Skylark\" Tanaka",
+   "to": "Captain Otto von Halbrecht",
+   "kind": "love",
+   "tag": "DL",
+   "gdd": true,
+   "public": false
+  },
+  {
+   "from": "Kaito \"Rogue\" Minami",
+   "to": "Cadet-Prodigy Ezra \"Comet\" Lin",
+   "kind": "rival",
+   "tag": "TA",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "Cadet-Prodigy Ezra \"Comet\" Lin",
+   "to": "Kaito \"Rogue\" Minami",
+   "kind": "rival",
+   "tag": "TA",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "Hierophant Aurelia",
+   "to": "The Ordained Prime, Vaelith",
+   "kind": "confidant",
+   "tag": "RE",
+   "gdd": true,
+   "public": false
+  },
+  {
+   "from": "The Ordained Prime, Vaelith",
+   "to": "Hierophant Aurelia",
+   "kind": "confidant",
+   "tag": "RE",
+   "gdd": true,
+   "public": false
+  },
+  {
+   "from": "Hierophant Aurelia",
+   "to": "Heretic Isolde",
+   "kind": "hunts",
+   "tag": "RE",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "The Ordained Prime, Vaelith",
+   "to": "Heretic Isolde",
+   "kind": "hunts",
+   "tag": "RE",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "Inquisitor Mordane",
+   "to": "Heretic Isolde",
+   "kind": "hunts",
+   "tag": "RE",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "Hierophant Aurelia",
+   "to": "Inquisitor Mordane",
+   "kind": "uses",
+   "tag": "RE",
+   "gdd": true,
+   "public": false
+  },
+  {
+   "from": "The Hollow Prophet",
+   "to": "Hierophant Aurelia",
+   "kind": "rival",
+   "tag": "RE",
+   "gdd": true,
+   "public": false
+  },
+  {
+   "from": "Wavecaller Nerea",
+   "to": "Warlord-Gunner Vex Marrow",
+   "kind": "hunts",
+   "tag": "RV",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "Chieftain Coral of the Reef-Born",
+   "to": "Raider-Chief Drowned Kael",
+   "kind": "rival",
+   "tag": "TW",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "Raider-Chief Drowned Kael",
+   "to": "Chieftain Coral of the Reef-Born",
+   "kind": "rival",
+   "tag": "TW",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "Splinter \"Wildseed\" Ovo",
+   "to": "The Root-Mind",
+   "kind": "rival",
+   "tag": "TW",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "Field-Marshal Seraphine von Halbrecht",
+   "to": "Captain Otto von Halbrecht",
+   "kind": "kin",
+   "tag": "FL",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "Captain Otto von Halbrecht",
+   "to": "Field-Marshal Seraphine von Halbrecht",
+   "kind": "kin",
+   "tag": "FL",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "Captain Otto von Halbrecht",
+   "to": "General Kord Stahl",
+   "kind": "kin",
+   "tag": "FL",
+   "gdd": true,
+   "public": true,
+   "note": "his uncle (Otto's hate secret)"
+  },
+  {
+   "from": "General Kord Stahl",
+   "to": "Captain Otto von Halbrecht",
+   "kind": "kin",
+   "tag": "FL",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "Field-Marshal Seraphine von Halbrecht",
+   "to": "General Kord Stahl",
+   "kind": "kin",
+   "tag": "FL",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "General Kord Stahl",
+   "to": "Field-Marshal Seraphine von Halbrecht",
+   "kind": "kin",
+   "tag": "FL",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "Chief Ethicist Dr. Grace Sterling",
+   "to": "CEO Adrian Sterling",
+   "kind": "kin",
+   "tag": "FL",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "CEO Adrian Sterling",
+   "to": "Chief Ethicist Dr. Grace Sterling",
+   "kind": "kin",
+   "tag": "FL",
+   "gdd": true,
+   "public": true
+  },
+  {
+   "from": "Quartermaster Ines Roth",
+   "to": "Mechanic Sora Ito",
+   "kind": "love",
+   "public": false,
+   "note": "Powder love secret"
+  },
+  {
+   "from": "Sergeant \"Bricks\" Malloy",
+   "to": "Quartermaster Ines Roth",
+   "kind": "love",
+   "public": false,
+   "note": "Powder love secret"
+  },
+  {
+   "from": "Colonel Aldric Vane",
+   "to": "Major Elena Ruiz",
+   "kind": "love",
+   "public": false,
+   "note": "Powder love secret"
+  },
+  {
+   "from": "Freikorps raider Grigor Vosk",
+   "to": "Raider-Chief Drowned Kael",
+   "kind": "love",
+   "public": false,
+   "note": "Powder love secret"
+  },
+  {
+   "from": "General Kord Stahl",
+   "to": "Sky-Marshal Reiko Kurogane",
+   "kind": "love",
+   "public": false,
+   "note": "Powder love secret"
+  },
+  {
+   "from": "Chancellor Wilhelmina Graf",
+   "to": "The Iron Regent (masked)",
+   "kind": "love",
+   "public": false,
+   "note": "Powder love secret"
+  },
+  {
+   "from": "The Iron Regent (masked)",
+   "to": "The Hollow Prophet",
+   "kind": "love",
+   "public": false,
+   "note": "Powder love secret"
+  },
+  {
+   "from": "Sergeant \"Bricks\" Malloy",
+   "to": "General Kord Stahl",
+   "kind": "rival",
+   "public": false,
+   "note": "Powder hate secret"
+  },
+  {
+   "from": "Captain Otto von Halbrecht",
+   "to": "General Kord Stahl",
+   "kind": "rival",
+   "public": false,
+   "note": "Powder hate secret"
+  },
+  {
+   "from": "Freikorps raider Grigor Vosk",
+   "to": "Colonel Aldric Vane",
+   "kind": "hunts",
+   "public": false,
+   "note": "Powder hate secret: sure Vane burned his village"
+  },
+  {
+   "from": "Field-Marshal Seraphine von Halbrecht",
+   "to": "Chancellor Wilhelmina Graf",
+   "kind": "rival",
+   "public": false,
+   "note": "Powder hate secret"
+  },
+  {
+   "from": "General Kord Stahl",
+   "to": "Captain Otto von Halbrecht",
+   "kind": "rival",
+   "public": false,
+   "note": "Powder hate secret"
+  },
+  {
+   "from": "Chancellor Wilhelmina Graf",
+   "to": "Field-Marshal Seraphine von Halbrecht",
+   "kind": "rival",
+   "public": false,
+   "note": "Powder hate secret"
+  },
+  {
+   "from": "The Iron Regent (masked)",
+   "to": "Chancellor Wilhelmina Graf",
+   "kind": "rival",
+   "public": false,
+   "note": "Powder hate secret"
+  },
+  {
+   "from": "Mechanic Sora Ito",
+   "to": "Wing-Commander Garret \"Ash\" Kowalski",
+   "kind": "rival",
+   "public": false,
+   "note": "Air hate secret"
+  },
+  {
+   "from": "Mechanic Sora Ito",
+   "to": "Quartermaster Ines Roth",
+   "kind": "love",
+   "public": false,
+   "note": "Air love secret"
+  },
+  {
+   "from": "Kaito \"Rogue\" Minami",
+   "to": "Cadet-Prodigy Ezra \"Comet\" Lin",
+   "kind": "love",
+   "public": false,
+   "note": "Air love secret"
+  },
+  {
+   "from": "Rei \"Skylark\" Tanaka",
+   "to": "General Kord Stahl",
+   "kind": "rival",
+   "public": false,
+   "note": "Air hate secret"
+  },
+  {
+   "from": "Ace Jun \"Halo\" Sato",
+   "to": "Rei \"Skylark\" Tanaka",
+   "kind": "love",
+   "public": false,
+   "note": "Air love secret"
+  },
+  {
+   "from": "Squadron-Mother Hikari \"Dawnwing\" Aoi",
+   "to": "Ace Jun \"Halo\" Sato",
+   "kind": "love",
+   "public": false,
+   "note": "Air love secret"
+  },
+  {
+   "from": "Squadron-Mother Hikari \"Dawnwing\" Aoi",
+   "to": "Sky-Marshal Reiko Kurogane",
+   "kind": "rival",
+   "public": false,
+   "note": "Air hate secret"
+  },
+  {
+   "from": "Renegade \"Viper\" Ryu",
+   "to": "Ace Jun \"Halo\" Sato",
+   "kind": "rival",
+   "public": false,
+   "note": "Air hate secret"
+  },
+  {
+   "from": "Renegade \"Viper\" Ryu",
+   "to": "Privateer Rax Dune",
+   "kind": "love",
+   "public": false,
+   "note": "Air love secret"
+  },
+  {
+   "from": "Sky-Marshal Reiko Kurogane",
+   "to": "General Kord Stahl",
+   "kind": "rival",
+   "public": false,
+   "note": "Air hate secret"
+  },
+  {
+   "from": "Sky-Marshal Reiko Kurogane",
+   "to": "Squadron-Mother Hikari \"Dawnwing\" Aoi",
+   "kind": "love",
+   "public": false,
+   "note": "Air love secret"
+  },
+  {
+   "from": "Wing-Commander Garret \"Ash\" Kowalski",
+   "to": "Sky-Marshal Reiko Kurogane",
+   "kind": "love",
+   "public": false,
+   "note": "Air love secret"
+  },
+  {
+   "from": "The Nightingale (ghost squadron)",
+   "to": "Sky-Marshal Reiko Kurogane",
+   "kind": "rival",
+   "public": false,
+   "note": "Air hate secret"
+  },
+  {
+   "from": "The Nightingale (ghost squadron)",
+   "to": "Squadron-Mother Hikari \"Dawnwing\" Aoi",
+   "kind": "love",
+   "public": false,
+   "note": "Air love secret"
+  },
+  {
+   "from": "Actuary Devlin Cho",
+   "to": "COO Marcus Thorne",
+   "kind": "rival",
+   "public": false,
+   "note": "High Tech hate secret"
+  },
+  {
+   "from": "Actuary Devlin Cho",
+   "to": "Navigator AI \"Vector\"",
+   "kind": "love",
+   "public": false,
+   "note": "High Tech love secret"
+  },
+  {
+   "from": "Hacker \"Null\" (Priya Nair)",
+   "to": "Heretic Isolde",
+   "kind": "love",
+   "public": false,
+   "note": "High Tech love secret"
+  },
+  {
+   "from": "Hacker \"Null\" (Priya Nair)",
+   "to": "CEO Adrian Sterling",
+   "kind": "rival",
+   "public": false,
+   "note": "High Tech hate secret"
+  },
+  {
+   "from": "R&D Lead Amara Okonkwo",
+   "to": "Fire-Director Yusuf Kaya",
+   "kind": "love",
+   "public": false,
+   "note": "High Tech love secret"
+  },
+  {
+   "from": "R&D Lead Amara Okonkwo",
+   "to": "COO Marcus Thorne",
+   "kind": "rival",
+   "public": false,
+   "note": "High Tech hate secret"
+  },
+  {
+   "from": "CFO Julian Vance",
+   "to": "Black-ops broker Sable Reyes",
+   "kind": "rival",
+   "public": false,
+   "note": "High Tech hate secret"
+  },
+  {
+   "from": "CFO Julian Vance",
+   "to": "Chief Ethicist Dr. Grace Sterling",
+   "kind": "love",
+   "public": false,
+   "note": "High Tech love secret"
+  },
+  {
+   "from": "Black-ops broker Sable Reyes",
+   "to": "Privateer Rax Dune",
+   "kind": "love",
+   "public": false,
+   "note": "High Tech love secret"
+  },
+  {
+   "from": "Black-ops broker Sable Reyes",
+   "to": "Hacker \"Null\" (Priya Nair)",
+   "kind": "rival",
+   "public": false,
+   "note": "High Tech hate secret"
+  },
+  {
+   "from": "Chief Ethicist Dr. Grace Sterling",
+   "to": "The Board (anonymized AI)",
+   "kind": "rival",
+   "public": false,
+   "note": "High Tech hate secret"
+  },
+  {
+   "from": "COO Marcus Thorne",
+   "to": "Grand-Bombardier Seline Voss",
+   "kind": "love",
+   "public": false,
+   "note": "High Tech love secret"
+  },
+  {
+   "from": "CEO Adrian Sterling",
+   "to": "The Board (anonymized AI)",
+   "kind": "rival",
+   "public": false,
+   "note": "High Tech hate secret"
+  },
+  {
+   "from": "The Board (anonymized AI)",
+   "to": "The Signal",
+   "kind": "love",
+   "public": false,
+   "note": "High Tech love secret"
+  },
+  {
+   "from": "Logistician Bo Farrell",
+   "to": "Colonel Hargreave",
+   "kind": "rival",
+   "public": false,
+   "note": "Artillery hate secret"
+  },
+  {
+   "from": "Logistician Bo Farrell",
+   "to": "CFO Julian Vance",
+   "kind": "love",
+   "public": false,
+   "note": "Artillery love secret"
+  },
+  {
+   "from": "Spotter \"Ricochet\" Deacon",
+   "to": "Kaito \"Rogue\" Minami",
+   "kind": "love",
+   "public": false,
+   "note": "Artillery love secret"
+  },
+  {
+   "from": "Spotter \"Ricochet\" Deacon",
+   "to": "The Siegemaster",
+   "kind": "rival",
+   "public": false,
+   "note": "Artillery hate secret"
+  },
+  {
+   "from": "Chaplain-Gunner Ruth Bellamy",
+   "to": "Tide-Priestess Marena",
+   "kind": "love",
+   "public": false,
+   "note": "Artillery love secret"
+  },
+  {
+   "from": "Chaplain-Gunner Ruth Bellamy",
+   "to": "Warlord-Gunner Vex Marrow",
+   "kind": "rival",
+   "public": false,
+   "note": "Artillery hate secret"
+  },
+  {
+   "from": "Major Elena Ruiz",
+   "to": "Colonel Hargreave",
+   "kind": "rival",
+   "public": false,
+   "note": "Artillery hate secret"
+  },
+  {
+   "from": "Major Elena Ruiz",
+   "to": "Colonel Aldric Vane",
+   "kind": "love",
+   "public": false,
+   "note": "Artillery love secret"
+  },
+  {
+   "from": "Fire-Director Yusuf Kaya",
+   "to": "R&D Lead Amara Okonkwo",
+   "kind": "love",
+   "public": false,
+   "note": "Artillery love secret"
+  },
+  {
+   "from": "Fire-Director Yusuf Kaya",
+   "to": "Grand-Bombardier Seline Voss",
+   "kind": "rival",
+   "public": false,
+   "note": "Artillery hate secret"
+  },
+  {
+   "from": "Warlord-Gunner Vex Marrow",
+   "to": "Wavecaller Nerea",
+   "kind": "rival",
+   "public": false,
+   "note": "Artillery hate secret"
+  },
+  {
+   "from": "Warlord-Gunner Vex Marrow",
+   "to": "Renegade \"Viper\" Ryu",
+   "kind": "love",
+   "public": false,
+   "note": "Artillery love secret"
+  },
+  {
+   "from": "Colonel Hargreave",
+   "to": "Fire-Director Yusuf Kaya",
+   "kind": "rival",
+   "public": false,
+   "note": "Artillery hate secret"
+  },
+  {
+   "from": "Colonel Hargreave",
+   "to": "General Kord Stahl",
+   "kind": "love",
+   "public": false,
+   "note": "Artillery love secret"
+  },
+  {
+   "from": "Grand-Bombardier Seline Voss",
+   "to": "CEO Adrian Sterling",
+   "kind": "rival",
+   "public": false,
+   "note": "Artillery hate secret"
+  },
+  {
+   "from": "Grand-Bombardier Seline Voss",
+   "to": "The Siegemaster",
+   "kind": "love",
+   "public": false,
+   "note": "Artillery love secret"
+  },
+  {
+   "from": "The Siegemaster",
+   "to": "Chaplain-Gunner Ruth Bellamy",
+   "kind": "rival",
+   "public": false,
+   "note": "Artillery hate secret"
+  },
+  {
+   "from": "The Siegemaster",
+   "to": "Grand-Bombardier Seline Voss",
+   "kind": "love",
+   "public": false,
+   "note": "Artillery love secret"
+  },
+  {
+   "from": "Ferryman Old Brack",
+   "to": "Tide-Priestess Marena",
+   "kind": "love",
+   "public": false,
+   "note": "Water love secret"
+  },
+  {
+   "from": "Corsair Finn Saltmoor",
+   "to": "Heretic Isolde",
+   "kind": "love",
+   "public": false,
+   "note": "Water love secret"
+  },
+  {
+   "from": "Corsair Finn Saltmoor",
+   "to": "Abyssal Sovereign Thal",
+   "kind": "rival",
+   "public": false,
+   "note": "Water hate secret"
+  },
+  {
+   "from": "Wavecaller Nerea",
+   "to": "Chieftain Coral of the Reef-Born",
+   "kind": "love",
+   "public": false,
+   "note": "Water love secret"
+  },
+  {
+   "from": "Chieftain Coral of the Reef-Born",
+   "to": "Corsair Finn Saltmoor",
+   "kind": "love",
+   "public": false,
+   "note": "Water love secret"
+  },
+  {
+   "from": "Raider-Chief Drowned Kael",
+   "to": "Chieftain Coral of the Reef-Born",
+   "kind": "love",
+   "public": false,
+   "note": "Water love secret"
+  },
+  {
+   "from": "Raider-Chief Drowned Kael",
+   "to": "Wavecaller Nerea",
+   "kind": "rival",
+   "public": false,
+   "note": "Water hate secret"
+  },
+  {
+   "from": "Tide-Priestess Marena",
+   "to": "Leviathan-Binder Morgause",
+   "kind": "rival",
+   "public": false,
+   "note": "Water hate secret"
+  },
+  {
+   "from": "Tide-Priestess Marena",
+   "to": "Hierophant Aurelia",
+   "kind": "love",
+   "public": false,
+   "note": "Water love secret"
+  },
+  {
+   "from": "Leviathan-Binder Morgause",
+   "to": "Tide-Priestess Marena",
+   "kind": "rival",
+   "public": false,
+   "note": "Water hate secret"
+  },
+  {
+   "from": "Leviathan-Binder Morgause",
+   "to": "Abyssal Sovereign Thal",
+   "kind": "love",
+   "public": false,
+   "note": "Water love secret"
+  },
+  {
+   "from": "Abyssal Sovereign Thal",
+   "to": "The Undertow (drowned collective)",
+   "kind": "rival",
+   "public": false,
+   "note": "Water hate secret"
+  },
+  {
+   "from": "Abyssal Sovereign Thal",
+   "to": "Leviathan-Binder Morgause",
+   "kind": "love",
+   "public": false,
+   "note": "Water love secret"
+  },
+  {
+   "from": "The Undertow (drowned collective)",
+   "to": "Ferryman Old Brack",
+   "kind": "love",
+   "public": false,
+   "note": "Water love secret"
+  },
+  {
+   "from": "Archivist Balthus",
+   "to": "Hierophant Aurelia",
+   "kind": "love",
+   "public": false,
+   "note": "Arcane / Energy love secret"
+  },
+  {
+   "from": "Heretic Isolde",
+   "to": "Inquisitor Mordane",
+   "kind": "rival",
+   "public": false,
+   "note": "Arcane / Energy hate secret"
+  },
+  {
+   "from": "Heretic Isolde",
+   "to": "Corsair Finn Saltmoor",
+   "kind": "love",
+   "public": false,
+   "note": "Arcane / Energy love secret"
+  },
+  {
+   "from": "Acolyte-Scholar Wen",
+   "to": "Lightbearer Cassian",
+   "kind": "love",
+   "public": false,
+   "note": "Arcane / Energy love secret"
+  },
+  {
+   "from": "Acolyte-Scholar Wen",
+   "to": "Inquisitor Mordane",
+   "kind": "rival",
+   "public": false,
+   "note": "Arcane / Energy hate secret"
+  },
+  {
+   "from": "Lightbearer Cassian",
+   "to": "Acolyte-Scholar Wen",
+   "kind": "love",
+   "public": false,
+   "note": "Arcane / Energy love secret"
+  },
+  {
+   "from": "Warlock Nyx",
+   "to": "Inquisitor Mordane",
+   "kind": "love",
+   "public": false,
+   "note": "Arcane / Energy love secret"
+  },
+  {
+   "from": "Warlock Nyx",
+   "to": "Hierophant Aurelia",
+   "kind": "rival",
+   "public": false,
+   "note": "Arcane / Energy hate secret"
+  },
+  {
+   "from": "Hierophant Aurelia",
+   "to": "Inquisitor Mordane",
+   "kind": "rival",
+   "public": false,
+   "note": "Arcane / Energy hate secret"
+  },
+  {
+   "from": "Hierophant Aurelia",
+   "to": "Heretic Isolde",
+   "kind": "love",
+   "public": false,
+   "note": "Arcane / Energy love secret"
+  },
+  {
+   "from": "Inquisitor Mordane",
+   "to": "The Hollow Prophet",
+   "kind": "rival",
+   "public": false,
+   "note": "Arcane / Energy hate secret"
+  },
+  {
+   "from": "Inquisitor Mordane",
+   "to": "Heretic Isolde",
+   "kind": "love",
+   "public": false,
+   "note": "Arcane / Energy love secret"
+  },
+  {
+   "from": "The Ordained Prime, Vaelith",
+   "to": "Inquisitor Mordane",
+   "kind": "rival",
+   "public": false,
+   "note": "Arcane / Energy hate secret"
+  },
+  {
+   "from": "The Ordained Prime, Vaelith",
+   "to": "Hierophant Aurelia",
+   "kind": "love",
+   "public": false,
+   "note": "Arcane / Energy love secret"
+  },
+  {
+   "from": "The Unmade Choir",
+   "to": "Heretic Isolde",
+   "kind": "rival",
+   "public": false,
+   "note": "Arcane / Energy hate secret"
+  },
+  {
+   "from": "The Unmade Choir",
+   "to": "The Undertow (drowned collective)",
+   "kind": "love",
+   "public": false,
+   "note": "Arcane / Energy love secret"
+  },
+  {
+   "from": "Navigator AI \"Vector\"",
+   "to": "Cadet-Prodigy Ezra \"Comet\" Lin",
+   "kind": "love",
+   "public": false,
+   "note": "Space Tech love secret"
+  },
+  {
+   "from": "Navigator AI \"Vector\"",
+   "to": "Privateer Rax Dune",
+   "kind": "rival",
+   "public": false,
+   "note": "Space Tech hate secret"
+  },
+  {
+   "from": "Cadet-Prodigy Ezra \"Comet\" Lin",
+   "to": "Admiral Sarn",
+   "kind": "rival",
+   "public": false,
+   "note": "Space Tech hate secret"
+  },
+  {
+   "from": "Cadet-Prodigy Ezra \"Comet\" Lin",
+   "to": "Kaito \"Rogue\" Minami",
+   "kind": "love",
+   "public": false,
+   "note": "Space Tech love secret"
+  },
+  {
+   "from": "Science-Officer Tovah",
+   "to": "Grand-Cartographer Ophir",
+   "kind": "rival",
+   "public": false,
+   "note": "Space Tech hate secret"
+  },
+  {
+   "from": "Science-Officer Tovah",
+   "to": "Commander Idris Vale",
+   "kind": "love",
+   "public": false,
+   "note": "Space Tech love secret"
+  },
+  {
+   "from": "Commander Idris Vale",
+   "to": "The Signal",
+   "kind": "rival",
+   "public": false,
+   "note": "Space Tech hate secret"
+  },
+  {
+   "from": "Commander Idris Vale",
+   "to": "Envoy Lyra-9",
+   "kind": "love",
+   "public": false,
+   "note": "Space Tech love secret"
+  },
+  {
+   "from": "Privateer Rax Dune",
+   "to": "Admiral Sarn",
+   "kind": "rival",
+   "public": false,
+   "note": "Space Tech hate secret"
+  },
+  {
+   "from": "Privateer Rax Dune",
+   "to": "Black-ops broker Sable Reyes",
+   "kind": "love",
+   "public": false,
+   "note": "Space Tech love secret"
+  },
+  {
+   "from": "Envoy Lyra-9",
+   "to": "The Reformer Elias",
+   "kind": "love",
+   "public": false,
+   "note": "Space Tech love secret"
+  },
+  {
+   "from": "Envoy Lyra-9",
+   "to": "The Signal",
+   "kind": "rival",
+   "public": false,
+   "note": "Space Tech hate secret"
+  },
+  {
+   "from": "Admiral Sarn",
+   "to": "Commander Idris Vale",
+   "kind": "rival",
+   "public": false,
+   "note": "Space Tech hate secret"
+  },
+  {
+   "from": "Admiral Sarn",
+   "to": "Cadet-Prodigy Ezra \"Comet\" Lin",
+   "kind": "love",
+   "public": false,
+   "note": "Space Tech love secret"
+  },
+  {
+   "from": "Grand-Cartographer Ophir",
+   "to": "CEO Adrian Sterling",
+   "kind": "rival",
+   "public": false,
+   "note": "Space Tech hate secret"
+  },
+  {
+   "from": "Grand-Cartographer Ophir",
+   "to": "The Architect, Malis",
+   "kind": "love",
+   "public": false,
+   "note": "Space Tech love secret"
+  },
+  {
+   "from": "The Signal",
+   "to": "Navigator AI \"Vector\"",
+   "kind": "love",
+   "public": false,
+   "note": "Space Tech love secret"
+  },
+  {
+   "from": "The Signal",
+   "to": "Envoy Lyra-9",
+   "kind": "rival",
+   "public": false,
+   "note": "Space Tech hate secret"
+  },
+  {
+   "from": "Doctrinist Vera",
+   "to": "The Hollow Prophet",
+   "kind": "rival",
+   "public": false,
+   "note": "Dark Energy hate secret"
+  },
+  {
+   "from": "Doctrinist Vera",
+   "to": "The Reformer Elias",
+   "kind": "love",
+   "public": false,
+   "note": "Dark Energy love secret"
+  },
+  {
+   "from": "Firebrand Lux",
+   "to": "Enforcer Grael",
+   "kind": "love",
+   "public": false,
+   "note": "Dark Energy love secret"
+  },
+  {
+   "from": "Firebrand Lux",
+   "to": "The Architect, Malis",
+   "kind": "rival",
+   "public": false,
+   "note": "Dark Energy hate secret"
+  },
+  {
+   "from": "Organizer Tomas",
+   "to": "The Vanguard, Corin",
+   "kind": "rival",
+   "public": false,
+   "note": "Dark Energy hate secret"
+  },
+  {
+   "from": "Organizer Tomas",
+   "to": "Sister Maren",
+   "kind": "love",
+   "public": false,
+   "note": "Dark Energy love secret"
+  },
+  {
+   "from": "Sister Maren",
+   "to": "Organizer Tomas",
+   "kind": "love",
+   "public": false,
+   "note": "Dark Energy love secret"
+  },
+  {
+   "from": "Sister Maren",
+   "to": "The Hollow Prophet",
+   "kind": "rival",
+   "public": false,
+   "note": "Dark Energy hate secret"
+  },
+  {
+   "from": "Enforcer Grael",
+   "to": "Warlord-Gunner Vex Marrow",
+   "kind": "rival",
+   "public": false,
+   "note": "Dark Energy hate secret"
+  },
+  {
+   "from": "Enforcer Grael",
+   "to": "Firebrand Lux",
+   "kind": "love",
+   "public": false,
+   "note": "Dark Energy love secret"
+  },
+  {
+   "from": "The Reformer Elias",
+   "to": "The Vanguard, Corin",
+   "kind": "rival",
+   "public": false,
+   "note": "Dark Energy hate secret"
+  },
+  {
+   "from": "The Reformer Elias",
+   "to": "Envoy Lyra-9",
+   "kind": "love",
+   "public": false,
+   "note": "Dark Energy love secret"
+  },
+  {
+   "from": "The Vanguard, Corin",
+   "to": "The Reformer Elias",
+   "kind": "rival",
+   "public": false,
+   "note": "Dark Energy hate secret"
+  },
+  {
+   "from": "The Vanguard, Corin",
+   "to": "The Hollow Prophet",
+   "kind": "love",
+   "public": false,
+   "note": "Dark Energy love secret"
+  },
+  {
+   "from": "The Architect, Malis",
+   "to": "The Vanguard, Corin",
+   "kind": "rival",
+   "public": false,
+   "note": "Dark Energy hate secret"
+  },
+  {
+   "from": "The Architect, Malis",
+   "to": "Grand-Cartographer Ophir",
+   "kind": "love",
+   "public": false,
+   "note": "Dark Energy love secret"
+  },
+  {
+   "from": "The Hollow Prophet",
+   "to": "The Reformer Elias",
+   "kind": "rival",
+   "public": false,
+   "note": "Dark Energy hate secret"
+  },
+  {
+   "from": "The Hollow Prophet",
+   "to": "The Iron Regent (masked)",
+   "kind": "love",
+   "public": false,
+   "note": "Dark Energy love secret"
+  },
+  {
+   "from": "Composter Null-7",
+   "to": "Blight-Agitator Sear",
+   "kind": "rival",
+   "public": false,
+   "note": "Greenies (Chem) hate secret"
+  },
+  {
+   "from": "Composter Null-7",
+   "to": "Delegate Fenn",
+   "kind": "love",
+   "public": false,
+   "note": "Greenies (Chem) love secret"
+  },
+  {
+   "from": "Splinter \"Wildseed\" Ovo",
+   "to": "Delegate Fenn",
+   "kind": "love",
+   "public": false,
+   "note": "Greenies (Chem) love secret"
+  },
+  {
+   "from": "Splinter \"Wildseed\" Ovo",
+   "to": "Overseer Thax",
+   "kind": "rival",
+   "public": false,
+   "note": "Greenies (Chem) hate secret"
+  },
+  {
+   "from": "Delegate Fenn",
+   "to": "Overseer Thax",
+   "kind": "rival",
+   "public": false,
+   "note": "Greenies (Chem) hate secret"
+  },
+  {
+   "from": "Delegate Fenn",
+   "to": "Splinter \"Wildseed\" Ovo",
+   "kind": "love",
+   "public": false,
+   "note": "Greenies (Chem) love secret"
+  },
+  {
+   "from": "Steward Bractus",
+   "to": "Mother-Spore Ilya",
+   "kind": "love",
+   "public": false,
+   "note": "Greenies (Chem) love secret"
+  },
+  {
+   "from": "Mother-Spore Ilya",
+   "to": "Tide-Priestess Marena",
+   "kind": "love",
+   "public": false,
+   "note": "Greenies (Chem) love secret"
+  },
+  {
+   "from": "Mother-Spore Ilya",
+   "to": "The Root-Mind",
+   "kind": "rival",
+   "public": false,
+   "note": "Greenies (Chem) hate secret"
+  },
+  {
+   "from": "Blight-Agitator Sear",
+   "to": "Overseer Thax",
+   "kind": "rival",
+   "public": false,
+   "note": "Greenies (Chem) hate secret"
+  },
+  {
+   "from": "Blight-Agitator Sear",
+   "to": "Enforcer Grael",
+   "kind": "love",
+   "public": false,
+   "note": "Greenies (Chem) love secret"
+  },
+  {
+   "from": "Overseer Thax",
+   "to": "Steward Bractus",
+   "kind": "rival",
+   "public": false,
+   "note": "Greenies (Chem) hate secret"
+  },
+  {
+   "from": "Overseer Thax",
+   "to": "The Root-Mind",
+   "kind": "love",
+   "public": false,
+   "note": "Greenies (Chem) love secret"
+  },
+  {
+   "from": "The Root-Mind",
+   "to": "Mother-Spore Ilya",
+   "kind": "love",
+   "public": false,
+   "note": "Greenies (Chem) love secret"
+  },
+  {
+   "from": "The Rot",
+   "to": "The Undertow (drowned collective)",
+   "kind": "love",
+   "public": false,
+   "note": "Greenies (Chem) love secret"
+  },
+  {
+   "from": "The Rot",
+   "to": "The Unmade Choir",
+   "kind": "rival",
+   "public": false,
+   "note": "Greenies (Chem) hate secret"
+  }
+ ]
+}
