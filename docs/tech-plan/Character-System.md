@@ -459,6 +459,32 @@ the teller gets the lied-before mark.
 `s.rumours[owner] = [{ key, teller, version: 'true' | 'twist' | 'lie' | 'false', at }]`, next to the existing
 `s.secretsHeard`. It is pure data, and `secrets.js` gains `rumoursFor(…)`, `credibility(…)` and `noteRumour(…)`.
 
+### 7.8 Relationship portraits (owner 2026-11-20)
+
+> "The character should all have 3 portraits invoking relationship as neutral, friendly, or antagonistic. These can be
+> swapped into dialogs based on friend level. Even an angry character could appear neutral if given the right info or
+> gift."
+
+- Every character has three relationship portraits: **antagonistic, neutral, friendly**. The base portrait is the
+  neutral one (owner: "Can we assume all current images are neutral?"), so two more per character
+  (`<slug>-antagonistic.png`, `<slug>-friendly.png`). The rating band picks one: Wary or Hostile → antagonistic; Friendly or Trusted → friendly;
+  otherwise neutral (`standings.js moodFor`).
+- A **mood shift** moves the portrait one step warmer or colder for the character's next few calls without moving the
+  rating (`s.moodShift`): a kept promise or the right gift or news softens; a broken promise, a rumour told behind
+  their back, or a Read or Coerce hardens. Kept and broken promises are wired now; gifts and news arrive with the
+  payoff and rumours stories.
+- Every map dialog (the opening, the wave 3 secondary, the closing) and the Standings show the portrait.
+- **Placeholders** (owner: "copy the current image into the other two slots as new images (flag to be replaced) and
+  print the relationship status over the image"): until the art is made, each relationship file is a byte copy of the
+  base portrait, listed in `PLACEHOLDER_PORTRAITS`, with NEUTRAL / FRIENDLY / ANTAGONISTIC printed over it. Saving the
+  final art over the file and re-running the tool clears the flag and the label.
+- **Doobers** (owner: "When a relationship status changes draw animation doobers over the image with heart icons for
+  improved and lightening bolt icons for worsens"): the game remembers the portrait each character was last seen with
+  (`s.moodSeen`); when it next appears warmer, hearts rise over it; colder, lightning bolts strike. Reduced motion
+  shows them still.
+- The expression is generated from the character's personality and alignment by `tools/dialog/expression_prompts.py`,
+  which also writes the switch-on list from the files present. `tools/portraits/index.html` reviews all 81.
+
 ## 8. Magic side (hook only; the design is `Magic-System.md`)
 
 The three magics (Brain, the electric field; Soul, the quantum field; Body, the organic field) are neutral; good and evil are how a

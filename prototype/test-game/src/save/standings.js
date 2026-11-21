@@ -23,7 +23,12 @@
  *                                                              a character: 'purchase' (no character sells yet)
  *   a contract struck with a character in person          → 'contract': the farming contract accepted from the
  *                                                              planet's Factor at the Trade Station (farm/factor.js)
- * Each band also picks the character's portrait expression (moodFor: angry, neutral, happy).
+ * Each band also picks the character's RELATIONSHIP PORTRAIT (moodFor: antagonistic, neutral, friendly) [MM-story_mwpni0v4_3m].
+ * Owner 2026-11-20: "3 portraits invoking relationship as neutral, friendly, or antagonistic. These can be swapped into
+ * dialogs based on friend level. Even an angry character could appear neutral if given the right info or gift." So a
+ * MOOD SHIFT can soften (+1) or harden (−1) the portrait for the character's next few calls without moving their
+ * rating: s.moodShift = { [name]: { step, calls, why } } (shiftMood, spendMoodCall). A kept promise softens, a broken
+ * one hardens; gifts and news (MOOD_SHIFTS gift / info) arrive with the gift and rumour stories.
  *
  * Factions: the loyalty ledger that already exists (s.loyalty by faction name, contracts.addLoyalty) and its tiers
  * (LOYALTY_TIERS: 100 / 260 / 520).
@@ -57,6 +62,7 @@ export function noteRapport(s, m, end, reason) {
   const r = book[g.name] || (book[g.name] = { score: 0, kept: 0, broken: 0, faction: g.faction || null });
   r.score += rapportDelta(m, end, reason);
   if (end === 'done') r.kept++; else r.broken++;
+  shiftMood(s, g.name, end === 'done' ? 'kept' : 'broken');
 }
 
 /** The player's local calendar day, 'YYYY-MM-DD' (the greeting limit's day). */
@@ -89,17 +95,72 @@ export function captainOf(catalog, planetName) {
 /** Has the player dealt with this character at all? */
 export const hasMet = (r) => !!(r && (r.kept || r.broken || r.greets || r.sales || r.purchases || r.contracts));
 
-/** The portrait expression a rating shows: angry when wary or worse, happy when friendly or better. */
-export function moodFor(bandKey) {
-  if (bandKey === 'hostile' || bandKey === 'wary') return 'angry';
-  if (bandKey === 'friendly' || bandKey === 'trusted' || bandKey === 'allied') return 'happy';
-  return 'neutral';
+/** The three relationship portraits, from cold to warm. */
+export const MOOD_ORDER = Object.freeze(['antagonistic', 'neutral', 'friendly']);
+
+/**
+ * The relationship portrait a rating shows: antagonistic when wary or worse, friendly when friendly or better,
+ * neutral otherwise. shift (−1 … +1, from a mood shift) moves it one step warmer or colder for now.
+ */
+export function moodFor(bandKey, shift = 0) {
+  const base = (bandKey === 'hostile' || bandKey === 'wary') ? 0
+    : (bandKey === 'friendly' || bandKey === 'trusted' || bandKey === 'allied') ? 2 : 1;
+  return MOOD_ORDER[Math.max(0, Math.min(2, base + (shift | 0)))];
 }
 
-/** A character's rating band and mood from the save. → { band, mood } */
+/** What softens (+) or hardens (−) a character's portrait for their next calls, and for how many calls. */
+export const MOOD_SHIFTS = Object.freeze({
+  kept: { step: 1, calls: 2 },      // a promise kept to them
+  broken: { step: -1, calls: 2 },   // a promise broken
+  gift: { step: 1, calls: 3 },      // the right gift (their want): wired with the gift payoff (MM-story_mwohmo7a_2z)
+  info: { step: 1, calls: 2 },      // the right news (a rumour or secret that matters to them): with the rumours story
+  slight: { step: -1, calls: 2 },   // a secret told behind their back, a Read or a Coerce (Magic-System §7.4)
+});
+
+/** Start (or replace) a mood shift for a character. → the shift, or null for an unknown reason. */
+export function shiftMood(s, name, why) {
+  const d = MOOD_SHIFTS[why];
+  if (!s || !name || !d) return null;
+  const book = s.moodShift || (s.moodShift = {});
+  return (book[name] = { step: d.step, calls: d.calls, why });
+}
+
+/** The live shift step for a character (0 when none). */
+export function moodShiftOf(s, name) {
+  const m = s && s.moodShift && s.moodShift[name];
+  return m && m.calls > 0 ? m.step : 0;
+}
+
+/** A call by this character was shown in play: one fewer call left on their shift. */
+export function spendMoodCall(s, name) {
+  const m = s && s.moodShift && s.moodShift[name];
+  if (!m) return;
+  m.calls -= 1;
+  if (m.calls <= 0) delete s.moodShift[name];
+}
+
+/**
+ * Did the relationship portrait change since the player last saw this character? (owner 2026-11-20: "When a relationship
+ * status changes draw animation doobers over the image with heart icons for improved and lightening bolt icons for
+ * worsens".) s.moodSeen = { [name]: mood } is written when a call is shown in play (noteMoodSeen).
+ * → 'up' (warmer: hearts) | 'down' (colder: bolts) | null (same, or never seen)
+ */
+export function moodChangeOf(s, name, mood) {
+  const seen = s && s.moodSeen && s.moodSeen[name];
+  if (!seen || !mood || seen === mood) return null;
+  return MOOD_ORDER.indexOf(mood) > MOOD_ORDER.indexOf(seen) ? 'up' : 'down';
+}
+
+/** The player has now seen this character with this portrait. */
+export function noteMoodSeen(s, name, mood) {
+  if (!s || !name || !MOOD_ORDER.includes(mood)) return;
+  (s.moodSeen || (s.moodSeen = {}))[name] = mood;
+}
+
+/** A character's rating band and relationship portrait from the save. → { band, mood } */
 export function standingOf(s, name) {
   const r = s && s.rapport && s.rapport[name], met = hasMet(r), band = rapportBand(r ? r.score : 0, met);
-  return { band, mood: moodFor(band.key) };
+  return { band, mood: moodFor(band.key, moodShiftOf(s, name)) };
 }
 
 /** Old saves: build the ledger once from the ended missions still in the log. → s */
@@ -146,7 +207,7 @@ export function characterStandings(s, packs) {
       const r = book[c.name] || null, met = hasMet(r);
       const score = r ? r.score : 0, band = rapportBand(score, met);
       return { name: c.name, align: c.align, motivation: c.motivation || '', score, kept: r ? r.kept : 0, broken: r ? r.broken : 0,
-        greets: (r && r.greets) || 0, sales: (r && r.sales) || 0, purchases: (r && r.purchases) || 0, contracts: (r && r.contracts) || 0, met, band, mood: moodFor(band.key) };
+        greets: (r && r.greets) || 0, sales: (r && r.sales) || 0, purchases: (r && r.purchases) || 0, contracts: (r && r.contracts) || 0, met, band, mood: moodFor(band.key, moodShiftOf(s, c.name)) };
     }),
   }));
 }
