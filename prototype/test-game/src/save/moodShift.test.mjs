@@ -45,8 +45,8 @@ test('map dialogs carry the speaker\'s portrait; main.js spends a shift only in 
   const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
   assert.match(main, /withMood\(open\.spec, loadSave\(\)\)/);
   assert.match(main, /withMood\(secondaryCall\(matchCast\(\), voicePacks\), loadSave\(\)\)/);
-  assert.match(main, /withMood\(closing, loadSave\(\)\)/);
-  assert.match(main, /if \(closing && mode === 'play'\) moodShown\(closing\.name, call\.mood\)/);
+  assert.match(main, /withMood\(mapClosing, loadSave\(\)\)/);
+  assert.match(main, /if \(mapClosing && mode === 'play'\) moodShown\(mapClosing\.name, call\.mood\)/);
   assert.match(main, /noteMoodSeen\(sv, name, mood\)/);
 });
 
@@ -61,4 +61,13 @@ test('a portrait that changed since it was last seen is flagged up (hearts) or d
   assert.equal(moodChangeOf(s, 'X', standingOf(s, 'X').mood), 'down');
   noteMoodSeen(s, 'X', 'bogus');
   assert.equal(s.moodSeen.X, 'neutral', 'only real moods are remembered');
+});
+
+test('the secondary mission giver still has the last word: nothing in the end-of-map block hides `closing`', () => {
+  // v2026.11.20-b declared a second `const closing` (the map character's line) inside the block, so the quest giver's
+  // verdict read the wrong object and never played [MM-story_mwpow3fl_3r]
+  const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
+  assert.equal((main.match(/const closing = /g) || []).length, 1, "exactly one `closing`: the secondary mission's result");
+  assert.match(main, /const closing = resolvedFavour && questClosingDue\(resolvedFavour, sim\.result\) \? resolvedFavour : null;/);
+  assert.match(main, /if \(closing && voicePacks\) \{[^}]*tipsCall\(voicePacks, closing\.giver,/);
 });

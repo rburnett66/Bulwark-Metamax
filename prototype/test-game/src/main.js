@@ -1159,12 +1159,13 @@ export function boot(mountEl, seed) {
             if (openPodChest && !lastWaveFaction) setTimeout(openPodChest, 1200);
             if (lastWaveFaction) {
               // the map's own character has the last word (owner 2026-11-19) [MM-story_mwohmm89_2x]
-              const closing = closingCall(matchCast(), characterFiles, voicePacks, S.result);
-              const call = withMood(closing, loadSave())
+              // mapClosing, not `closing`: that name is the secondary mission's result above, whose giver gives the verdict
+              const mapClosing = closingCall(matchCast(), characterFiles, voicePacks, S.result);
+              const call = withMood(mapClosing, loadSave())
                 || (S.result === 'win'
                   ? winCall(voicePacks, lastWaveFaction, S.waves ? S.waves.current : 0, currentSeed, commOutcome(), true)
                   : defeatCall(voicePacks, lastWaveFaction, currentSeed));
-              if (closing && mode === 'play') moodShown(closing.name, call.mood);
+              if (mapClosing && mode === 'play') moodShown(mapClosing.name, call.mood);
               setTimeout(async () => {
                 if (openPodChest) await openPodChest();
                 if (S !== sim) return;
