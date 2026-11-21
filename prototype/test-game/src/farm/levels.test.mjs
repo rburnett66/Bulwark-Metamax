@@ -1,62 +1,93 @@
-// [MM-story_mwai5f8t_1g] Crop levels come from the tech tree (owner rule 9, 2026-11-10): cropLevel reads the owned chain;
-// the farming contracts unlock the nodes (II: F1 accepted; III–V: F1 complete, proposed); gold buys them (D7).
+// [MM-story_mwatmww5_1l] [MM-story_mwatmy2u_1m] A crop's level is its MASTERY, with the farm machinery owned (owner
+// rules 12-13). Owner 2026-11-21: "We don't need to create a tree for the crop upgrades, only the farm equipment."
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultSave } from '../save/save.js';
-import { CROPS } from '../data/farm.js';
+import { defaultSave, migrate } from '../save/save.js';
+import { CROPS, CROP_LEVEL_RULES, masteryFor, plantsFor, cropOf, FARM } from '../data/farm.js';
 import { TECH_BY_ID, techStatus, techGates } from '../data/techtree.js';
 import { techCtxFromSave, createGameTechAdapter } from '../menu/techSave.js';
-import { cropLevel, cropLevels, nextLevelNode, cropTechUnlocked } from './levels.js';
+import { cropLevel, cropLevels, cropLevelInfo, masteryOf, masteryLevel, notePlanted, noteGrown, machineryUnlocked,
+  MACHINES, machineFor, migrateCropNodes } from './levels.js';
 
 const own = (s, ...ids) => { for (const id of ids) s.tech.owned[id] = true; return s; };
+const mastered = (s, crop, pts) => { s.mastery[crop] = pts; return s; };
 
-test('cropLevel: 1 with nothing owned, else the highest owned node of the chain, in order', () => {
+test('the rules are data: levels 2-5, mastery rising, a machine from level 3, the same for every crop', () => {
+  assert.deepEqual(CROP_LEVEL_RULES.map((r) => [r.level, r.mastery, r.machine]),
+    [[2, 100, null], [3, 300, 'mc_fertilizer'], [4, 800, 'mc_agrobots'], [5, 2000, 'mc_irrigation']]);
+  assert.equal(masteryFor(1), 0);
+  assert.deepEqual(MACHINES.map((m) => [m.level, m.id]), [[3, 'mc_fertilizer'], [4, 'mc_agrobots'], [5, 'mc_irrigation']]);
+  assert.equal(machineFor(2), null);
+});
+
+test('mastery points: a pod planted is one; units harvested, sold or delivered count as the plants that grew them', () => {
+  const s = defaultSave();
+  notePlanted(s, 'loam-grain', 16);
+  assert.equal(masteryOf(s, 'loam-grain'), 16);
+  const grain = cropOf('loam-grain'), egg = cropOf('broodqueen-egg');
+  noteGrown(s, 'loam-grain', grain.yield);   // one full plot's harvest
+  assert.equal(masteryOf(s, 'loam-grain'), 32);
+  assert.equal(plantsFor(egg, egg.yield), FARM.Pods_Per_Plot, 'every tier: one plot\'s yield is one plot\'s plants');
+  notePlanted(s, 'not-a-crop', 50);
+  assert.equal(s.mastery['not-a-crop'], undefined);
+  assert.equal(masteryOf(null, 'loam-grain'), 0);
+});
+
+test('the level: what mastery has opened, held at the first missing machine', () => {
   const s = defaultSave();
   assert.equal(cropLevel(s, 'loam-grain'), 1);
-  own(s, 'crop_loam_grain_2');
-  assert.equal(cropLevel(s, 'loam-grain'), 2);
-  own(s, 'crop_loam_grain_3', 'crop_loam_grain_4', 'crop_loam_grain_5');
+  mastered(s, 'loam-grain', 99);
+  assert.equal(cropLevel(s, 'loam-grain'), 1);
+  mastered(s, 'loam-grain', 100);
+  assert.equal(cropLevel(s, 'loam-grain'), 2, 'level 2 needs no machine');
+  mastered(s, 'loam-grain', 2500);
+  assert.equal(masteryLevel(s, 'loam-grain'), 5);
+  let i = cropLevelInfo(s, 'loam-grain', (id) => TECH_BY_ID[id].name);
+  assert.deepEqual([i.level, i.mastered, i.capped, i.why], [2, 5, true, 'level 3 needs the Fertilizer Machine']);
+  own(s, 'mc_fertilizer', 'mc_agrobots');
+  i = cropLevelInfo(s, 'loam-grain', (id) => TECH_BY_ID[id].name);
+  assert.deepEqual([i.level, i.why], [4, 'level 5 needs the Irrigation']);
+  own(s, 'mc_irrigation');
   assert.equal(cropLevel(s, 'loam-grain'), 5);
-  assert.equal(cropLevel(s, 'elder-bloom'), 1, 'per crop');
-  const gap = own(defaultSave(), 'crop_elder_bloom_3');
-  assert.equal(cropLevel(gap, 'elder-bloom'), 1, 'a node without the one before it does not count');
-  assert.equal(cropLevel(defaultSave(), 'petal-silk'), 1, 'a crop with no chain yet is level 1');
-  assert.equal(cropLevel(null, 'loam-grain'), 1);
-  const all = cropLevels(s);
-  assert.equal(Object.keys(all).length, CROPS.length);
-  assert.equal(all['loam-grain'], 5);
-  assert.equal(nextLevelNode(s, 'loam-grain'), null, 'top');
-  assert.equal(nextLevelNode(defaultSave(), 'loam-grain').id, 'crop_loam_grain_2');
-  assert.equal(nextLevelNode(defaultSave(), 'petal-silk'), null);
+  assert.equal(cropLevelInfo(s, 'loam-grain').next, null, 'top');
+  assert.equal(cropLevel(s, 'petal-silk'), 1, 'per crop: machines are shared, mastery is not');
+  assert.equal(Object.keys(cropLevels(s)).length, CROPS.length);
+  assert.deepEqual(cropLevelInfo(defaultSave(), 'petal-silk').next, { level: 2, need: 100, have: 0 });
 });
 
-test('the mission gates: II with F1 accepted, III–V with F1 complete', () => {
+test('MACHINERY in the tech tree: three machines, each unlocked by a crop mastered to its level, then bought', () => {
   const s = defaultSave();
-  assert.equal(cropTechUnlocked(s).size, 0, 'no farm contract: nothing unlocked');
-  s.farmContracts = { ground: { step: 1, state: 'offered' } };
-  assert.equal(cropTechUnlocked(s).size, 0, 'an offer unlocks nothing');
-  s.farmContracts.ground.state = 'active';
-  assert.deepEqual([...cropTechUnlocked(s)].sort(), ['crop_elder_bloom_2', 'crop_heartwood_amber_2', 'crop_loam_grain_2', 'crop_rootsong_seeds_2']);
-  s.farmContracts.ground.state = 'complete';
-  assert.equal(cropTechUnlocked(s).size, 16);
-});
-
-test('through the game\'s tech adapter: locked until F1, then bought with gold; the level follows', () => {
-  const s = defaultSave();
-  s.carry = { gold: 10_000, structures: [] };
-  const opts = { missionGate: true, unlockedBy: () => 'Bread for the Regiments' };
-  const ii = TECH_BY_ID.crop_loam_grain_2, iii = TECH_BY_ID.crop_loam_grain_3;
-  assert.equal(techStatus(ii, techCtxFromSave(s, undefined, opts)), 'locked');
-  assert.match(techGates(ii, techCtxFromSave(s, undefined, opts))[0].txt, /Farming F1 on Verdance accepted/);
-  s.farmContracts = { ground: { step: 1, state: 'active' } };
-  assert.equal(techStatus(ii, techCtxFromSave(s, undefined, opts)), 'ready');
+  s.carry = { gold: 20_000, structures: [] };
+  const opts = { missionGate: true };
+  const fert = TECH_BY_ID.mc_fertilizer, bots = TECH_BY_ID.mc_agrobots;
+  assert.equal(machineryUnlocked(s).size, 0);
+  assert.equal(techStatus(fert, techCtxFromSave(s, undefined, opts)), 'locked');
+  assert.equal(techGates(fert, techCtxFromSave(s, undefined, opts))[0].txt, 'A crop mastered to level 3');
+  mastered(s, 'rootsong-seeds', 300);
+  assert.deepEqual([...machineryUnlocked(s)], ['mc_fertilizer']);
+  assert.equal(techStatus(fert, techCtxFromSave(s, undefined, opts)), 'ready');
   const save = { loadSave: () => s, buyTech: (id, price) => { s.carry.gold -= price; s.tech.owned[id] = true; s.tech.paid[id] = price; return true; }, refundTech: () => {} };
   const adapter = createGameTechAdapter({ save, ctxOpts: opts });
-  assert.equal(adapter.buy(ii.id), true);
-  assert.equal(s.carry.gold, 10_000 - ii.price);
-  assert.equal(cropLevel(s, 'loam-grain'), 2);
-  assert.equal(adapter.buy(iii.id), false, 'III waits for F1 complete');
-  s.farmContracts.ground.state = 'complete';
-  assert.equal(adapter.buy(iii.id), true);
-  assert.equal(cropLevel(s, 'loam-grain'), 3);
+  assert.equal(adapter.buy(bots.id), false, 'Agrobots: locked until a crop reaches level 4, and needs the Fertilizer Machine');
+  assert.equal(adapter.buy(fert.id), true);
+  assert.equal(s.carry.gold, 20_000 - fert.price);
+  assert.equal(cropLevel(s, 'rootsong-seeds'), 3);
+});
+
+test('old saves: bought crop nodes are refunded and become mastery, so the level is kept', () => {
+  const s = defaultSave();
+  s.carry = { gold: 100, structures: [] };
+  s.tech.owned = { crop_loam_grain_2: true, crop_loam_grain_3: true, cannon2: true };
+  s.tech.paid = { crop_loam_grain_2: 500, crop_loam_grain_3: 1200, cannon2: 600 };
+  assert.equal(migrateCropNodes(s), 1700);
+  assert.equal(s.carry.gold, 1800);
+  assert.deepEqual(Object.keys(s.tech.owned), ['cannon2'], 'other research untouched');
+  assert.equal(masteryOf(s, 'loam-grain'), 300);
+  assert.equal(masteryLevel(s, 'loam-grain'), 3);
+  assert.equal(migrateCropNodes(s), 0, 'once only');
+  const old = { ...defaultSave(), tech: { owned: { crop_elder_bloom_2: true }, paid: { crop_elder_bloom_2: 1500 }, unlocked: {} }, carry: { gold: 0 } };
+  delete old.mastery;
+  const m = migrate(old);
+  assert.equal(m.carry.gold, 1500);
+  assert.equal(m.mastery['elder-bloom'], 100);
 });

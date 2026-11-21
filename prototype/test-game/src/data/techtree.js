@@ -29,11 +29,13 @@ export const DIVISIONS = Object.freeze({
   // owner 2026-11-02: "We will need to add Ship upgrades for future trade and space combat economies. Ship upgrades should be
   // added to tech tree as coming soon." [MM-story_mvzkubvz_1m]
   ships:      Object.freeze({ tree: 'battle',  label: 'SHIPS',      color: '#5fb8c9', a0: 330, a1: 360, total: 0, soon: true }),
-  // owner rule 9 (2026-11-10): crop levels are researched here, one chain II … V per crop (data: Crop_Levels)
-  seedpods:   Object.freeze({ tree: 'outpost', label: 'SEED PODS',  color: '#7fdc6a', a0: 0,   a1: 80,  total: CROP_LEVEL_NODES.length }),
-  machinery:  Object.freeze({ tree: 'outpost', label: 'MACHINERY',  color: '#e0a64a', a0: 80,  a1: 160, total: 0, soon: true }),
-  structures: Object.freeze({ tree: 'outpost', label: 'STRUCTURES', color: '#6f9cc8', a0: 160, a1: 260, total: 5 }),
-  mining:     Object.freeze({ tree: 'outpost', label: 'MINING',     color: '#c87a5a', a0: 260, a1: 360, total: 2 }),
+  // owner 2026-11-21 [MM-story_mwatmww5_1l]: "We don't need to create a tree for the crop upgrades, only the farm
+  // equipment." SEED PODS buys nothing: it shows each planet's crops unlocked (owner rule 10), 9 planets × 4 crops.
+  // MACHINERY holds the equipment each crop level needs (owner rule 13).
+  seedpods:   Object.freeze({ tree: 'outpost', label: 'SEED PODS',  color: '#7fdc6a', a0: 0,   a1: 110, total: CROPS.length, progress: true }),
+  machinery:  Object.freeze({ tree: 'outpost', label: 'MACHINERY',  color: '#e0a64a', a0: 110, a1: 170, total: MACHINES.length }),
+  structures: Object.freeze({ tree: 'outpost', label: 'STRUCTURES', color: '#6f9cc8', a0: 170, a1: 270, total: 5 }),
+  mining:     Object.freeze({ tree: 'outpost', label: 'MINING',     color: '#c87a5a', a0: 270, a1: 360, total: 2 }),
 });
 /** The two trees: their label on the switch buttons, divisions in order round the circle, and the node at the centre. */
 export const TREES = Object.freeze({
@@ -50,18 +52,20 @@ export const GROUPS = Object.freeze([
   { div: 'units', lane: -0.47, text: 'TOWERS' }, { div: 'units', lane: 0.36, text: 'TROOPS' }, { div: 'units', lane: 0.76, text: 'HARVESTERS' },
   { div: 'bases', lane: -0.82, text: 'SUPER-CANNON' }, { div: 'bases', lane: -0.3, text: 'DEFENSE PODS' }, { div: 'bases', lane: 0.52, text: 'BASE MODELS' },
   { div: 'map', lane: -0.2, text: 'PORTALS' }, { div: 'map', lane: 0.84, text: 'INTEL' },
-  { div: 'seedpods', lane: -0.1, text: 'VERDANCE CROPS' },
+  { div: 'seedpods', lane: -1, text: 'CROPS UNLOCKED' },
 ]);
 export const STAT_KEYS = Object.freeze(['ATK', 'DEF', 'RNG', 'DMG', 'COST', 'H-SPD', 'H-GAT']);
 export const STAT_NAMES = Object.freeze(['Attack', 'Defense', 'Range', 'Damage', 'Upgrade cost', 'Harvester speed', 'Harvester gathering']);
-/** 80: the battle tree's 57, the outpost tree's 7 Outpost nodes and its 16 crop levels (Verdance's four crops, II–V). */
-export const TECH_TOTAL = 57 + OUTPOST_TECH.length + CROP_LEVEL_NODES.length;
+/** 67: the battle tree's 57, the outpost tree's 7 Outpost nodes and its 3 machines (owner 2026-11-21). */
+export const TECH_TOTAL = 57 + OUTPOST_TECH.length + MACHINES.length;
 /** Upgrades to buy in each tree. */
-export const TREE_TOTAL = Object.freeze({ battle: 57, outpost: OUTPOST_TECH.length + CROP_LEVEL_NODES.length });
+export const TREE_TOTAL = Object.freeze({ battle: 57, outpost: OUTPOST_TECH.length + MACHINES.length });
 export const PORTAL_BASE_PRICE = 1000, PORTAL_STEP = 500;
 
 import { OUTPOST_TECH } from './outpost.js';
-import { CROP_LEVEL_NODES, cropOf, podLevel } from './farm.js';
+import { CROPS, cropsOf, podLevel } from './farm.js';
+import { PLANETS } from './planets.js';
+import { MACHINES, machineUnlockText } from '../farm/levels.js';
 
 const N = [];
 const add = (o) => { N.push(o); return o; };
@@ -170,27 +174,36 @@ OUTPOST_TECH.forEach((t, i) => {
       (t.applies === 'upgradeBay' ? '; installed at an outpost with an Upgrade Bay.' : '; applies to every outpost.') });
 });
 
-// ── SEED PODS: the crop levels (owner rule 9, 2026-11-10 [MM-story_mwai5f8t_1g]). One chain per crop, II … V, each node
-// needing the one before; level 1 is the base. A farming contract unlocks a node (II: F1 accepted; III–V: F1 complete,
-// proposed until F2/F3 exist), gold buys it (D7). New plantings of the crop grow at its level; plots already growing
-// keep theirs. Data: the workbook's Crop_Levels (src/data/farm.js CROP_LEVEL_NODES). Each crop is a lane.
-const CROP_LANES = [...new Set(CROP_LEVEL_NODES.map((n) => n.crop))];
-CROP_LEVEL_NODES.forEach((n) => {
-  const c = cropOf(n.crop), L = podLevel(n.level), i = CROP_LANES.indexOf(n.crop);
-  const lane = CROP_LANES.length > 1 ? -0.86 + i * (1.5 / (CROP_LANES.length - 1)) : 0;
-  const prev = CROP_LEVEL_NODES.find((m) => m.crop === n.crop && m.level === n.level - 1);
-  const by = 'Farming ' + n.unlock.contract + ' on ' + c.planet + (n.unlock.state === 'complete' ? ' complete' : ' accepted');
-  add({ id: n.id, div: 'seedpods', kind: 'item', name: n.name, sub: c.planet + ' · crop level ' + n.level, price: n.price,
-    d: 0.4 + n.level * 0.9, lane, req: prev ? [prev.id] : [], unlockBy: by, crop: n.crop, cropLevel: n.level,
-    desc: 'New ' + c.name + ' plantings grow at level ' + n.level + ' (' + L.name + '): +' + Math.round(L.yieldBonus * 100) +
-      ' % yield. Plots already growing keep their level.' + (n.level === 5 ? ' Level 5 needs a trick: an Irrigated plot with water.' : '') +
-      ' Unlocked by ' + by + '.' });
+// ── SEED PODS: progress, not purchases (owner 2026-11-21 [MM-story_mwatmww5_1l]: "Seed pods can show progress by planet
+// based on the number of crops unlocked .. 9 x 4"). One node per planet, its four crops as four pods that light once
+// that crop's seed pods are unlocked (owner rule 10: 500 delivered). Never bought, priced or counted as research; the
+// division's count is crops unlocked of 36. A crop's LEVEL is its mastery (src/farm/levels.js), not a node.
+const PLANET_ORDER = Object.keys(PLANETS).filter((k) => cropsOf(k).length);
+PLANET_ORDER.forEach((k, i) => {
+  const P = PLANETS[k], crops = cropsOf(k).map((c) => c.id), n = PLANET_ORDER.length;
+  add({ id: 'pods_' + k, div: 'seedpods', kind: 'cropplanet', name: P.name, sub: 'Seed pods · ' + crops.length + ' crops',
+    d: i % 2 ? 2.7 : 1.7, lane: n > 1 ? -0.9 + i * (1.8 / (n - 1)) : 0, progress: true, planetKey: k, crops,
+    desc: P.name + '\'s four crops. Each one\'s seed pods unlock once 500 of it are delivered: every unit your harvesters bring home at the end of a map, and every farm sale. Pods are bought on the SEED PODS tab; a crop\'s level comes from your mastery of it.' });
+});
+// ── MACHINERY: the farm equipment each crop level needs (owner rule 13, 2026-11-21 [MM-story_mwatmy2u_1m]): level 3
+// fertilizer, 4 agrobots, 5 irrigation. Each unlocks once any crop's mastery reaches its level (rule D7: unlocked, then
+// bought) and serves every crop on every planet. Prices proposed (D14).
+const MACHINE_DEF = {
+  mc_fertilizer: ['Fertilizer Machine', 2500, 'Makes fertilizer, so crops mastered to level 3 grow at level 3. Each crop\'s fertilizer recipe will come from a mission with the faction that buys it; until then the machine makes them all.'],
+  mc_agrobots: ['Agrobots', 5000, 'Farm robots that tend the plots, so crops mastered to level 4 grow at level 4.'],
+  mc_irrigation: ['Irrigation', 8000, 'Irrigation that also tunes the soil\'s minerals, so crops mastered to level 5 grow at level 5 on an Irrigated plot with water.'],
+};
+MACHINES.forEach((m, i) => {
+  const [name, price, text] = MACHINE_DEF[m.id] || [m.id, 1000, ''];
+  add({ id: m.id, div: 'machinery', kind: 'item', name, sub: 'Crop level ' + m.level, price, d: 1.4 + i, lane: -0.35 + i * 0.1,
+    req: i ? [MACHINES[i - 1].id] : [], machine: true, cropLevel: m.level, unlockBy: machineUnlockText(m.id), gateText: machineUnlockText(m.id),
+    desc: text + ' Takes effect at the next planting; plots already growing keep their level.' });
 });
 // SEED PODS and MACHINERY ghosts (coming soon), named so players see what is coming
-[['pod_store', 'Faction Pod Stores', 2.0, 0.96]]
+[['pod_store', 'Faction Pod Stores', 3.7, 0]]
   .forEach(([id, nm, d, lane]) => add({ id, div: 'seedpods', kind: 'shipghost', name: nm, sub: 'Coming soon · Farming', d, lane, soon: true,
     desc: 'Faction pod stores are coming soon.' }));
-[['mc_irrigation', 'Irrigation', 1.4, -0.4], ['mc_engineering', 'Machine Engineering', 2.6, 0.1], ['mc_grobots', 'Gro-bots', 3.2, 0.5]]
+[['mc_engineering', 'Machine Engineering', 2.2, 0.75]]
   .forEach(([id, nm, d, lane]) => add({ id, div: 'machinery', kind: 'shipghost', name: nm, sub: 'Coming soon · Farming', d, lane, soon: true,
     desc: 'Farm machinery is coming soon.' }));
 
@@ -206,8 +219,8 @@ export const TECH_BY_ID = Object.freeze(Object.fromEntries(N.map((n) => [n.id, n
 for (const n of N) for (const r of n.req) TECH_BY_ID[r].kids.push(n.id);
 for (const n of N) { Object.freeze(n.req); Object.freeze(n.kids); Object.freeze(n); }
 export const TECH_NODES = Object.freeze(N);
-/** The 80 things a player buys (not the free starting kit, the Gun Pod, the milestone or the Ships ghosts). */
-export const BUYABLE = Object.freeze(N.filter((n) => !n.free && !n.soon && !n.milestone).map((n) => n.id));
+/** The 67 things a player buys (not the free starting kit, the Gun Pod, the milestone, the seed pod progress or the ghosts). */
+export const BUYABLE = Object.freeze(N.filter((n) => !n.free && !n.soon && !n.milestone && !n.progress).map((n) => n.id));
 
 // ════════════════════════════════════════════════ rules ════════════════════════════════════════════════
 export function startingOwned() { return new Set(N.filter((n) => n.start).map((n) => n.id)); }
@@ -221,10 +234,10 @@ export function techPrice(n, ctx) {
 export function techGates(n, ctx) {
   const out = [], g = n.gate || {}, held = portalsOwned(ctx.owned);
   // tech plan D7: a node unlocks through a mission and is then bought. Only the game's context carries `unlocked`.
-  if (ctx.unlocked && !n.free && !n.soon && !n.milestone && !ctx.unlocked.has(n.id)) {
-    // a crop level names its contract and the state it must reach (accepted / complete), not just the mission's title
-    const by = (n.crop ? n.unlockBy : null) || (ctx.unlockedBy ? ctx.unlockedBy(n.id) : null) || n.unlockBy || null;
-    out.push({ txt: 'Unlocked by a mission' + (by ? ': ' + by : ''), ok: false });
+  if (ctx.unlocked && !n.free && !n.soon && !n.milestone && !n.progress && !ctx.unlocked.has(n.id)) {
+    // a machine names the mastery that unlocks it, not a mission (owner 2026-11-21)
+    const by = (ctx.unlockedBy ? ctx.unlockedBy(n.id) : null) || n.unlockBy || null;
+    out.push({ txt: n.gateText || 'Unlocked by a mission' + (by ? ': ' + by : ''), ok: false });
   }
   if (g.portals) out.push({ txt: g.portals + (g.portals > 1 ? ' portal codes owned' : ' portal code owned') + ' (' + held + ')', ok: held >= g.portals });
   if (g.win) {
@@ -233,9 +246,13 @@ export function techGates(n, ctx) {
   }
   return out;
 }
-/** 'owned' | 'ready' (can buy now) | 'short' (only gold missing) | 'locked' | 'soon'. */
+/** A seed pods planet node's crops unlocked (ctx.cropsUnlocked: a Set of crop ids, from the save). → 0 … 4 */
+export const cropsUnlockedOf = (n, ctx) => (n.crops || []).filter((id) => ctx.cropsUnlocked && ctx.cropsUnlocked.has(id)).length;
+/** 'owned' | 'ready' (can buy now) | 'short' (only gold missing) | 'locked' | 'soon'. A seed pods planet node is 'owned'
+ *  (lit) once any of its crops is unlocked, else 'locked'; its pods show how many. */
 export function techStatus(n, ctx) {
   if (n.soon) return 'soon';
+  if (n.progress) return cropsUnlockedOf(n, ctx) ? 'owned' : 'locked';
   if (ctx.owned.has(n.id)) return 'owned';
   const met = n.req.every((r) => ctx.owned.has(r)) && techGates(n, ctx).every((g) => g.ok);
   if (!met) return 'locked';
@@ -260,7 +277,7 @@ export function settleFree(owned) {
 }
 /** Can this owned node be refunded? '' = yes, else the reason. */
 export function refundBlock(n, ctx) {
-  if (!ctx.owned.has(n.id) || n.free || n.milestone || n.soon) return 'Not refundable.';
+  if (!ctx.owned.has(n.id) || n.free || n.milestone || n.soon || n.progress) return 'Not refundable.';
   const deps = n.kids.filter((k) => ctx.owned.has(k) && !TECH_BY_ID[k].free);
   if (deps.length) return 'Refund blocked — ' + deps.map((k) => TECH_BY_ID[k].name).join(', ') + ' depends on it.';
   if (n.portal) {

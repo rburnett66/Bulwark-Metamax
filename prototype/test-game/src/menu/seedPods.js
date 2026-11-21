@@ -4,9 +4,10 @@
  * story A10. Owner rule 5: a tab of the farm's own inventory, not of the battle INVENTORY.
  *
  * Owner rule 9 (2026-11-10): seed pods have no level. Each crop's row shows the pods held (a plain count), the crop's
- * level now — the tech tree's (src/farm/levels.js cropLevel), the level new plantings grow at — as a badge in its
- * colour, and the next level's tech node with its price. Levels are bought in the Tech Tree (OUTPOST & FARM › SEED
- * PODS), never here. Pods are bought here, BUY 4 (one plot's worth) at one fixed price per pod (FARM.Pod_Price).
+ * level now (src/farm/levels.js cropLevel, the level new plantings grow at) as a badge in its colour, and its mastery
+ * toward the next level. Owner 2026-11-21 [MM-story_mwatmww5_1l]: no tree for crop levels, so a level is never bought:
+ * mastery opens it (rule 12) and from level 3 a machine in the Tech Tree's MACHINERY lets it grow (rule 13). Pods are
+ * bought here, one plot's worth at one fixed price per pod (FARM.Pod_Price).
  *
  * Not a second screen: a tab VIEW the inventory screen (menu/inventoryScreen.js) draws on its own markup, tabs and
  * selection, on the farm store's bands (save/stores.js storeBands). Not a second ledger: every count is s.pods, read and
@@ -22,7 +23,8 @@ import { podCount, podsHeld, buyPods, podPrice } from '../farm/pods.js';
 import { unitsPerPod, chestsHeld, openChest } from '../farm/chest.js';
 import { chestStripHtml, playChestOpen } from './podChest.js';
 import { unlockProgress } from '../farm/unlock.js';
-import { cropLevel, nextLevelNode, cropTechUnlocked } from '../farm/levels.js';
+import { cropLevel, cropLevelInfo, machineFor } from '../farm/levels.js';
+import { TECH_BY_ID } from '../data/techtree.js';
 import { bankOf } from '../save/save.js';
 import { bandHtml, bandDetailHtml } from './inventoryScreen.js';
 import { esc, TIER_VAR, TIER_NAME } from './missionView.js';
@@ -50,11 +52,12 @@ export function podValue(crop, L) {
   return base == null ? null : podLevel(L).value * base;
 }
 
-/** The next level's words for a crop: { html, node } — the node and its price, or the top / no chain yet. */
+const machineName = (id) => (TECH_BY_ID[id] || { name: id }).name;
+/** The next level's words for a crop: { html, next } — its mastery toward the next level, or the top. */
 function nextHtml(s, c) {
-  const n = nextLevelNode(s, c.id);
-  if (!n) return { node: null, html: cropLevel(s, c.id) >= POD_LEVELS.length ? 'Top level' : 'More levels later' };
-  return { node: n, html: `<span class="pnext">${podBadgeHtml(n.level)}${esc(n.name)}</span><b class="num">${num(n.price)}</b>g` };
+  const info = cropLevelInfo(s, c.id, machineName), n = info.next;
+  if (!n) return { next: null, html: 'Top level' };
+  return { next: n, html: `<span class="pnext">${podBadgeHtml(n.level)}L${n.level}</span><b class="num">${num(Math.min(n.have, n.need))}</b>/${num(n.need)}` };
 }
 
 /** The list: the farm store's bands, each crop a row — pods held, its level now, the next level and its price. */
@@ -68,7 +71,7 @@ export function seedPodsListHtml(bands, s, selected) {
         ? `<button class="pslot pheld plock nil" data-inv-id="${id}" aria-label="${esc(c.name)}: pods locked, ${num(Math.min(u.delivered, u.need))} of ${num(u.need)} delivered"><b class="num">${num(Math.min(u.delivered, u.need))}<i>/${num(u.need)}</i></b></button>`
         : `<button class="pslot pheld${n ? '' : ' nil'}" data-inv-id="${id}" aria-label="${esc(c.name)}: ${b.open ? num(n) : 'locked'} pods"><small>Pods</small><b class="num">${b.open ? num(n) : '—'}</b></button>`)
         + `<button class="pslot plevel" data-inv-id="${id}" style="--lc:${podLevel(L).colour}" aria-label="${esc(c.name)}: level ${L}, ${esc(levelName(L))}">${named(L)}</button>`
-        + `<button class="pslot pnextc${next.node ? '' : ' nil'}" data-inv-id="${id}" aria-label="${esc(c.name)}: next level ${next.node ? esc(next.node.name) + ', ' + num(next.node.price) + ' gold' : 'none'}">${next.html}</button>`;
+        + `<button class="pslot pnextc${next.next ? '' : ' nil'}" data-inv-id="${id}" aria-label="${esc(c.name)}: ${next.next ? `mastery ${num(Math.min(next.next.have, next.next.need))} of ${num(next.next.need)} toward level ${next.next.level}` : 'top level'}">${next.html}</button>`;
       return `<div class="podrow${n ? '' : ' none'}" style="--rc:var(${TIER_VAR[c.tier]})"><button class="pcrop" data-inv-id="${id}" aria-selected="${c.id === selected}">${resourceIconHtml(c.id, 'gem3 resi pring')}
      <span class="rtx"><b>${esc(c.name)}</b><small>${TIER_NAME[c.tier]} tier</small></span></button><div class="pslots pcols">${cells}</div></div>`;
     }).join('');
@@ -88,19 +91,21 @@ function sourcesHtml(c) {
   return out.map((t) => `<li>${t}</li>`).join('');
 }
 
-/** The crop's level now and how the next is reached: the tech node, its price and its gate. */
+/** The crop's level now and how the next is reached: mastery, and the machine a level needs (owner rules 12–13). */
 function levelHtml(s, c) {
-  const L = cropLevel(s, c.id), { node } = nextHtml(s, c);
+  const info = cropLevelInfo(s, c.id, machineName), L = info.level, n = info.next;
   let next;
-  if (!node) next = L >= POD_LEVELS.length ? `${named(L)} is the top level.` : 'More levels come with this planet\'s farming contracts.';
+  if (!n) next = `${named(info.mastered)} is the top level.`;
   else {
-    const open = cropTechUnlocked(s).has(node.id);
-    next = `Next: ${named(node.level)} <b>${esc(node.name)}</b> · <b class="num">${num(node.price)}</b> gold in the Tech Tree (OUTPOST &amp; FARM › SEED PODS)`
-      + `<div class="pbhave">${open ? 'Unlocked: buy it in the Tech Tree.' : `Unlocked by Farming ${esc(node.unlock.contract)} on ${esc(c.planet)} ${node.unlock.state === 'complete' ? 'complete' : 'accepted'}.`}</div>`;
+    const mc = machineFor(n.level);
+    next = `Next: ${named(n.level)} at <b class="num">${num(n.need)}</b> mastery · you have <b class="num">${num(Math.floor(n.have))}</b>`
+      + `<div class="pmeter" role="meter" aria-valuemin="0" aria-valuemax="${n.need}" aria-valuenow="${Math.min(Math.floor(n.have), n.need)}" aria-label="${esc(c.name)} mastery toward level ${n.level}"><i style="width:${Math.round(100 * Math.min(1, n.have / n.need))}%"></i></div>`
+      + (mc ? `<div class="pbhave">Level ${n.level} also needs the ${esc(machineName(mc))} (Tech Tree › OUTPOST &amp; FARM › MACHINERY).</div>` : '');
   }
   return `<div class="pbench" style="--lc:${podLevel(L).colour}"><div class="pbh">Crop level · ${named(L)}</div>
-   <div class="pbp">New ${esc(c.name)} plantings grow at level ${L}; plots already growing keep the level they were planted at.</div>
-   <div class="pbp">${next}</div>${L >= 4 ? '<div class="pbhave">Level 5 needs a trick: an Irrigated plot with water.</div>' : ''}</div>`;
+   <div class="pbp">New ${esc(c.name)} plantings grow at level ${L}; plots already growing keep the level they were planted at. Mastery grows with every pod you plant and every unit you harvest, sell or deliver.</div>
+   ${info.why ? `<div class="pbhave">Mastered to level ${info.mastered}, held at ${L}: ${esc(info.why)}.</div>` : ''}
+   <div class="pbp">${next}</div>${L >= 4 ? '<div class="pbhave">Level 5 also needs an Irrigated plot with water.</div>' : ''}</div>`;
 }
 
 /** BUY (one plot's worth at the fixed price), PLANT (when the menu wires it), the last answer. */

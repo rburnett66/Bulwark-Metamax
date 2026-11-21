@@ -189,21 +189,6 @@ def farm_missions(ships, givers, problems):
     return missions, lines
 
 
-def crop_level_nodes():
-    """
-    The tech tree's crop level nodes (owner rule 9, 2026-11-10 [MM-story_mwai5f8t_1g]): the map-data workbook's
-    Crop_Levels sheet, one row per crop and level (II … V). They are not on the Missions workbook's Tech_Unlocks sheet
-    (that sheet's Economy total leaves the OUTPOST & FARM tree out): this adds them to techUnlocks with their price, and
-    the farming contract that unlocks each — its Unlock column, F<n>:accepted | F<n>:complete, names the contract; the
-    state is the game's to check (src/farm/levels.js cropTechUnlocked). → [(node, price, planet key, contract step)]
-    """
-    wb = openpyxl.load_workbook(MAP_XLSX, data_only=True)
-    if "Crop_Levels" not in wb.sheetnames:
-        return []
-    return [(r["Node"], r["Price"], r["Planet_Key"], int(str(r["Unlock"]).split(":")[0].lstrip("F")))
-            for r in sheet_from(wb["Crop_Levels"], "Planet_Key")]
-
-
 def main():
     wb = openpyxl.load_workbook(XLSX, data_only=False)
     problems = []
@@ -333,16 +318,9 @@ def main():
     missions += fm
     lines.update(flines)
     conds.update(FARM_CONDS)
-    # the crop levels (owner rule 9): unlocked by the planet's farming contract, bought with gold (tech plan D7)
-    for node, price, key, step in crop_level_nodes():
-        by = next((m["id"] for m in fm if m["farm"]["planetKey"] == key and m["step"] == step), None)
-        if node in nodes:
-            problems.append(f"Crop_Levels {node}: already on Tech_Unlocks")
-        elif not by:
-            problems.append(f"Crop_Levels {node}: no farming contract F{step} on {key}")
-        else:
-            nodes[node] = {"price": price, "cost": []}
-            unlocked_by[node] = by
+    # crop levels are not tech nodes any more (owner 2026-11-21: "We don't need to create a tree for the crop upgrades,
+    # only the farm equipment"); the MACHINERY nodes unlock by crop mastery in the game (src/farm/levels.js), not by a
+    # mission, so none is listed here [MM-story_mwatmww5_1l]
     for (ql, var), ss in steps.items():   # each variant of a line must cover steps 1..n once
         if sorted(ss) != list(range(1, len(ss) + 1)):
             problems.append(f"quest line {ql} ({var or 'primary'}): steps {sorted(ss)} are not 1..{len(ss)}")

@@ -6894,163 +6894,31 @@ export const MAPDATA = {
  ],
  "cropLevels": [
   {
-   "Planet_Key": "ground",
-   "Crop_Id": "loam-grain",
    "Level": 2,
-   "Node": "crop_loam_grain_2",
-   "Name": "Loam Grain II",
-   "Price": 500,
-   "Unlock": "F1:accepted",
+   "Name": "Uncommon",
+   "Mastery": 100,
+   "Machine": null,
    "Status": "proposed"
   },
   {
-   "Planet_Key": "ground",
-   "Crop_Id": "loam-grain",
    "Level": 3,
-   "Node": "crop_loam_grain_3",
-   "Name": "Loam Grain III",
-   "Price": 1200,
-   "Unlock": "F1:complete",
+   "Name": "Rare",
+   "Mastery": 300,
+   "Machine": "mc_fertilizer",
    "Status": "proposed"
   },
   {
-   "Planet_Key": "ground",
-   "Crop_Id": "loam-grain",
    "Level": 4,
-   "Node": "crop_loam_grain_4",
-   "Name": "Loam Grain IV",
-   "Price": 2500,
-   "Unlock": "F1:complete",
+   "Name": "Epic",
+   "Mastery": 800,
+   "Machine": "mc_agrobots",
    "Status": "proposed"
   },
   {
-   "Planet_Key": "ground",
-   "Crop_Id": "loam-grain",
    "Level": 5,
-   "Node": "crop_loam_grain_5",
-   "Name": "Loam Grain V",
-   "Price": 5000,
-   "Unlock": "F1:complete",
-   "Status": "proposed"
-  },
-  {
-   "Planet_Key": "ground",
-   "Crop_Id": "heartwood-amber",
-   "Level": 2,
-   "Node": "crop_heartwood_amber_2",
-   "Name": "Heartwood Amber II",
-   "Price": 750,
-   "Unlock": "F1:accepted",
-   "Status": "proposed"
-  },
-  {
-   "Planet_Key": "ground",
-   "Crop_Id": "heartwood-amber",
-   "Level": 3,
-   "Node": "crop_heartwood_amber_3",
-   "Name": "Heartwood Amber III",
-   "Price": 1800,
-   "Unlock": "F1:complete",
-   "Status": "proposed"
-  },
-  {
-   "Planet_Key": "ground",
-   "Crop_Id": "heartwood-amber",
-   "Level": 4,
-   "Node": "crop_heartwood_amber_4",
-   "Name": "Heartwood Amber IV",
-   "Price": 3750,
-   "Unlock": "F1:complete",
-   "Status": "proposed"
-  },
-  {
-   "Planet_Key": "ground",
-   "Crop_Id": "heartwood-amber",
-   "Level": 5,
-   "Node": "crop_heartwood_amber_5",
-   "Name": "Heartwood Amber V",
-   "Price": 7500,
-   "Unlock": "F1:complete",
-   "Status": "proposed"
-  },
-  {
-   "Planet_Key": "ground",
-   "Crop_Id": "rootsong-seeds",
-   "Level": 2,
-   "Node": "crop_rootsong_seeds_2",
-   "Name": "Rootsong Seeds II",
-   "Price": 1000,
-   "Unlock": "F1:accepted",
-   "Status": "proposed"
-  },
-  {
-   "Planet_Key": "ground",
-   "Crop_Id": "rootsong-seeds",
-   "Level": 3,
-   "Node": "crop_rootsong_seeds_3",
-   "Name": "Rootsong Seeds III",
-   "Price": 2400,
-   "Unlock": "F1:complete",
-   "Status": "proposed"
-  },
-  {
-   "Planet_Key": "ground",
-   "Crop_Id": "rootsong-seeds",
-   "Level": 4,
-   "Node": "crop_rootsong_seeds_4",
-   "Name": "Rootsong Seeds IV",
-   "Price": 5000,
-   "Unlock": "F1:complete",
-   "Status": "proposed"
-  },
-  {
-   "Planet_Key": "ground",
-   "Crop_Id": "rootsong-seeds",
-   "Level": 5,
-   "Node": "crop_rootsong_seeds_5",
-   "Name": "Rootsong Seeds V",
-   "Price": 10000,
-   "Unlock": "F1:complete",
-   "Status": "proposed"
-  },
-  {
-   "Planet_Key": "ground",
-   "Crop_Id": "elder-bloom",
-   "Level": 2,
-   "Node": "crop_elder_bloom_2",
-   "Name": "Elder Bloom II",
-   "Price": 1500,
-   "Unlock": "F1:accepted",
-   "Status": "proposed"
-  },
-  {
-   "Planet_Key": "ground",
-   "Crop_Id": "elder-bloom",
-   "Level": 3,
-   "Node": "crop_elder_bloom_3",
-   "Name": "Elder Bloom III",
-   "Price": 3600,
-   "Unlock": "F1:complete",
-   "Status": "proposed"
-  },
-  {
-   "Planet_Key": "ground",
-   "Crop_Id": "elder-bloom",
-   "Level": 4,
-   "Node": "crop_elder_bloom_4",
-   "Name": "Elder Bloom IV",
-   "Price": 7500,
-   "Unlock": "F1:complete",
-   "Status": "proposed"
-  },
-  {
-   "Planet_Key": "ground",
-   "Crop_Id": "elder-bloom",
-   "Level": 5,
-   "Node": "crop_elder_bloom_5",
-   "Name": "Elder Bloom V",
-   "Price": 15000,
-   "Unlock": "F1:complete",
+   "Name": "Legendary",
+   "Mastery": 2000,
+   "Machine": "mc_irrigation",
    "Status": "proposed"
   }
  ]

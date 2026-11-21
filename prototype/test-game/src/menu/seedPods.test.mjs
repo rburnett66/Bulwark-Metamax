@@ -1,7 +1,7 @@
 // [MM-story_mwabgu9v_g] [MM-story_mwai5f8t_1g] The SEED PODS tab of the OUTPOST & FARM inventory: crops by planet, each
-// with its pods held (a plain count), its crop level (the tech tree's) and the next level's node and price; the detail
-// panel; BUY (a fixed price per pod) and PLANT (a callback). No UPGRADE: the tech tree buys levels. The battle INVENTORY
-// is unchanged.
+// with its pods held (a plain count), its crop level and its mastery toward the next (owner 2026-11-21: no tree for crop
+// levels [MM-story_mwatmww5_1l]); the detail panel; BUY (a fixed price per pod) and PLANT (a callback). No UPGRADE: a
+// level is never bought. The battle INVENTORY is unchanged.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -38,10 +38,10 @@ test('the Seed pods tab is a row of the farm store, drawn by its own view on the
   assert.deepEqual(BATTLE_INVENTORY.tabs.map((t) => t[0]), ['all', 'kept', 'quest']);
 });
 
-test('the list: 9 planet bands, 36 crops; each row its pods, its crop level in the level colour, the next level and price', () => {
+test('the list: 9 planet bands, 36 crops; each row its pods, its crop level in the level colour, its mastery toward the next', () => {
   const s = defaultSave();
   addPods(s, 'loam-grain', 7); addPods(s, 'helium-4', 1);
-  s.tech.owned.crop_loam_grain_2 = true; s.tech.owned.crop_loam_grain_3 = true;
+  s.mastery['loam-grain'] = 450; s.tech.owned.mc_fertilizer = true;   // level 3 by mastery, with the Fertilizer Machine
   const bands = storeBands(s, 'farm', (p) => p === 'Verdance' || p === 'Lumen');
   const html = seedPodsListHtml(bands, s, 'loam-grain');
   assert.equal(count(html, /class="pband/g), 9);
@@ -54,10 +54,10 @@ test('the list: 9 planet bands, 36 crops; each row its pods, its crop level in t
   assert.ok(html.includes('aria-label="Loam Grain: 7 pods"') && html.includes('<b class="num">7</b>'));
   assert.ok(html.includes('style="--lc:#4da6ff" aria-label="Loam Grain: level 3, Rare"'),
     'Loam Grain at level 3, in Rare\'s colour');
-  assert.ok(html.includes('aria-label="Loam Grain: next level Loam Grain IV, 2,500 gold"') && html.includes('<b class="num">2,500</b>g'));
-  assert.ok(html.includes('style="--lc:#ffffff" aria-label="Elder Bloom: level 1, Common"'), 'no levels bought: level 1');
-  assert.ok(html.includes('aria-label="Elder Bloom: next level Elder Bloom II, 1,500 gold"'));
-  assert.ok(html.includes('aria-label="Petal Silk: next level none"') && html.includes('More levels later'), 'other planets\' chains come later');
+  assert.ok(html.includes('aria-label="Loam Grain: mastery 450 of 800 toward level 4"') && html.includes('<b class="num">450</b>/800'));
+  assert.ok(html.includes('style="--lc:#ffffff" aria-label="Elder Bloom: level 1, Common"'), 'no mastery: level 1');
+  assert.ok(html.includes('aria-label="Elder Bloom: mastery 0 of 100 toward level 2"'));
+  assert.ok(html.includes('aria-label="Petal Silk: mastery 0 of 100 toward level 2"'), 'every planet\'s crops climb the same way'); 
   assert.ok(html.includes('aria-label="Helium-4: 1 pods"'), 'Helium-4 in Lumen');
   assert.ok(html.includes('Portal: Florael not owned') && html.includes('aria-label="Petal Silk: locked pods"'));
   assert.ok(html.includes('<b class="num">7</b> held'), 'Verdance band counts its pods');
@@ -74,10 +74,10 @@ test('the tab never uses an attribute the 3D menu draws into', () => {
   for (const attr of ['data-res', 'data-globe', 'data-craft', 'data-galaxy']) assert.ok(!src.includes(attr), attr + ' in seedPods.js');
 });
 
-test('the detail panel: pods held, the crop level and the next node, yield and worth per level, map crops at 3, sources', () => {
+test('the detail panel: pods held, the crop level and its mastery, yield and worth per level, map crops at 3, sources', () => {
   const s = withGold(500);
   addPods(s, 'loam-grain', 5);
-  s.tech.owned.crop_loam_grain_2 = true;
+  s.mastery['loam-grain'] = 120;
   const bands = storeBands(s, 'farm', all);
   const det = seedPodsDetailHtml(bands, s, 'loam-grain');
   assert.ok(det.includes('<h2>Loam Grain</h2>') && det.includes('<div class="rdn num">5</div>'), 'the big number is pods held');
@@ -85,8 +85,9 @@ test('the detail panel: pods held, the crop level and the next node, yield and w
   assert.ok(det.includes('<dt>Grows in</dt><dd>2 h · Traditional plot, every level</dd>'));
   assert.ok(det.includes('Crop level · <span class="plvn">') && det.includes('L2 Uncommon'));
   assert.ok(det.includes('New Loam Grain plantings grow at level 2; plots already growing keep the level they were planted at.'));
-  assert.ok(det.includes('<b>Loam Grain III</b> · <b class="num">1,200</b> gold in the Tech Tree'));
-  assert.ok(det.includes('Unlocked by Farming F1 on Verdance complete.'), 'III–V wait for F1 complete');
+  assert.ok(det.includes('L3 Rare</span> at <b class="num">300</b> mastery · you have <b class="num">120</b>'));
+  assert.ok(det.includes('Level 3 also needs the Fertilizer Machine (Tech Tree › OUTPOST &amp; FARM › MACHINERY).'));
+  assert.ok(det.includes('aria-label="Loam Grain mastery toward level 3"'), 'a meter');
   assert.equal(count(det, /<tr class="[^"]*"><td><span class="plvn">/g), 5, 'a row per level');
   assert.ok(det.includes(' on"><td>') && det.includes('L2 Uncommon</span></td><td class="num">16</td>'), 'the level now is marked');
   assert.ok(det.includes('Legendary</span></td><td class="num">19</td><td class="num">×1.75 · 1.75 g</td>'), 'yield +20 %, worth 1.75× the battle price');
@@ -97,23 +98,23 @@ test('the detail panel: pods held, the crop level and the next node, yield and w
   assert.ok(det.includes(`<b class="num">${FARM.Pod_Price}</b> gold a pod, every crop alike`));
   assert.ok(det.includes(`data-pod-buy="loam-grain" data-buy-n="${BUY_PODS}">Buy 16 · 400g`));
   assert.equal(BUY_PODS, 16, 'the default buy is one full plot (1 pod = 1 plant)');
-  assert.ok(!det.includes('data-pod-up'), 'no UPGRADE: the tech tree buys levels');
+  assert.ok(!det.includes('data-pod-up'), 'no UPGRADE: a level is never bought');
   assert.ok(!det.includes('data-pod-plant'), 'PLANT hidden when nothing is wired');
   assert.ok(det.includes('All crops'), 'the phone back link');
 
   const he = seedPodsDetailHtml(bands, s, 'helium-4');
   assert.ok(he.includes('Battles: none') && he.includes('no battle price'), 'Helium-4: no battle pods, no battle price');
   assert.ok(he.includes('<td class="num">×0.75</td>'), 'worth as a multiple only');
-  assert.ok(he.includes('More levels come with this planet'), 'no chain yet');
+  assert.ok(he.includes('at <b class="num">100</b> mastery'), 'Lumen\'s crops climb like any other');
   assert.equal(podValue(cropOf('rootsong-seeds'), 3), null, 'rare-tier crops have no known battle price');
   assert.equal(podValue(cropOf('heartwood-amber'), 4), 2.6);
   const top = withGold(0);
-  for (const L of [2, 3, 4, 5]) top.tech.owned['crop_elder_bloom_' + L] = true;
-  assert.ok(seedPodsDetailHtml(storeBands(top, 'farm', all), top, 'elder-bloom').includes('is the top level.'));
-  assert.ok(seedPodsDetailHtml(storeBands(top, 'farm', all), top, 'elder-bloom').includes('Level 5 needs a trick'));
-  const f1 = withGold(0);
-  f1.farmContracts = { ground: { step: 1, state: 'active' } };
-  assert.ok(seedPodsDetailHtml(storeBands(f1, 'farm', all), f1, 'loam-grain').includes('Unlocked: buy it in the Tech Tree.'), 'II opens with F1 accepted');
+  top.mastery['elder-bloom'] = 5000;
+  const held = seedPodsDetailHtml(storeBands(top, 'farm', all), top, 'elder-bloom');
+  assert.ok(held.includes('is the top level.'));
+  assert.ok(held.includes('Mastered to level 5, held at 2: level 3 needs the Fertilizer Machine.'), 'no machines: held at 2');
+  for (const id of ['mc_fertilizer', 'mc_agrobots', 'mc_irrigation']) top.tech.owned[id] = true;
+  assert.ok(seedPodsDetailHtml(storeBands(top, 'farm', all), top, 'elder-bloom').includes('Level 5 also needs an Irrigated plot with water.'));
   assert.equal(hoursText(7.5 * 3600), '7 h 30 min');
 });
 

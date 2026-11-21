@@ -6,7 +6,7 @@ import { MAPDATA } from '../../content/maps/mapdata.js';
 import {
   FARM, CROPS, cropOf, cropsOf, METHODS, methodOf, POD_LEVELS, MAX_POD_LEVEL, podLevel, FARM_BUILDINGS, farmBuildingOf,
   farmContractOf, growSec, fruitedSec, stageAt, yieldOf, podsBack, prepCost, NEW_MATERIALS, MAP_CROP_LEVEL, CROP_LEVELS,
-  CROP_LEVEL_NODES, cropLevelChain, growLevel,
+  CROP_LEVEL_RULES, masteryFor, growLevel,
 } from './farm.js';
 
 const CATALOG = JSON.parse(readFileSync(new URL('../../content/missions/missions.json', import.meta.url), 'utf8'));
@@ -130,24 +130,12 @@ test('battle-map crops count as level 3 (Rare): its worth is the battle price', 
   assert.equal(podLevel(MAP_CROP_LEVEL).value, 1);
 });
 
-test('the crop level nodes: Verdance\'s four crops, a chain II–V each, priced and gated from the workbook', () => {
-  const verdance = cropsOf('ground').map((c) => c.id);
-  assert.equal(CROP_LEVEL_NODES.length, 16);
-  assert.deepEqual([...new Set(CROP_LEVEL_NODES.map((n) => n.crop))], verdance, 'Verdance first, in tier order');
-  for (const id of verdance) {
-    const chain = cropLevelChain(id);
-    assert.deepEqual(chain.map((n) => n.level), [2, 3, 4, 5], id);
-    assert.ok(chain.every((n, i) => !i || n.price > chain[i - 1].price), id + ': each level dearer');
-    assert.deepEqual(chain.map((n) => n.unlock.state), ['accepted', 'complete', 'complete', 'complete'], id + ': II with F1 accepted, III–V with F1 complete');
-    assert.ok(chain.every((n) => n.unlock.contract === 'F1' && n.proposed), id + ': proposed gates and prices');
-  }
-  assert.deepEqual(cropLevelChain('loam-grain').map((n) => [n.id, n.name, n.price]), [
-    ['crop_loam_grain_2', 'Loam Grain II', 500], ['crop_loam_grain_3', 'Loam Grain III', 1200],
-    ['crop_loam_grain_4', 'Loam Grain IV', 2500], ['crop_loam_grain_5', 'Loam Grain V', 5000]]);
-  assert.deepEqual(cropLevelChain('elder-bloom').map((n) => n.price), [1500, 3600, 7500, 15000], 'epic tier ×3');
-  assert.deepEqual(cropLevelChain('petal-silk'), [], 'other planets join later as rows');
+test('Crop_Levels: levels 2-5 open by mastery (the same for every crop) and from level 3 by a machine (owner 2026-11-21)', () => {
+  assert.deepEqual(CROP_LEVEL_RULES.map((r) => r.level), [2, 3, 4, 5]);
+  assert.ok(CROP_LEVEL_RULES.every((r, i) => r.proposed && (!i || r.mastery > CROP_LEVEL_RULES[i - 1].mastery)), 'rising, proposed');
+  assert.deepEqual(CROP_LEVEL_RULES.map((r) => r.machine), [null, 'mc_fertilizer', 'mc_agrobots', 'mc_irrigation']);
+  assert.equal(masteryFor(2), 100);
 });
-
 test('level 5 needs a trick: a Traditional plot grows a level-5 crop at 4; an Irrigated plot reaches 5 with water', () => {
   assert.equal(methodOf('traditional').level5Needs, 'never');
   assert.equal(methodOf('irrigated').level5Needs, 'water');

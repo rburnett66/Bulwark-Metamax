@@ -101,8 +101,13 @@ Rules 10–13 (owner, 2026-11-10, epic **F-E · Earned seed pods** [MM-epic_mwat
     1, even before they have an outpost,"* so by the time the outpost opens they want the farm to plant them.
 12. **Mastery opens crop levels 2–5** (E4): *"Planting, harvesting and selling fruit from seed pods increases the
     player's mastery of the pods allowing level 2–5 to be grown."* Each crop has a mastery count; thresholds (data,
-    proposed) open its `<Crop> II … V` nodes in place of the F1 gates (rule 9), and **gold still buys each level** in
-    the tech tree (owner answer; rule D7 holds).
+    proposed) open its levels. **Amended 2026-11-21** (owner: *"We don't need to create a tree for the crop upgrades,
+    only the farm equipment"*): a crop level is **never bought** and has no tech node. Mastery alone opens it:
+    `s.mastery[crop]` gains a point per pod planted, and harvests, sales and deliveries count as the plants that grew
+    them (units × Pods_Per_Plot ÷ yield, so every tier earns alike per plot). The thresholds are the same for all 36
+    crops (`Crop_Levels`: L2 100, L3 300, L4 800, L5 2000, proposed). The 16 Verdance crop nodes are gone; a save that
+    bought them is refunded the gold and given the mastery for the level it held. The tech tree's **SEED PODS**
+    division now buys nothing: one node per planet shows its 4 crops' pods unlocked (rule 10), 9 × 4.
 13. **Each level above 2 needs machinery** (E5, E6; checked when planting, as rule 9's level 5 is): *"level 4 requires
     agrobots and 5 requires irrigation. The irrigation also optimizes the mineral content. Level 3 requires fertilizer
     made by a special fertilizer machine. The specific recipe for each fertilizer must be discovered through missions
@@ -110,7 +115,11 @@ Rules 10–13 (owner, 2026-11-10, epic **F-E · Earned seed pods** [MM-epic_mwat
     you will need friend status to receive it."* So: **L3** the crop's fertilizer, made by a Fertilizer machine from a
     recipe learned in a mission from the crop's buyer faction, offered by a character aboard its capital ship at
     **Friendly** standing (`standings.js`); **L4** agrobots; **L5** irrigation. A plot grows at the highest level its
-    crop has bought and its equipment allows, and the PLANT button names what caps it. Battle-map crops stay level 3.
+    crop has mastered and its equipment allows, and the PLANT button names what caps it. Battle-map crops stay level 3.
+    **Built 2026-11-21:** the equipment is the tech tree's **MACHINERY** division: Fertilizer Machine (L3, 2,500 g),
+    Agrobots (L4, 5,000 g) and Irrigation (L5, 8,000 g), each needing the one before (prices proposed). Each is unlocked
+    once any crop is mastered to its level, then bought (D7), and serves every crop. Until E6 lands, the Fertilizer
+    Machine makes every crop's fertilizer; L5 still also needs an Irrigated plot with water (E8 will add the units).
     *"Level 3 on some crops may also require a new planting method like terracing, vertical farming, or hydroponics"*
     (owner, 2026-11-10): a crop's row may name a **method** its level 3 also needs (`Crop_Levels.Method`, blank for
     most crops); on any other method that crop grows at level 2 at most.
@@ -376,8 +385,8 @@ they come back; the owner will detail them first:
 | **E1** Design | rules 10–13 in this plan | — |
 | **E2** Pod unlock at 500 | `s.cropDelivered[crop]` counted at every map's end and every outpost/farm sale; `podsUnlocked(s, crop)` at `Pod_Unlock_Units` (500); BUY, chest and PLANT refuse a locked crop; SEED PODS shows the count toward 500 | F-A |
 | **E3** Pod Reward Chest | at every won map's end (any stars): `s.podCarry[crop]` += delivered units of each unlocked crop, ⌊÷ `Chest_Units_Per_Pod` (100)⌋ pods go in a chest; it plays over the result screen and one tap opens it (Pirate Bash's reveal, one card per crop); an unopened chest waits on SEED PODS; replaces `battlePods` (built) | E2 |
-| **E4** Crop mastery | `s.mastery[crop]` from plantings, harvests and sales; thresholds (data, proposed) open the L2–L5 nodes in place of the F1 gates; gold still buys | F-A |
-| **E5** Level machinery | at planting: L3 needs the crop's fertilizer (and, for some crops, a method: `Crop_Levels.Method`), L4 agrobots, L5 irrigation (`Crop_Levels.Needs`); the plot grows at the highest level it qualifies for and PLANT names the cap | E4 |
+| **E4** Crop mastery | `s.mastery[crop]` from plantings, harvests, sales and deliveries; thresholds (`Crop_Levels.Mastery`, proposed) open L2–L5; no crop nodes, nothing bought (owner 2026-11-21); old crop nodes refunded as mastery | F-A |
+| **E5** Level machinery | MACHINERY nodes (`Crop_Levels.Machine`): L3 Fertilizer Machine, L4 Agrobots, L5 Irrigation, unlocked by mastery, bought with gold; the plot grows at the highest level it qualifies for and PLANT names the cap. A per-crop L3 method (`Crop_Levels.Method`) is not built | E4 |
 | **E9** The farm visitors | rule 14: nine new characters, one per faction; unlocked by a crop's 4th harvest with 4 plots of it; they roam the outpost daily; GREET for friend points, GIVE crops for tips | F-A (A8 avatar) |
 | **E10** The farming log | rule 15: every tip kept and grouped by crop, reopenable | E9 |
 | **E11** Off-world pods | rule 16: no fruit at levels 1–2 away from home; the "I don't think those grow here" prompt; sprout, die, pods back; visitor tricks open levels 3–5 | E9, E5 |
