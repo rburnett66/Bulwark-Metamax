@@ -111,6 +111,23 @@ export function characterFindings(model, files, ranks) {
     if (hearts.length !== 1) add(`magic-heart:${key}`, 'magic', key, null, hearts.length ? `${hearts.length} magic hearts; there must be one` : 'no magic heart declared');
   }
 
+  // names before their stage (Magic-System §9 check 7): the field names (Electrum, Quantum, Organum) only in a secret
+  // of stage 4 or later; the folk names (brain-craft, soul-fire, body-craft) only from stage 2; nowhere in the lines
+  // every player hears (start / win / lose) [MM-story_mwpt846x_3z]
+  const FIELD = /\b(Electrum|Quantum|Organum)\b/, FOLK = /\b(brain-craft|soul-fire|body-craft)\b/i;
+  for (const [key, file] of Object.entries(files)) for (const c of file.characters || []) {
+    const said = [...Object.values(c.lines || {})];
+    for (const t of said) {
+      if (FIELD.test(t) || FOLK.test(t)) add(`magic-names:${c.name}:lines`, 'magic', key, c.name, `an everyday line names the magic before the player learns it: "${t}"`);
+    }
+    for (const s of c.secrets || []) {
+      const words = [s.text, s.line, s.twist, s.lie && s.lie.text, s.lie && s.lie.line].filter(Boolean).join(' ');
+      const stage = s.stage || 1;
+      if (FIELD.test(words) && stage < 4) add(`magic-names:${c.name}:${s.key}`, 'magic', key, c.name, `${s.key} names a field (stage 4) at stage ${stage}`);
+      else if (FOLK.test(words) && stage < 2) add(`magic-names:${c.name}:${s.key}`, 'magic', key, c.name, `${s.key} uses a faculty name (stage 2) at stage ${stage}`);
+    }
+  }
+
   // magic across the cast (Magic-System §6, §6.1, §9 checks 4, 6 and 10)
   const keys = Object.keys(files);
   if (keys.length === FACTION_KEYS.length) {

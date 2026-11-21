@@ -43,6 +43,12 @@ export const STAGES = Object.freeze([
   'balance: the three are one system',
 ]);
 
+/**
+ * Where each discovery stage opens in the campaign (Magic-System §6 "Where"): the homeworld the player must have
+ * reached (surveyed) before a magic or sense secret of that stage can come out. Stage 1 is Verdance, the start.
+ */
+export const STAGE_HOMEWORLD = Object.freeze([null, 'ground', 'air', 'artillery', 'arcane', 'dark']);
+
 /** A character's use of magic, from their alignment's polarity. → 'good' | 'neutral' | 'evil' */
 export const useFor = (align) => polarity(align);
 

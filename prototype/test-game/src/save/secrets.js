@@ -11,6 +11,8 @@
  * Rapport is save/standings.js's ledger (s.rapport[name].score). Pure: no DOM.
  */
 import { hasMet } from './standings.js';
+import { isSurveyed } from './reveals.js';
+import { STAGE_HOMEWORLD } from '../data/magic.js';
 
 export const SECRET_KEYS = Object.freeze(['love', 'hate', 'want', 'share', 'desire', 'treasure', 'sorrow', 'magic', 'sense']);
 export const SECRET_LABEL = Object.freeze({
@@ -24,6 +26,18 @@ export const SHAME_EXTRA = 15, CONTROL_AT = 60;
 export const GUARD_HINT = Object.freeze({
   shame: 'Ashamed to say', fear: 'Afraid to say', loyalty: 'Keeping it for their faction', control: 'Holding it over you', love: 'Protecting someone',
 });
+/** A magic or sense secret from a later stage of the discovery story is held until the player gets there. */
+export const STAGE_HINT = 'Not yet understood';
+
+/**
+ * How far the player is into the magic discovery story (Magic-System §6): the highest stage whose homeworld they have
+ * reached (surveyed). Verdance, stage 1, is where every player starts [MM-story_mwpt846x_3z]. → 1 … 5
+ */
+export function discoveryStage(s) {
+  let stage = 1;
+  for (let k = 2; k < STAGE_HOMEWORLD.length; k++) if (isSurveyed(s || {}, STAGE_HOMEWORLD[k])) stage = k;
+  return stage;
+}
 
 export const PERSONALITIES = Object.freeze({
   whimsical: 'Shares magic and the strange things they sense early, and rarely guards anything.',
@@ -63,6 +77,8 @@ export function revealSecrets(ch, s, factionName = null) {
     const base = { key: sec.key, label: SECRET_LABEL[sec.key] || sec.key, step, guard: sec.guard || null };
     if (!met || ctx.score < step) return { ...base, state: 'locked' };
     if (sec.guard && !guardMet(sec.guard, sec, step, ctx)) return { ...base, state: 'held', hint: GUARD_HINT[sec.guard] || '' };
+    // the discovery story keeps its order (Magic-System §9 check 5): a later stage's magic waits for its homeworld
+    if (sec.stage > 1 && sec.stage > discoveryStage(s)) return { ...base, state: 'held', hint: STAGE_HINT };
     const lying = !!(sec.lie && ctx.score < sec.lie.until);
     return {
       ...base, state: 'out', lie: lying, wasLie: !!(sec.lie && !lying),
