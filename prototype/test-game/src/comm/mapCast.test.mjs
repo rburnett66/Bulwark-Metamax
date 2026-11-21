@@ -79,6 +79,6 @@ test('main.js: only the map\'s first wave has a character; the secondary after w
   assert.match(main, /if \(idx === SECONDARY_AFTER_WAVE\) await offerRareContract\(\(matchCast\(\) \|\| \{\}\)\.secondary \|\| null\);/, 'one voice at wave 3: the secondary offers the contract');
   assert.match(main, /const call = !own && contact && characterCall/, 'the secondary is not announced twice');
   const ship = readFileSync(new URL('../reveal/shipReveal.js', import.meta.url), 'utf8');
-  assert.match(ship, /aboardSecretCalls\(files, pk, ship\.key, loadSave\(\), factionNameOf\(ship\.key\)\)/, 'secrets are told aboard');
-  assert.match(ship, /noteSecretTold\(sv, t\.name, t\.secret\)/, 'and told once');
+  assert.match(ship, /aboardScene\(buildModel\(\{ packs: pk, files, threads \}\), files, pk, ship\.key, loadSave\(\), factionNameOf\(ship\.key\)\)/, 'secrets and rumours are told aboard');
+  assert.match(ship, /updateSave\(\(sv\) => scene\.commit\(sv\)\)/, 'and recorded once');
 });

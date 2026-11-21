@@ -11,9 +11,18 @@
  * Pure except loadCharacterFiles (fetch). Specs go through dialog.js characterCall, the one comm-card path.
  */
 import { characterCall } from './dialog.js';
-import { untoldSecret } from '../save/secrets.js';
+import { untoldSecret, noteSecretTold } from '../save/secrets.js';
+import { rumourFrom, rumoursFor, noteRumour, ownerTells, REACTIONS } from '../save/rumours.js';
+import { tellsFor } from './tells.js';
+import { shortName } from './shortName.js';
 import { FACTION_KEYS } from '../data/factionRelations.js';
 import { standingOf, moodChangeOf } from '../save/standings.js';
+
+/** Fetch the drama threads (content/characters/threads.json). Never throws. → { threads: [] } */
+export async function loadThreads(url = 'content/characters/threads.json') {
+  try { const r = await fetch(url); if (r.ok) return await r.json(); } catch (e) { /* none yet */ }
+  return { threads: [] };
+}
 
 /** Fetch every faction's characters file that exists. Never throws. → { [factionKey]: file } */
 export async function loadCharacterFiles(base = 'content/characters/') {
@@ -102,6 +111,51 @@ export function aboardSecretCalls(files, packs, factionKey, s, factionName = nul
     if (spec) out.push({ spec, name: ch.name, secret });
   }
   return out;
+}
+
+const PRONOUN_START = /^(He|She|It|They|His|Her|Its|Their|My|Our)\b/;
+/** The clean line a teller says about someone: "About Otto: he wants Petal Silk, …". */
+export function rumourLine(owner, text) {
+  const t = String(text || '');
+  return `About ${shortName(owner)}: ${PRONOUN_START.test(t) ? t.replace(/^./, (m) => m.toLowerCase()) : t}`;
+}
+
+/**
+ * The scene aboard a faction's capital ship (Character-System §7.1, owner 2026-11-21: "Secrets should usually be
+ * delivered at the capital ships") [MM-story_mwp61bjm_33]: up to `limit` of the faction's characters speak. One with a
+ * newly unlocked secret tells it (and if the player had heard it as a rumour, they react, §7.5); one with nothing new
+ * of their own passes on a rumour about someone they know, in their own voice with its tells (§7.4).
+ * model: characterModel buildModel(...). → { calls: [spec], commit(save) } — commit records it all in a save.
+ */
+export function aboardScene(model, files, packs, factionKey, s, factionName = null, limit = 3) {
+  const file = files && files[factionKey];
+  if (!file) return { calls: [], commit: () => {} };
+  const calls = [], ops = [];
+  for (const ch of file.characters) {
+    if (calls.length >= limit) break;
+    const told = untoldSecret(ch, s, factionName);
+    if (told) {
+      const spec = characterCall(packs, factionKey, ch.name, say(told.line), 'SECRET');
+      if (!spec) continue;
+      calls.push(spec);
+      const raw = (ch.secrets || []).find((x) => x.key === told.key) || told;
+      const heard = rumoursFor(s, ch.name).some((r) => r.key === told.key);
+      const react = heard && REACTIONS[raw.guard];
+      if (react) { const r = characterCall(packs, factionKey, ch.name, say(react.line), 'SECRET'); if (r) calls.push(r); }
+      ops.push((sv) => { noteSecretTold(sv, ch.name, told); if (heard) ownerTells(model, sv, ch.name, raw); });
+      continue;
+    }
+    const r = model ? rumourFrom(model, files, ch.name, s) : null;
+    if (!r) continue;
+    const flaw = model.flawsOf(ch.name)[0] || null;
+    const line = tellsFor(rumourLine(r.owner, r.text), { credibility: r.credibility, version: r.version,
+      personality: model.personalityOf(ch.name).personality, flaw, seed: `${ch.name}|${r.owner}|${r.key}` });
+    const spec = characterCall(packs, factionKey, ch.name, say(line), 'RUMOUR');
+    if (!spec) continue;
+    calls.push(spec);
+    ops.push((sv) => noteRumour(sv, r));
+  }
+  return { calls, commit: (sv) => { for (const op of ops) op(sv); } };
 }
 
 /** The secondary's one line after wave 3: they introduce themselves (and, when it is earned, offer the contract). → spec | null */
