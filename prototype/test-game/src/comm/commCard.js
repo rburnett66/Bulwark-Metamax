@@ -136,6 +136,14 @@ const CSS = `
 .bw-comm .bw-tapclose { color:#ffd76a; letter-spacing:.2em; animation:bwTapPulse 1.1s ease-in-out infinite; }
 @keyframes bwTapPulse { 0%,100%{opacity:.45} 50%{opacity:1} }
 .bw-comm.signoff .bw-comm-end{opacity:1}
+.bw-comm-choices{padding:0 11px 8px}
+.bw-comm-terms{font-size:9.5px;line-height:1.45;color:#9fb3c6;margin-bottom:6px}
+.bw-comm-terms b{color:#f2c869}
+.bw-comm-row{display:flex;gap:8px}
+.bw-comm-choice{flex:1;padding:7px 0;font:700 10.5px/1 "Segoe UI",system-ui,sans-serif;letter-spacing:.14em;cursor:pointer;
+  border:1px solid #2e3846;background:#1a1f28;color:#e6ecf3;border-radius:4px}
+.bw-comm-choice:hover,.bw-comm-choice:focus-visible{border-color:#d9a441;outline:none}
+.bw-comm-choice.primary{background:linear-gradient(160deg,#f2c869,#d9a441);color:#0c0e12;border-color:#f2c869}
 .bw-comm-qchip{border:1px solid #d8a13a;color:#f0c675;border-radius:6px;padding:2px 8px;font-size:8.5px;letter-spacing:1px;opacity:0;transition:.3s}
 .bw-comm-qchip.on{opacity:1}
 /* a long run's dots wrap rather than widen the card (the text column must never grow past it) */
@@ -546,9 +554,42 @@ export function createComm(doc) {
     if (portrait) portrait.classList.remove('speaking');
     if (d.chip) { const q = card.querySelector('.bw-comm-qchip'); if (q) { q.textContent = d.chip; q.classList.add('on'); } }
   }
-  async function playScene(calls, { onLine = null, center = true } = {}) {
+  /**
+   * A CHOICE at the end of a scene [MM-story_mwpzbj5c_45]: the speaker's last line stays up and the card shows the terms
+   * and one button per choice; only a button answers (a stray tap on the card does not). → the chosen value, or null if
+   * the scene was cut short (the menu opened).
+   */
+  function askChoice(scene, choices, terms) {
+    const right = card.querySelector('.bw-comm-right'), foot = card.querySelector('.bw-comm-foot');
+    const box = card.ownerDocument.createElement('div'); box.className = 'bw-comm-choices';
+    box.innerHTML = (terms ? '<div class="bw-comm-terms">' + terms + '</div>' : '') + '<div class="bw-comm-row"></div>';
+    const row = box.querySelector('.bw-comm-row');
+    const footl = card.querySelector('.bw-comm-foot-l');
+    if (footl) { footl.textContent = 'CHOOSE'; footl.classList.remove('bw-tapclose'); }
+    if (right) right.insertBefore(box, foot || null);
+    // the card has grown by the choices: centre stage fits it to the screen again
+    if (card.classList.contains('center')) card.style.transform = 'translate(-50%,-50%) scale(' + centerScale(card).toFixed(3) + ')';
+    return new Promise((res) => {
+      const done = (v) => { scene.choosing = false; scene.waiter = null; box.remove(); res(v); };
+      scene.choosing = true;
+      scene.waiter = () => done(null);   // abort() resolves it
+      choices.forEach((c, k) => {
+        const b = card.ownerDocument.createElement('button');
+        b.type = 'button'; b.className = 'bw-comm-choice' + (c.primary ? ' primary' : ''); b.textContent = c.label;
+        b.addEventListener('click', (e) => { e.stopPropagation(); done(c.value); });
+        row.appendChild(b);
+        if (k === 0) setTimeout(() => b.focus({ preventScroll: true }), 0);
+      });
+    });
+  }
+  /**
+   * Play a scene. opts.choices: [{ label, value, primary? }] — the scene ends on a choice (askChoice) with opts.terms
+   * shown above the buttons; opts.replies[value]: the speaker's answer to it, then opts.after (more lines, same speaker),
+   * each in the same window. → the chosen value (undefined without choices).
+   */
+  async function playScene(calls, { onLine = null, center = true, choices = null, terms = '', replies = {}, after = [] } = {}) {
     const list = (calls || []).filter(Boolean);
-    let i = 0;
+    let i = 0, chosen;
     while (i < list.length && !hushed) {
       let j = i + 1;
       while (j < list.length && sameSpeaker(list[j], list[i])) j++;
@@ -557,7 +598,7 @@ export function createComm(doc) {
       const waiting = () => new Promise((res) => { _scene.waiter = res; });
       _scene = {
         typing: true, waiter: null, aborted: false,
-        tap() { if (this.typing) _rush = true; else if (this.waiter) { const w = this.waiter; this.waiter = null; w(); } },
+        tap() { if (this.choosing) return; if (this.typing) _rush = true; else if (this.waiter) { const w = this.waiter; this.waiter = null; w(); } },
         abort() { this.aborted = true; if (this.waiter) { const w = this.waiter; this.waiter = null; w(); } },
       };
       const scene = _scene;
@@ -572,7 +613,17 @@ export function createComm(doc) {
         if (onLine) onLine(run[k], base + k);
         await sayInPlace(run[k]);
       }
-      if (!scene.aborted && _held) {
+      if (!scene.aborted && _held && choices && j >= list.length) {
+        scene.typing = false;
+        chosen = await askChoice(scene, choices, terms);
+        const more = [replies[chosen], ...(chosen != null ? after : [])].filter(Boolean);
+        for (let k = 0; k < more.length && !scene.aborted && _held; k++) {
+          scene.typing = true;
+          await sayInPlace(more[k]);
+          scene.typing = false; setFoot(k < more.length - 1 ? 'TAP ▸ NEXT' : 'TAP TO CLOSE');
+          await waiting();
+        }
+      } else if (!scene.aborted && _held) {
         scene.typing = false; setFoot(j < list.length ? 'TAP ▸ NEXT' : 'TAP TO CLOSE');
         await waiting();
       }
@@ -582,6 +633,7 @@ export function createComm(doc) {
       await shut;
       i = j;
     }
+    return choices ? (chosen === undefined ? null : chosen) : undefined;
   }
 
   return {
