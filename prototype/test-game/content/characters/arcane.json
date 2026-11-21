@@ -1,0 +1,241 @@
+{
+  "_source": "Hand-authored, canonical (docs/tech-plan/Character-Secrets.md). Arcane cast, written to the Powder sample (ground.json). [MM-story_mwohmiyq_2u]",
+  "faction": "arcane",
+  "status": "draft",
+  "characters": [
+    {
+      "name": "Archivist Balthus",
+      "personality": "wary",
+      "relations": { "water": { "to": "neutral", "why": "Ferryman Brack sells him drowned ledgers, honestly." } },
+      "lines": {
+        "start": "Unbeliever. Designation logged. Proceed.",
+        "win": "Variance from forecast: considerable. Interesting.",
+        "lose": "Holdings forfeit. The column closes."
+      },
+      "secrets": [
+        { "key": "want", "item": "ash-basalt", "text": "He wants Ash Basalt, for shelves that will not burn.", "line": "Ash Basalt. For shelves Mordane can't burn." },
+        { "key": "sense", "text": "He can tell a forged page by touch. A lie feels warm.", "line": "This page is warm. Someone lied in it." },
+        { "key": "share", "text": "He'll copy any record for anyone, by the terms as written.", "line": "Terms as written: bring the paper, take a copy.",
+          "mission": { "task": "Deliver 20 Ash Basalt to the Archive.", "reward": { "kind": "gold", "amount": 300 } } },
+        { "key": "hate", "text": "He hates fire. All of it, holy or not.", "line": "Fire is fire, whatever it prays to." },
+        { "key": "treasure", "guard": "fear", "text": "The one record he hid: Mordane and Isolde share a mother.", "line": "One record I hid. Mordane and Isolde share a mother.",
+          "mission": { "task": "Recover the birth registry from the burned annex on Cinder map 1.", "reward": { "kind": "xp", "amount": 200 } } },
+        { "key": "desire", "text": "He wants one honest history, with nobody's name on the cover.", "line": "One honest history. Nobody's name on it." },
+        { "key": "love", "guard": "fear", "who": "Hierophant Aurelia", "text": "He has loved Hierophant Aurelia for forty years, and filed every sermon twice.", "line": "Forty years I've filed Aurelia's sermons. Each one twice." },
+        { "key": "sorrow", "guard": "fear", "text": "He filed the warrant that sent his own apprentice to the pyre.", "line": "I filed the warrant that burned my apprentice." },
+        { "key": "magic", "text": "What he writes in the ledger cannot be unwritten, not even by the Choir.", "line": "What I write, even the Choir can't unwrite.",
+          "mission": { "task": "Keep the record: win three Cinder maps in a row.", "reward": { "kind": "resource", "item": "phoenix-glass", "amount": 2 } } }
+      ]
+    },
+    {
+      "name": "Heretic Isolde",
+      "personality": "whimsical",
+      "relations": { "dark": { "to": "friendly", "why": "Firebrand Lux prints her pamphlets." } },
+      "lines": {
+        "start": "Welcome to the club, unbeliever. No dress code.",
+        "win": "Ha! Clean getaway. Nobody recited anything.",
+        "lose": "They got your walls. Heretics always rebuild."
+      },
+      "secrets": [
+        { "key": "magic", "text": "Any flame she lights refuses to burn a prisoner.", "line": "My fire won't burn anyone in chains. Handy.",
+          "mission": { "task": "Light the way: build four towers before wave 1 ends on Cinder.", "reward": { "kind": "gold", "amount": 250 } } },
+        { "key": "sense", "text": "She hears a lie as a wrong note, like a choir singing flat.", "line": "Somebody's flat. Somebody's lying." },
+        { "key": "hate", "text": "She hates Inquisitor Mordane's pyres, and misses the brother inside him.", "line": "Mordane burns people. He used to braid my hair." },
+        { "key": "love", "who": "Corsair Finn Saltmoor", "text": "She loves Corsair Finn Saltmoor of the Water, the enemy. She burned his sails; he proposed.", "line": "I set a pirate's sails on fire. He proposed." },
+        { "key": "share", "text": "She shares smuggled pamphlets with anyone who'll read one aloud.", "line": "Read one out loud, and the pamphlets are yours.",
+          "mission": { "task": "Spread the word: finish a Cinder map without losing a harvester.", "reward": { "kind": "alignment", "amount": 2 } } },
+        { "key": "want", "item": "duskmoss-resin", "text": "She wants Duskmoss Resin. It makes an ink the Inquisition can't bleach.", "line": "Duskmoss Resin. Ink they can't bleach. Please?" },
+        { "key": "desire", "text": "She wants a church with no doors, so nobody can be shut out.", "line": "A church with no doors. Imagine." },
+        { "key": "treasure", "text": "Aurelia's first sermon, on freedom, hidden before Aurelia banned it.", "line": "Aurelia preached freedom once. I hid the proof.",
+          "mission": { "task": "Recover the banned sermon from the old chapel on Cinder map 6.", "reward": { "kind": "xp", "amount": 150 } } },
+        { "key": "sorrow", "text": "Aurelia raised her as a daughter, and still signed her warrant.", "line": "Aurelia raised me. Then she signed my warrant." }
+      ]
+    },
+    {
+      "name": "Acolyte-Scholar Wen",
+      "personality": "open-hearted",
+      "relations": { "hightech": { "to": "friendly", "why": "She writes to Dr. Grace Sterling about ethics." } },
+      "lines": {
+        "start": "Let's reason this through, unbeliever. Gently.",
+        "win": "Clean. The practice held, so the scripture holds.",
+        "lose": "You fought well. It wasn't enough. That's all."
+      },
+      "secrets": [
+        { "key": "sorrow", "text": "Her first library burned on Mordane's sentence. She saved one book.", "line": "I saved one book from the fire. One." },
+        { "key": "share", "text": "She lends her notes to any commander who'll argue with them.", "line": "Argue with my notes, and you can keep them.",
+          "mission": { "task": "Win Cinder map 3 at three stars.", "reward": { "kind": "xp", "amount": 250 } } },
+        { "key": "love", "who": "Lightbearer Cassian", "text": "She loves Lightbearer Cassian, who carries the flame and will hold nothing else.", "line": "Cassian holds the flame. Never my hand." },
+        { "key": "want", "item": "phoenix-glass", "text": "She wants Phoenix Glass. Through it, burned pages can be read.", "line": "Phoenix Glass reads ash. Bring me some." },
+        { "key": "hate", "text": "She hates Inquisitor Mordane, who burns books to save time.", "line": "Mordane burns books. He calls it editing." },
+        { "key": "magic", "text": "Once a day, any question she asks aloud gets an honest answer.", "line": "One question a day. Someone always answers true.",
+          "mission": { "task": "Deliver 10 Ember Obsidian to her study.", "reward": { "kind": "resource", "item": "phoenix-glass", "amount": 1 } } },
+        { "key": "sense", "text": "She feels a wrong idea nearby as a headache behind the eyes.", "line": "My head aches. Somebody nearby is wrong." },
+        { "key": "desire", "text": "She wants doctrine rewritten as a map, not a wall.", "line": "Doctrine should be a map, not a wall." },
+        { "key": "treasure", "text": "The book she saved: the first scripture, with Isolde's notes in the margins.", "line": "My saved book has Isolde's notes in it.",
+          "mission": { "task": "Carry her book to the hidden school on Cinder map 3.", "reward": { "kind": "loyalty", "amount": 30 } } }
+      ]
+    },
+    {
+      "name": "Lightbearer Cassian",
+      "personality": "devoted",
+      "relations": { "water": { "to": "friendly", "why": "He hid Chieftain Coral's children from Drowned Kael." } },
+      "lines": {
+        "start": "Behind me, faithful. Come no further.",
+        "win": "Held. The flock is safe. Thank the Light.",
+        "lose": "You were someone's charge too. I'm sorry."
+      },
+      "secrets": [
+        { "key": "share", "text": "He'll share the altar's bread with anyone who shields the flock.", "line": "Shield the flock, and share our bread.",
+          "mission": { "task": "Finish a Cinder map with every harvester alive.", "reward": { "kind": "gold", "amount": 300 } } },
+        { "key": "hate", "text": "He hates the throne the Prime has built on the altar.", "line": "The throne can wait. The people cannot." },
+        { "key": "sense", "text": "He feels a frightened child within a mile, like a draught on a candle.", "line": "Somebody small is frightened. My flame bends." },
+        { "key": "want", "item": "loam-grain", "text": "He wants Loam Grain, to feed the refugees behind his altar.", "line": "Loam Grain. The refugees ate the last today." },
+        { "key": "desire", "guard": "loyalty", "text": "He wants to leave the Church and simply feed people.", "line": "I'd leave the Church just to feed people." },
+        { "key": "love", "guard": "loyalty", "who": "Acolyte-Scholar Wen", "text": "He loves Acolyte-Scholar Wen. His vows say no.", "line": "Wen argues with me. I'd marry her for it." },
+        { "key": "magic", "text": "His flame cannot be bought. It goes out in any hand that pays for it.", "line": "My flame goes out if you pay for it.",
+          "mission": { "task": "Carry the flame: win Cinder map 4 without losing a wall.", "reward": { "kind": "alignment", "amount": 2 } } },
+        { "key": "treasure", "guard": "loyalty", "text": "He hid Chieftain Coral's children in the catacombs, against the Prime's law.", "line": "Coral's children are in the catacombs. Help me.",
+          "mission": { "task": "Escort the Reef-Born children out on Cinder map 4.", "reward": { "kind": "loyalty", "amount": 40 } } },
+        { "key": "sorrow", "text": "He once held the light while Mordane lit a pyre.", "line": "I held the light for Mordane's pyre. Once." }
+      ]
+    },
+    {
+      "name": "Warlock Nyx",
+      "personality": "cruel",
+      "relations": { "water": { "to": "friendly", "why": "Drowned Kael fences her stolen flame." } },
+      "lines": {
+        "start": "Unbeliever! Finally. Bring your flame. I'm hungry.",
+        "win": "Aw. Spat out. I'll eat the next one.",
+        "lose": "Look at it all, steaming. Every last mouthful."
+      },
+      "secrets": [
+        { "key": "want", "item": "dreamspore", "text": "She wants Dreamspore. She eats dreams, and hers are getting thin.", "line": "Dreamspore, sweetling. I'm hungry for dreams." },
+        { "key": "share", "text": "There is no lesson. She just eats the tower.", "line": "No lesson. I just wanted the tower.",
+          "lie": { "text": "She offers to teach you to eat flame, for one tower.", "line": "Feed me one tower. I'll teach you fire.", "until": 42 },
+          "mission": { "task": "Win a Cinder map after losing a tower.", "reward": { "kind": "gold", "amount": 200 } } },
+        { "key": "love", "who": "Inquisitor Mordane", "text": "She loves Inquisitor Mordane, who has hunted her for ten years.", "line": "Mordane's hunted me for years. Best years ever.",
+          "lie": { "text": "She says she loves only what she can swallow.", "line": "Love? I love what I can swallow.", "until": 60 } },
+        { "key": "magic", "text": "She can eat any spell cast at her, and grow from it.", "line": "Cast at me. Go on. I'm peckish.",
+          "mission": { "task": "Eat the volley: destroy 60 enemies in one wave on Cinder.", "reward": { "kind": "xp", "amount": 150 } } },
+        { "key": "treasure", "text": "The vault is empty. She needs someone else to break its seal.", "line": "The vault's empty. I just needed the seal broken.",
+          "lie": { "text": "She says the vault under the cathedral holds the Hierophant's gold.", "line": "Gold under the cathedral, sweetling. Go dig.", "until": 80 },
+          "mission": { "task": "Break the vault seal on Cinder map 5.", "reward": { "kind": "gold", "amount": 150 } } },
+        { "key": "hate", "text": "She hates Aurelia's pity more than Mordane's fire.", "line": "Pity's worse than fire. Aurelia drips with it." },
+        { "key": "sense", "text": "She can taste power in a room, sweet or sour.", "line": "Mmm. Someone here tastes sour. You?" },
+        { "key": "desire", "text": "She wants to eat the Heartflame and become the altar.", "line": "Eat the Heartflame. Become the altar. Lovely." },
+        { "key": "sorrow", "guard": "shame", "text": "She was an acolyte who could not light a candle. They laughed.", "line": "I couldn't light a candle. They laughed. Now look." }
+      ]
+    },
+    {
+      "name": "Hierophant Aurelia",
+      "personality": "proud",
+      "relations": { "water": { "to": "neutral", "why": "She and Tide-Priestess Marena both pray for balance." } },
+      "lines": {
+        "start": "Be at peace, unbeliever. Hold still.",
+        "win": "Order, made merciful. Go, forgiven.",
+        "lose": "Even heresy is gathered home. Rest now."
+      },
+      "secrets": [
+        { "key": "sense", "text": "She feels a lost soul as a cold spot in the Light.", "line": "There's a cold spot in the Light. You?" },
+        { "key": "share", "text": "She gives the altar's grace to anyone who asks without fear.", "line": "Ask without fear, and grace is given.",
+          "mission": { "task": "Finish an Arcane mission without breaking it.", "reward": { "kind": "loyalty", "amount": 30 } } },
+        { "key": "want", "item": "heartflame", "text": "She wants Heartflame, to relight the first altar.", "line": "Heartflame. The first altar has gone dark." },
+        { "key": "magic", "text": "Anyone she forgives sleeps without nightmares, once.", "line": "I forgive you. Sleep well tonight. Truly.",
+          "mission": { "task": "Win Cinder map 6 with no wave reaching the base.", "reward": { "kind": "alignment", "amount": 2 } } },
+        { "key": "hate", "text": "She hates what Mordane made of mercy: a pyre with a prayer on it.", "line": "Mordane put a prayer on a pyre. I hate it." },
+        { "key": "desire", "guard": "shame", "text": "She wants to tear up Isolde's warrant, and cannot without breaking the Law.", "line": "I want to tear up a warrant. The Law forbids." },
+        { "key": "treasure", "text": "Her own first sermon, on freedom, which she later banned.", "line": "I preached freedom once. Then I banned it.",
+          "mission": { "task": "Recover her first sermon from the old chapel on Cinder map 6.", "reward": { "kind": "xp", "amount": 300 } } },
+        { "key": "love", "guard": "shame", "who": "Heretic Isolde", "text": "She loves Heretic Isolde, the novice she raised as a daughter.", "line": "Isolde was mine to raise. She still is." },
+        { "key": "sorrow", "guard": "shame", "text": "She signed Isolde's warrant to keep the schism from becoming a war.", "line": "I signed my daughter's warrant. To prevent a war." }
+      ]
+    },
+    {
+      "name": "Inquisitor Mordane",
+      "personality": "devoted",
+      "relations": { "dark": { "to": "hostile", "why": "The Hollow Prophet stole his first congregation." } },
+      "lines": {
+        "start": "Confess, or combust, unbeliever.",
+        "win": "You slipped the pyre. I add it to the sentence.",
+        "lose": "You were an error. I was the correction."
+      },
+      "secrets": [
+        { "key": "hate", "text": "He hates the Hollow Prophet, who stole his first congregation.", "line": "The Hollow Prophet stole my first flock." },
+        { "key": "share", "text": "He pays the Church's bounty for any heretic's name.", "line": "A heretic's name earns a bounty. Speak.",
+          "mission": { "task": "Hunt doubt: destroy 50 enemies in one wave on Cinder.", "reward": { "kind": "gold", "amount": 400 } } },
+        { "key": "want", "item": "ember-obsidian", "text": "He wants Ember Obsidian: pyre stones that never cool.", "line": "Ember Obsidian. The pyres keep going out." },
+        { "key": "love", "guard": "loyalty", "who": "Heretic Isolde", "text": "Isolde is his sister. He hunts her so that nobody crueler will.", "line": "Isolde's my sister. Better me than someone worse.",
+          "lie": { "text": "He says he has no sister. The Church is his only family.", "line": "Sister? The Church is my only family.", "until": 60 } },
+        { "key": "sense", "text": "He smells doubt like smoke, even in himself.", "line": "I smell doubt. Some of it's mine." },
+        { "key": "magic", "text": "A confession made to him is always true, whatever it costs.", "line": "Confess to me. You'll only manage the truth.",
+          "mission": { "task": "Confess: finish three Arcane missions in a row.", "reward": { "kind": "xp", "amount": 250 } } },
+        { "key": "desire", "guard": "loyalty", "text": "He wants the Prime to order Isolde spared, so he can obey.", "line": "Order me to spare her. I'd obey. Gladly." },
+        { "key": "sorrow", "guard": "loyalty", "text": "He burned his own teacher on the Prime's word, and tells himself he was right.", "line": "I burned my teacher. The Prime said I was right." },
+        { "key": "treasure", "text": "Isolde's childhood hair ribbon, kept in his prayer-book.", "line": "There's a ribbon in my prayer-book. Leave it.",
+          "mission": { "task": "Recover his prayer-book from the burned cloister on Cinder map 7.", "reward": { "kind": "loyalty", "amount": 30 } } }
+      ]
+    },
+    {
+      "name": "The Ordained Prime, Vaelith",
+      "personality": "schemer",
+      "relations": { "water": { "to": "wary", "why": "He respects Abyssal Sovereign Thal's kind of order." } },
+      "lines": {
+        "start": "Rise not, unbeliever. The Law is closing.",
+        "win": "You tested the Law. I permit a moment's pride.",
+        "lose": "Precisely as ordained. The balance is holy."
+      },
+      "secrets": [
+        { "key": "share", "text": "The pardon is a pyre with better seating.", "line": "Pardon. Pyre. The words are cousins.",
+          "lie": { "text": "He offers to pardon Isolde if you bring her to the altar.", "line": "Bring me the heretic. I will pardon her.", "until": 60 },
+          "mission": { "task": "Win Cinder map 8 at three stars.", "reward": { "kind": "gold", "amount": 600 } } },
+        { "key": "magic", "guard": "control", "text": "His verdicts weigh exactly what they should. Nobody can lift one.", "line": "My verdicts weigh exactly right. Try lifting one.",
+          "mission": { "task": "Bear the verdict: win a Cinder map without losing a wall.", "reward": { "kind": "alignment", "amount": -2 } } },
+        { "key": "hate", "text": "He hates Mordane for presuming, and needs him anyway.", "line": "Mordane presumes. I keep him for that." },
+        { "key": "want", "item": "void-lens", "text": "He wants a Void Lens, to see every sin at once.", "line": "A Void Lens. Sin is easier counted wholesale." },
+        { "key": "desire", "guard": "control", "text": "He wants Aurelia to abolish mercy herself, gently.", "line": "Aurelia will abolish mercy herself. I'll wait." },
+        { "key": "sense", "text": "He feels the balance tip, like a scale in his chest.", "line": "The scale tipped. Someone here is unbalanced." },
+        { "key": "love", "guard": "control", "who": "Hierophant Aurelia", "text": "He loves Aurelia, and cannot forgive her for loving Isolde more.", "line": "Aurelia loves the heretic more than me.",
+          "lie": { "text": "He says he and Aurelia disagree on nothing.", "line": "Aurelia and I disagree on nothing that matters.", "until": 80 } },
+        { "key": "treasure", "text": "The schism's first decree, which names him as the one who started it.", "line": "The first schism decree has my name. Find it.",
+          "mission": { "task": "Take the decree from the archive on Cinder map 8.", "reward": { "kind": "xp", "amount": 400 } } },
+        { "key": "sorrow", "text": "He was once as young and free as Isolde.", "line": "I was free once. Like her. It passed." }
+      ]
+    },
+    {
+      "name": "The Unmade Choir",
+      "personality": "proud",
+      "relations": { "water": { "to": "friendly", "why": "The Undertow is its silence under the sea." } },
+      "lines": {
+        "start": "Unbeliever. Believer. Same noise. Be silent.",
+        "win": "You nearly made a sound. We nearly felt it.",
+        "lose": "Quiet now. Nothing left to hear. Good."
+      },
+      "secrets": [
+        { "key": "hate", "text": "It hates Isolde's laughter. Laughter is a question.", "line": "The heretic laughs. Laughter is a question." },
+        { "key": "sense", "text": "It hears thoughts as noise, and feels each one end.", "line": "So many thoughts here. Fewer now." },
+        { "key": "want", "item": "petal-silk", "text": "It wants Petal Silk, to stuff the cathedral bells.", "line": "Petal Silk. For the bells. Be silent." },
+        { "key": "share", "text": "Peace is erasure. Those who stop asking stop being.", "line": "Peace? You simply stop being. That is all.",
+          "lie": { "text": "It offers peace to all who stop asking.", "line": "Stop asking, and you will have peace.", "until": 42 },
+          "mission": { "task": "Win Cinder map 9 at three stars.", "reward": { "kind": "gold", "amount": 300 } } },
+        { "key": "love", "who": "The Undertow (drowned collective)", "text": "It loves The Undertow, a silence older than its own.", "line": "Below the sea, another silence. We love it." },
+        { "key": "treasure", "guard": "shame", "text": "Its last hymn, written down by Archivist Balthus before it fell silent.", "line": "Balthus wrote down our last hymn. Bring it.",
+          "mission": { "task": "Take the hymn from the Archive on Cinder map 9.", "reward": { "kind": "resource", "item": "heartflame", "amount": 1 } } },
+        { "key": "desire", "text": "It wants to finish unmaking itself, and almost dreads it.", "line": "We want to finish. We are almost afraid." },
+        { "key": "magic", "text": "Where it passes, sound stops for an hour.", "line": "We pass. Sound stops. Listen. Nothing.",
+          "mission": { "task": "Hush the field: destroy 40 enemies in one wave on Cinder.", "reward": { "kind": "xp", "amount": 300 } } },
+        { "key": "sorrow", "guard": "shame", "text": "It was the cathedral choir. It sang at Mordane's first pyre, then chose silence.", "line": "We sang at the first pyre. Then we stopped." }
+      ]
+    }
+  ],
+  "maps": {
+    "1": { "primary": "Archivist Balthus", "secondary": { "name": "Ferryman Old Brack", "faction": "water", "line": "Ledgers for Balthus. Salt-stained. Fare's the fare." } },
+    "2": { "primary": "Heretic Isolde", "secondary": { "name": "Corsair Finn Saltmoor", "faction": "water", "line": "Is Isolde burning something? Save me a seat." } },
+    "3": { "primary": "Acolyte-Scholar Wen", "secondary": { "name": "Chief Ethicist Dr. Grace Sterling", "faction": "hightech", "line": "Wen's last letter outargued my whole ethics board." } },
+    "4": { "primary": "Lightbearer Cassian", "secondary": { "name": "Chieftain Coral of the Reef-Born", "faction": "water", "line": "Cassian kept my children safe. I owe him the sea." } },
+    "5": { "primary": "Warlock Nyx", "secondary": { "name": "Raider-Chief Drowned Kael", "faction": "water", "line": "Nyx's stolen flame sells well. Burn more!" } },
+    "6": { "primary": "Hierophant Aurelia", "secondary": { "name": "Tide-Priestess Marena", "faction": "water", "line": "Aurelia prays to fire, I to water. Same balance." } },
+    "7": { "primary": "Inquisitor Mordane", "secondary": { "name": "The Hollow Prophet", "faction": "dark", "line": "Mordane's first flock listens to me now. Ask him." } },
+    "8": { "primary": "The Ordained Prime, Vaelith", "secondary": { "name": "Abyssal Sovereign Thal", "faction": "water", "line": "Vaelith's Law and my weight. Both teach kneeling." } },
+    "9": { "primary": "The Unmade Choir", "secondary": { "name": "The Undertow (drowned collective)", "faction": "water", "line": "Come down, Choir. The sea is quieter still." } }
+  }
+}

@@ -1,0 +1,241 @@
+{
+  "_source": "Hand-authored, canonical (docs/tech-plan/Character-Secrets.md). Air cast in the owner-approved Powder tone (ground.json). [MM-story_mwohmiyq_2u]",
+  "faction": "air",
+  "status": "draft",
+  "characters": [
+    {
+      "name": "Mechanic Sora Ito",
+      "personality": "wary",
+      "relations": { "ground": { "to": "neutral", "why": "They trade engine parts for Ines Roth's powder." } },
+      "lines": {
+        "start": "Groundling. I patch what fighting breaks. Go on.",
+        "win": "Low wear, low parts cost. Logged it.",
+        "lose": "Twelve airframes gone. Logged as a loss."
+      },
+      "secrets": [
+        { "key": "want", "item": "dawnpollen", "text": "They want Dawnpollen. It scrubs the carbon out of a seized engine.", "line": "Dawnpollen. Best engine cleaner on Florael. Don't tell the bees." },
+        { "key": "sense", "text": "They hear metal fatigue before it cracks, like a held breath.", "line": "That wing's holding its breath. Ground it." },
+        { "key": "share", "text": "They'll share spare parts with anyone who lands what they fly.", "line": "Bring the birds back whole, and the spares are yours.",
+          "mission": { "task": "Win a Florael map without losing a structure.", "reward": { "kind": "gold", "amount": 300 } } },
+        { "key": "hate", "text": "They hate Wing-Commander Kowalski, who logs pilots as spare parts.", "line": "Kowalski calls pilots consumables. I fix consumables." },
+        { "key": "love", "guard": "fear", "who": "Quartermaster Ines Roth", "text": "They love Quartermaster Ines Roth of the Powder. The gaskets are an excuse.", "line": "Gaskets for powder. And letters. Mostly letters." },
+        { "key": "treasure", "text": "A crashed courier plane full of spares, hidden in the petal fields.", "line": "There's a wreck in the petal fields. Nobody logged it.",
+          "mission": { "task": "Recover the wreck from the petal fields on Florael map 1.", "reward": { "kind": "resource", "item": "choir-lily", "amount": 1 } } },
+        { "key": "desire", "text": "They want a workshop where nobody asks whose wing it is.", "line": "One day, a shop. No flags on the door." },
+        { "key": "magic", "text": "Anything they bolt together flies once more than it should.", "line": "My patches fly once past ruin. Only once.",
+          "mission": { "task": "Deliver 10 Petal Silk for wing patches.", "reward": { "kind": "xp", "amount": 200 } } },
+        { "key": "sorrow", "guard": "fear", "text": "Their trade with Ines put Air engine parts inside Powder guns.", "line": "My parts are in Powder guns now. I checked." }
+      ]
+    },
+    {
+      "name": "Kaito \"Rogue\" Minami",
+      "personality": "whimsical",
+      "relations": { "space": { "to": "allied", "why": "Ezra Lin is his rival, and his only friend." } },
+      "lines": {
+        "start": "Take the sky. It's got my family's name on it.",
+        "win": "Slick. Nobody handed you that.",
+        "lose": "Get up, groundling. You don't get to quit."
+      },
+      "secrets": [
+        { "key": "sense", "text": "He feels a storm front in his teeth a day early.", "line": "My teeth ache. Storm tomorrow. Fly today." },
+        { "key": "magic", "text": "Planes fly faster for him when nobody is watching.", "line": "Planes go faster when nobody's looking. True story.",
+          "mission": { "task": "Win a Florael map in under ten minutes.", "reward": { "kind": "gold", "amount": 250 } } },
+        { "key": "love", "who": "Cadet-Prodigy Ezra \"Comet\" Lin", "text": "He loves Ezra \"Comet\" Lin of the Space, and calls it a rivalry.", "line": "Ezra Lin's my rival. Shut up. Rival." },
+        { "key": "hate", "text": "He hates the Minami name, painted on every plane he's given.", "line": "Every plane they give me has our name on it." },
+        { "key": "want", "item": "skyhoney", "text": "He wants Skyhoney. The ground crew paints over crests for honey.", "line": "Skyhoney. The crew paints over crests for honey." },
+        { "key": "share", "text": "He'll share his stunt routes with a commander who wins on their own.", "line": "Win without help, and I'll show you my tricks.",
+          "mission": { "task": "Win a Florael map without taking a bonus pick.", "reward": { "kind": "xp", "amount": 200 } } },
+        { "key": "desire", "text": "He wants to win one race under a made-up name.", "line": "One race. Fake name. Win it clean." },
+        { "key": "treasure", "text": "His grandfather's medal, thrown off a cliff. He secretly wants it back.", "line": "I threw Grandpa's medal off a cliff. I want it back.",
+          "mission": { "task": "Find the medal under the cliffs on Florael map 2.", "reward": { "kind": "loyalty", "amount": 30 } } },
+        { "key": "sorrow", "text": "His father died a legend, and Kaito never told him he hated it.", "line": "Dad died a legend. I never told him I hated that." }
+      ]
+    },
+    {
+      "name": "Rei \"Skylark\" Tanaka",
+      "personality": "open-hearted",
+      "relations": { "ground": { "to": "wary", "why": "She loves Otto von Halbrecht, a Powder captain." } },
+      "lines": {
+        "start": "I don't hate you. I just want one clear sky.",
+        "win": "Fewer of us died today. That's my win.",
+        "lose": "Grounded. Somebody's landing strip stays empty tonight."
+      },
+      "secrets": [
+        { "key": "love", "guard": "love", "who": "Captain Otto von Halbrecht", "text": "She loves Captain Otto von Halbrecht of the Powder, across the war line.", "line": "If you meet Captain Otto, tell him I'm still flying." },
+        { "key": "sorrow", "text": "Otto shot down her wingman, Ken Sato, before either knew the other's name.", "line": "Otto killed my wingman. I love him anyway. Both true." },
+        { "key": "want", "item": "choir-lily", "text": "She wants a Choir Lily. It sings while someone you love is safe.", "line": "A Choir Lily sings while he's safe. I need one." },
+        { "key": "desire", "text": "She wants one clear sky, and a landing strip on his side.", "line": "One clear sky. One landing, on his side." },
+        { "key": "share", "text": "She'll share the quiet flight lanes with anyone who spares downed pilots.", "line": "Spare the downed pilots, and I'll show you the quiet lanes.",
+          "mission": { "task": "Win Florael map 3 at three stars.", "reward": { "kind": "gold", "amount": 400 } } },
+        { "key": "hate", "text": "She hates General Kord Stahl, who keeps the war fed.", "line": "Stahl feeds the war. Somebody has to starve it." },
+        { "key": "sense", "text": "She hears Otto's heartbeat on her radio. Nobody else can.", "line": "His heartbeat's on my radio again. Nobody else hears it." },
+        { "key": "treasure", "text": "Otto's letters, dropped from his trench, hidden in a hollow tree on the front.", "line": "His letters are in a hollow tree. Bring them, please.",
+          "mission": { "task": "Recover the letters from the hollow tree on Florael map 3.", "reward": { "kind": "loyalty", "amount": 30 } } },
+        { "key": "magic", "text": "Anyone who flies her wing lands safely, once.", "line": "Fly my wing once, and you'll land. Promise.",
+          "mission": { "task": "Bring every flier home: win a Florael map without losing an air unit.", "reward": { "kind": "alignment", "amount": 2 } } }
+      ]
+    },
+    {
+      "name": "Ace Jun \"Halo\" Sato",
+      "personality": "proud",
+      "relations": { "space": { "to": "allied", "why": "He flew escort for Commander Idris Vale." } },
+      "lines": {
+        "start": "I've got your six. Earn it.",
+        "win": "Textbook. Not one wingman went down.",
+        "lose": "I'll fly the missing-man for you, groundling."
+      },
+      "secrets": [
+        { "key": "share", "text": "He'll teach his formation to a commander who loses nobody.", "line": "Lose nobody, and I'll teach you the formation.",
+          "mission": { "task": "Win two Florael maps in a row.", "reward": { "kind": "xp", "amount": 300 } } },
+        { "key": "want", "item": "petal-silk", "text": "He wants Petal Silk, for the missing-man banners.", "line": "Petal Silk. I've run out of missing-man banners." },
+        { "key": "hate", "text": "He hates the Powder captain who shot down his brother Ken. He doesn't know it was Otto.", "line": "Some Powder captain killed my brother. I'll find him." },
+        { "key": "magic", "text": "Nobody flying in his formation dies alone.", "line": "In my formation, nobody dies alone. Ever.",
+          "mission": { "task": "Hold formation: win a Florael map without losing a tower.", "reward": { "kind": "gold", "amount": 350 } } },
+        { "key": "sense", "text": "He feels an empty slot in the sky before a pilot falls.", "line": "There's a gap in the sky today. Watch your six." },
+        { "key": "love", "guard": "shame", "who": "Rei \"Skylark\" Tanaka", "text": "He loves Rei \"Skylark\" Tanaka, his brother's wingmate. She loves someone else.", "line": "Rei flew with my brother. I'd fly for her." },
+        { "key": "treasure", "text": "His brother's flight jacket, still in the wreck on the ridge.", "line": "Ken's jacket is still in the wreck. Bring it home.",
+          "mission": { "task": "Recover the jacket from the ridge wreck on Florael map 4.", "reward": { "kind": "resource", "item": "dawnpollen", "amount": 2 } } },
+        { "key": "desire", "text": "He wants to retire as the ace who never lost a wingman. It's already too late.", "line": "Never lost a wingman, they'll write. It's wrong." },
+        { "key": "sorrow", "guard": "shame", "text": "Ken died because Jun broke formation to chase a kill.", "line": "I broke formation for a kill. Ken paid for it." }
+      ]
+    },
+    {
+      "name": "Squadron-Mother Hikari \"Dawnwing\" Aoi",
+      "personality": "devoted",
+      "relations": { "artillery": { "to": "friendly", "why": "Chaplain Ruth Bellamy buries her fallen kids." } },
+      "lines": {
+        "start": "Wheels up, little one. Everyone comes home to me.",
+        "win": "Not a feather bent. Good child.",
+        "lose": "Sleep now, groundling. I'll fold your wings myself."
+      },
+      "secrets": [
+        { "key": "want", "item": "dawnpollen", "text": "She wants Dawnpollen, for the tea every pilot drinks before takeoff.", "line": "Dawnpollen, please. My kids won't fly without their tea." },
+        { "key": "love", "who": "Ace Jun \"Halo\" Sato", "text": "She loves Jun Sato like a son. He was her first student.", "line": "Jun was my first. He still flies too close." },
+        { "key": "share", "text": "She'll share her rescue roster with anyone who brings a downed pilot home.", "line": "Bring my lost ones home, and the dawn is yours.",
+          "mission": { "task": "Recover the downed pilot on Florael map 5.", "reward": { "kind": "resource", "item": "skyhoney", "amount": 20 } } },
+        { "key": "sense", "text": "She feels each of her kids land, like a door closing softly.", "line": "Thirty-one landed today. One is still out." },
+        { "key": "hate", "guard": "loyalty", "text": "She hates Sky-Marshal Kurogane, who spends pilots to keep the sky tidy.", "line": "Reiko spends my kids to keep her sky neat." },
+        { "key": "desire", "text": "She wants to rest the day the last kid comes home. It never comes.", "line": "The day the last one lands, I'll rest." },
+        { "key": "magic", "text": "Her call sign reaches any lost pilot, wherever they fell.", "line": "Call 'Dawnwing' and I'll hear it. Anywhere.",
+          "mission": { "task": "Win a Florael map without losing a harvester.", "reward": { "kind": "loyalty", "amount": 40 } } },
+        { "key": "sorrow", "guard": "loyalty", "text": "The Nightingale were her kids. She sent them up on Kurogane's order.", "line": "The Nightingale were my kids. I let them go up." },
+        { "key": "treasure", "guard": "loyalty", "text": "The squadron's founding logbook, every name she ever flew with, hidden in the old hangar.", "line": "Every name I've flown with is in one logbook.",
+          "mission": { "task": "Recover the logbook from the old hangar on Florael map 5.", "reward": { "kind": "xp", "amount": 300 } } }
+      ]
+    },
+    {
+      "name": "Renegade \"Viper\" Ryu",
+      "personality": "cruel",
+      "relations": { "artillery": { "to": "hostile", "why": "Flak took his first plane, and his patience." } },
+      "lines": {
+        "start": "Come on up, little snack.",
+        "win": "Ha! Too quick for me. For now.",
+        "lose": "Down you go. I love this part."
+      },
+      "secrets": [
+        { "key": "share", "text": "The shortcut through the cloud wall runs straight into the flak lines.", "line": "The shortcut? Straight into the flak. Ha!",
+          "lie": { "text": "He'll share his shortcut through the cloud wall if you race him.", "line": "Race me through the cloud wall. I'll show you the shortcut.", "until": 42 },
+          "mission": { "task": "Race him: win a Florael map in under ten minutes.", "reward": { "kind": "gold", "amount": 200 } } },
+        { "key": "want", "item": "helium-3", "text": "He wants Helium-3. It makes engines scream. Rax Dune won't sell him any.", "line": "Helium-3. Makes the engine scream. I love screaming." },
+        { "key": "magic", "text": "He's never been caught. The sky moves aside for him.", "line": "The sky gets out of my way. Always has.",
+          "mission": { "task": "Destroy 50 enemies in a single wave.", "reward": { "kind": "xp", "amount": 150 } } },
+        { "key": "hate", "text": "He hates Ace Jun Sato, who flies clean and makes it look easy.", "line": "Halo flies clean. I'd love to dirty him up." },
+        { "key": "treasure", "text": "The canyon jet is rigged to blow. He wants to watch.", "line": "Rigged, obviously. I wanted to watch.",
+          "lie": { "text": "He says he stashed a stolen jet in the canyon, free to whoever finds it.", "line": "Stolen jet in the canyon. Finders keepers.", "until": 60 },
+          "mission": { "task": "Search the canyon on Florael map 6.", "reward": { "kind": "gold", "amount": 100 } } },
+        { "key": "sense", "text": "He can taste fear in the exhaust of the plane ahead.", "line": "Smell that? You're scared. Tastes like fuel." },
+        { "key": "love", "who": "Privateer Rax Dune", "text": "He loves Privateer Rax Dune, the only thing faster than him. He'd shoot him down for fun.", "line": "Rax is faster than me. I'll fix that." },
+        { "key": "desire", "text": "He wants someone to finally outfly him. Then he wants to kill them.", "line": "Someday someone outflies me. Then I kill them." },
+        { "key": "sorrow", "guard": "shame", "text": "He froze on a run once. His little sister flew it instead, and didn't come back.", "line": "I froze once. My sister flew instead. Didn't come back." }
+      ]
+    },
+    {
+      "name": "Sky-Marshal Reiko Kurogane",
+      "personality": "proud",
+      "relations": { "ground": { "to": "wary", "why": "She has beaten Kord Stahl twice. Powder no longer frightens her." } },
+      "lines": {
+        "start": "Look up, groundling, and know your place.",
+        "win": "Flawless. The scales acknowledge you.",
+        "lose": "The sky drops the arrogant. You climbed for this."
+      },
+      "secrets": [
+        { "key": "hate", "text": "She despises General Kord Stahl, who writes to her after every defeat.", "line": "Stahl writes me after each loss. I burn them." },
+        { "key": "want", "item": "dune-quartz", "text": "She wants Dune Quartz, for the lenses of her command scopes.", "line": "Dune Quartz. My scopes must see everything." },
+        { "key": "share", "text": "She'll lend her interceptors to a commander who keeps perfect order.", "line": "Keep perfect order, and my interceptors fly for you.",
+          "mission": { "task": "Win Florael map 7 at three stars.", "reward": { "kind": "gold", "amount": 500 } } },
+        { "key": "magic", "text": "Within sight of her flagship, no plane flies out of formation.", "line": "Under my flagship, nothing flies crooked.",
+          "mission": { "task": "Destroy every flier in a wave before it reaches the base.", "reward": { "kind": "alignment", "amount": -2 } } },
+        { "key": "desire", "text": "She wants a sky where only she flies.", "line": "A sky with one pilot. Me.",
+          "lie": { "text": "She says she wants only balance in the heavens.", "line": "Balance, groundling. Nothing more.", "until": 60 } },
+        { "key": "sense", "text": "She feels the sky tilt when anyone breaks rank, like a crooked picture.", "line": "Someone broke rank. The sky is crooked." },
+        { "key": "love", "guard": "shame", "who": "Squadron-Mother Hikari \"Dawnwing\" Aoi", "text": "She loves Hikari Aoi, her old wingmate, who chose children over order.", "line": "Hikari flew my wing once. She chose wrong." },
+        { "key": "treasure", "guard": "control", "text": "Her first wings, from before she was perfect, locked in her flagship.", "line": "My first wings are in the flagship. Earn a look.",
+          "mission": { "task": "Board the flagship: win Florael map 8 at three stars.", "reward": { "kind": "xp", "amount": 300 } } },
+        { "key": "sorrow", "guard": "shame", "text": "She sent the squadron that became the Nightingale on a run with no return.", "line": "I sent the Nightingale up. I knew. I sent them." }
+      ]
+    },
+    {
+      "name": "Wing-Commander Garret \"Ash\" Kowalski",
+      "personality": "schemer",
+      "relations": { "artillery": { "to": "friendly", "why": "Colonel Hargreave shares their doctrine: end it fast." } },
+      "lines": {
+        "start": "Contest my sky, and they die slower below.",
+        "win": "Decisive. The merciful war is the short one.",
+        "lose": "You dragged it out. That's the atrocity."
+      },
+      "secrets": [
+        { "key": "share", "text": "The cover is a bombing run. It flattens both sides to finish sooner.", "line": "Cover? I bomb everything. It ends sooner.",
+          "lie": { "text": "They offer air cover to any commander who ends a map fast.", "line": "End it fast, and my wings cover you.", "until": 60 },
+          "mission": { "task": "Win a Florael map in under eight minutes.", "reward": { "kind": "gold", "amount": 500 } } },
+        { "key": "want", "item": "mirage-oil", "text": "They want Mirage Oil, for fire that ends a siege in an hour.", "line": "Mirage Oil. One hour of fire beats a year of siege." },
+        { "key": "hate", "guard": "control", "text": "They hate Squadron-Mother Hikari, whose rescues drag every war out.", "line": "Hikari saves pilots. Each rescue costs a week of war." },
+        { "key": "magic", "text": "Any battle they watch ends before nightfall, one way or another.", "line": "If I'm watching, it's over by dark.",
+          "mission": { "task": "Win a Florael map without any wave reaching the base.", "reward": { "kind": "xp", "amount": 250 } } },
+        { "key": "sense", "text": "They feel the minute a war turns, like a cold coin in the palm.", "line": "The war turned an hour ago. You missed it." },
+        { "key": "love", "who": "Sky-Marshal Reiko Kurogane", "text": "They love Sky-Marshal Kurogane, who uses them like a good knife.", "line": "Kurogane points, I cut. Call it love." },
+        { "key": "desire", "guard": "control", "text": "They want to end every war personally, and be thanked for it.", "line": "End every war myself. Then be thanked." },
+        { "key": "treasure", "guard": "control", "text": "A list of the cities they burned to shorten wars, and the lives they claim it saved.", "line": "My list of mercies. Cities, and the lives they saved.",
+          "mission": { "task": "Recover the list from the bunker on Florael map 8.", "reward": { "kind": "loyalty", "amount": 30 } } },
+        { "key": "sorrow", "text": "Their first short war was fought against their own home town.", "line": "My first quick war was my own town." }
+      ]
+    },
+    {
+      "name": "The Nightingale (ghost squadron)",
+      "personality": "cruel",
+      "relations": { "arcane": { "to": "hostile", "why": "Arcane priests keep trying to lay it to rest." } },
+      "lines": {
+        "start": "We already fell. Come up. Go quiet.",
+        "win": "You climbed through us. Nothing touched you.",
+        "lose": "Down. Quiet. We were always going to meet."
+      },
+      "secrets": [
+        { "key": "sense", "text": "It hears every radio left on in a crash, still hissing.", "line": "Static, everywhere. All the radios nobody switched off." },
+        { "key": "share", "text": "Its lights lead up into the ceiling, where it is quiet forever.", "line": "Up. Always up. Nobody follows us back down.",
+          "lie": { "text": "It offers to guide your fliers through the storm ceiling.", "line": "Follow our lights through the ceiling. We know the way.", "until": 42 },
+          "mission": { "task": "Win Florael map 9 without losing a flier.", "reward": { "kind": "xp", "amount": 200 } } },
+        { "key": "want", "item": "choir-lily", "text": "It wants a Choir Lily, so the dead can hear a song again.", "line": "Bring a Choir Lily. We forgot what singing was." },
+        { "key": "magic", "text": "Fliers it marks can't be heard by radar, or by the living.", "line": "We can make you silent. Like us.",
+          "mission": { "task": "Destroy 40 fliers on one Florael map.", "reward": { "kind": "xp", "amount": 250 } } },
+        { "key": "hate", "text": "It hates Sky-Marshal Kurogane, who sent the squadron up to die.", "line": "Kurogane sent us. Bring her up. We'll wait." },
+        { "key": "love", "who": "Squadron-Mother Hikari \"Dawnwing\" Aoi", "text": "It still loves Squadron-Mother Hikari, and wants her up here with them.", "line": "Mother never came for us. We'll come for her.",
+          "lie": { "text": "It says it loves nothing. The dead don't.", "line": "Love? We left that on the runway.", "until": 80 } },
+        { "key": "treasure", "text": "The wrecks hold only the pilots. They want to be found.", "line": "No gold. Only us. Please find us.",
+          "lie": { "text": "It says the squadron's wrecks hold gold, for anyone brave enough.", "line": "Our wrecks are full of gold. Come look.", "until": 100 },
+          "mission": { "task": "Find the squadron wrecks on Florael map 9.", "reward": { "kind": "loyalty", "amount": 30 } } },
+        { "key": "desire", "text": "It wants the war unwritten: no squadron, no legend, no ghosts.", "line": "Unwrite the war. Then we can stop." },
+        { "key": "sorrow", "guard": "shame", "text": "They were children. They went up because Mother said they'd come home.", "line": "Mother said we'd come home. We believed her." }
+      ]
+    }
+  ],
+  "maps": {
+    "1": { "primary": "Mechanic Sora Ito", "secondary": { "name": "Quartermaster Ines Roth", "faction": "ground", "line": "Tell Sora the powder's dry. And nothing else." } },
+    "2": { "primary": "Kaito \"Rogue\" Minami", "secondary": { "name": "Cadet-Prodigy Ezra \"Comet\" Lin", "faction": "space", "line": "Kaito's flying? Tell him I'm faster. He'll know." } },
+    "3": { "primary": "Rei \"Skylark\" Tanaka", "secondary": { "name": "Captain Otto von Halbrecht", "faction": "ground", "line": "Is Skylark up there? Tell her I'm still standing." } },
+    "4": { "primary": "Ace Jun \"Halo\" Sato", "secondary": { "name": "Commander Idris Vale", "faction": "space", "line": "Halo's on escort? Then nobody gets left behind." } },
+    "5": { "primary": "Squadron-Mother Hikari \"Dawnwing\" Aoi", "secondary": { "name": "Chaplain-Gunner Ruth Bellamy", "faction": "artillery", "line": "Hikari writes after every crash. I always answer." } },
+    "6": { "primary": "Renegade \"Viper\" Ryu", "secondary": { "name": "Privateer Rax Dune", "faction": "space", "line": "Viper wants a race? Tell him I already won." } },
+    "7": { "primary": "Sky-Marshal Reiko Kurogane", "secondary": { "name": "General Kord Stahl", "faction": "ground", "line": "Kurogane. I wrote you another letter. Read this one." } },
+    "8": { "primary": "Wing-Commander Garret \"Ash\" Kowalski", "secondary": { "name": "Colonel Hargreave", "faction": "artillery", "line": "Kowalski wants it short. My guns agree." } },
+    "9": { "primary": "The Nightingale (ghost squadron)", "secondary": { "name": "The Signal", "faction": "space", "line": "We hear them too. Past the ceiling. Hissing." } }
+  }
+}

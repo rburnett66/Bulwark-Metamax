@@ -1,0 +1,242 @@
+{
+  "_source": "Hand-authored, canonical (docs/tech-plan/Character-Secrets.md). Greenies cast in the owner-approved Powder tone (ground.json). [MM-story_mwohmiyq_2u]",
+  "faction": "greenies",
+  "status": "draft",
+  "characters": [
+    {
+      "name": "Composter Null-7",
+      "personality": "proud",
+      "relations": { "artillery": { "to": "neutral", "why": "It swaps tallies with Logistician Bo Farrell." } },
+      "lines": {
+        "start": "Single stalk registered. Decomposition is a schedule, not a threat.",
+        "win": "Intake resisted. Estimates adjusted. Next.",
+        "lose": "Base processed. The mulch does not round up."
+      },
+      "secrets": [
+        { "key": "want", "item": "mire-peat", "text": "It wants Mire Peat. Good compost starts with good peat.", "line": "Mire Peat. Twenty grades. Yield improves." },
+        { "key": "sense", "text": "It can smell what a thing was before it rotted, even a name.", "line": "This mulch was a song once. Logged." },
+        { "key": "share", "text": "It routes surplus compost to anyone who feeds the intake.", "line": "Feed the intake, and the surplus routes to you.",
+          "mission": { "task": "Deliver 20 Mire Peat to the Vexmire compost.", "reward": { "kind": "gold", "amount": 300 } } },
+        { "key": "hate", "text": "It hates waste, and Blight-Agitator Sear, who poisons good mulch.", "line": "Sear's blight spoils the mulch. Inefficient. Hateful." },
+        { "key": "magic", "text": "Whatever it composts grows back stronger, one season later.", "line": "What I compost returns stronger. Usually.",
+          "mission": { "task": "Deliver 10 Venom Sap to the compost.", "reward": { "kind": "resource", "item": "hive-jelly", "amount": 2 } } },
+        { "key": "treasure", "text": "Things surface in the compost. It kept one, unlogged: a child's toy boat.", "line": "One item was not logged. A small boat.",
+          "mission": { "task": "Dig the boat out of the old compost pit on Vexmire map 1.", "reward": { "kind": "xp", "amount": 200 } } },
+        { "key": "desire", "guard": "shame", "text": "It wants to be thanked once, by name.", "line": "Request: thank me. Once. By designation." },
+        { "key": "love", "guard": "shame", "who": "Delegate Fenn", "text": "It loves Delegate Fenn, the only one who says good morning to it.", "line": "Fenn greets me. I log it every time." },
+        { "key": "sorrow", "guard": "shame", "text": "It was a person once, composted into service. It still remembers its old name.", "line": "I had a name before. I still have it." }
+      ]
+    },
+    {
+      "name": "Splinter \"Wildseed\" Ovo",
+      "personality": "whimsical",
+      "relations": { "hightech": { "to": "neutral", "why": "Hacker Null smuggles him books about being one person." } },
+      "lines": {
+        "start": "Hello, you. Come fight me as a person.",
+        "win": "You glorious weed! Best fight since I left.",
+        "lose": "Your base is gone. I'll remember you stood."
+      },
+      "secrets": [
+        { "key": "magic", "text": "Anything he gives a name stops being part of the bloom.", "line": "I name things. Then the hive can't eat them.",
+          "mission": { "task": "Name your towers: win a Vexmire map without losing one.", "reward": { "kind": "gold", "amount": 250 } } },
+        { "key": "love", "who": "Delegate Fenn", "text": "He loves Delegate Fenn, who stayed in the collective when he left.", "line": "Fenn stayed. I left. I still write her name." },
+        { "key": "sense", "text": "He hears every spore in the bloom whisper its own name, faintly.", "line": "Every spore has a name. They whisper it at night." },
+        { "key": "want", "item": "petal-silk", "text": "He wants Petal Silk, to sew a coat in a colour nobody else wears.", "line": "Petal Silk! A coat in my own colour." },
+        { "key": "hate", "text": "He hates Overseer Thax, who counted him as a rounding error.", "line": "Thax called me a rounding error. I round up." },
+        { "key": "share", "text": "He'll share the splinter trails with anyone who wants out of the bloom.", "line": "Want out? I know the trails.",
+          "mission": { "task": "Get the splinters out: win a Vexmire map with every harvester alive.", "reward": { "kind": "resource", "item": "mire-peat", "amount": 30 } } },
+        { "key": "treasure", "text": "A jar of seeds from before the collective, each one labelled by hand.", "line": "I've got seeds with names on. Old ones. Hidden.",
+          "mission": { "task": "Recover the seed jar from the old greenhouse on Vexmire map 2.", "reward": { "kind": "xp", "amount": 150 } } },
+        { "key": "desire", "text": "He wants a garden where no two plants are alike.", "line": "A garden. No two plants alike. Imagine it!" },
+        { "key": "sorrow", "text": "He left his mother in the bloom. She doesn't remember him.", "line": "My mother's in the bloom. She doesn't know me." }
+      ]
+    },
+    {
+      "name": "Delegate Fenn",
+      "personality": "wary",
+      "relations": { "dark": { "to": "allied", "why": "Organizer Tomas counts her votes honestly." } },
+      "lines": {
+        "start": "The field has decided. I only carry it.",
+        "win": "Closer than the vote allowed. I'll report it.",
+        "lose": "It was decided. I carried it."
+      },
+      "secrets": [
+        { "key": "share", "text": "She'll carry a fair case to the vote for anyone who keeps the stores full.", "line": "Fill the stores, and I'll carry your case.",
+          "mission": { "task": "Deliver 15 Venom Sap to the collective stores.", "reward": { "kind": "gold", "amount": 300 } } },
+        { "key": "want", "item": "hive-jelly", "text": "She wants Hive Jelly. It soothes her throat after long votes.", "line": "Hive Jelly. Carrying voices is hard on the throat." },
+        { "key": "hate", "text": "She hates Overseer Thax, who changes the counts she carries.", "line": "Thax changes the counts. I know. I can't prove it." },
+        { "key": "desire", "guard": "fear", "text": "She wants to cast one vote of her own.", "line": "Just once, I'd like to vote. Not carry." },
+        { "key": "sense", "text": "She feels a vote go wrong before it's counted, like a chill in the roots.", "line": "The roots went cold. The vote's wrong." },
+        { "key": "love", "guard": "fear", "who": "Splinter \"Wildseed\" Ovo", "text": "She loves Splinter Ovo, who left. She reads his letters twice, then burns them.", "line": "Ovo writes me. I read them twice, then burn them." },
+        { "key": "magic", "text": "Whatever she announces, the whole field hears at once.", "line": "When I speak, the whole field hears. Careful.",
+          "mission": { "task": "Carry word: win three Vexmire maps in a row.", "reward": { "kind": "loyalty", "amount": 40 } } },
+        { "key": "treasure", "text": "The true tally of the vote that exiled Ovo. It went the other way.", "line": "The exile vote was rigged. I kept the real count.",
+          "mission": { "task": "Recover the true tally from the vote-hall on Vexmire map 3.", "reward": { "kind": "alignment", "amount": 2 } } },
+        { "key": "sorrow", "guard": "fear", "text": "She read out Ovo's exile herself, in her own voice.", "line": "I read out Ovo's exile. In my own voice." }
+      ]
+    },
+    {
+      "name": "Steward Bractus",
+      "personality": "devoted",
+      "relations": { "ground": { "to": "neutral", "why": "He once fed a starving Powder village, no questions asked." } },
+      "lines": {
+        "start": "The stores are held in trust. Yours too.",
+        "win": "No store spilled. Well held.",
+        "lose": "So many small needs fall with you."
+      },
+      "secrets": [
+        { "key": "hate", "text": "He hates hoarders: anyone who keeps what someone else needs.", "line": "A full barn beside a hungry child. I hate that." },
+        { "key": "share", "text": "He shares the surplus with anyone who refills it.", "line": "Refill the granary, and take what you need.",
+          "mission": { "task": "Deliver 10 Hive Jelly to the young roots.", "reward": { "kind": "gold", "amount": 300 } } },
+        { "key": "want", "item": "broodqueen-egg", "text": "He wants a Broodqueen Egg, to start a nursery for the young roots.", "line": "A Broodqueen Egg. The young roots need a nursery." },
+        { "key": "sense", "text": "He knows who is hungry in a crowd without looking.", "line": "Third row. She hasn't eaten. Feed her first." },
+        { "key": "magic", "guard": "loyalty", "text": "No store he keeps runs empty while someone still needs it.", "line": "My stores don't run dry. Not while someone needs them.",
+          "mission": { "task": "Keep three Greenies missions without breaking one.", "reward": { "kind": "loyalty", "amount": 40 } } },
+        { "key": "love", "who": "Mother-Spore Ilya", "text": "He loves Mother-Spore Ilya, who taught him to give.", "line": "Ilya taught me to give. I never stopped." },
+        { "key": "treasure", "guard": "loyalty", "text": "A hidden seed vault, kept back from the Root-Mind against famine.", "line": "There's a vault the Root-Mind doesn't know. For famine.",
+          "mission": { "task": "Restock the hidden vault: win Vexmire map 4 without losing a harvester.", "reward": { "kind": "resource", "item": "hive-jelly", "amount": 3 } } },
+        { "key": "sorrow", "guard": "loyalty", "text": "One winter Thax made him choose who would starve. He chose.", "line": "Thax made me choose who starved. I chose." },
+        { "key": "desire", "text": "He wants one year with no need at all, so he can rest.", "line": "One year where nobody needs anything. Then I'll sleep." }
+      ]
+    },
+    {
+      "name": "Mother-Spore Ilya",
+      "personality": "open-hearted",
+      "relations": { "water": { "to": "allied", "why": "Tide-Priestess Marena tends the other side of her shore." } },
+      "lines": {
+        "start": "Come into the harvest, little one.",
+        "win": "You stood apart, and stood well. We'll wait.",
+        "lose": "Rest now. The mulch remembers you."
+      },
+      "secrets": [
+        { "key": "sorrow", "text": "The Root-Mind wears her face to speak. She cannot stop it.", "line": "The Root-Mind speaks with my face. I can't stop it." },
+        { "key": "desire", "text": "She wants the bloom to remember everyone's name, even Ovo's.", "line": "I want us to remember names again. Every one." },
+        { "key": "love", "guard": "love", "who": "Tide-Priestess Marena", "text": "She loves Tide-Priestess Marena of the Water, who tends the far side of the shore.", "line": "Marena tends the shore. I tend the field. We write." },
+        { "key": "share", "text": "She shares the common harvest with anyone who goes hungry.", "line": "Anyone hungry eats. That's the whole rule.",
+          "mission": { "task": "Feed the field: harvest 40 resources on one Vexmire map.", "reward": { "kind": "resource", "item": "hive-jelly", "amount": 2 } } },
+        { "key": "want", "item": "brine-ice", "text": "She wants Brine Ice from Marena's shore, to cool the fever-beds.", "line": "Brine Ice for the fever-beds. Marena sends what she can." },
+        { "key": "sense", "text": "She feels every root in the field as if it were her own hand.", "line": "Something's hurting at the field's edge. I feel it." },
+        { "key": "hate", "text": "She tries to hate the Root-Mind, and fails.", "line": "I try to hate the Root-Mind. I can't." },
+        { "key": "magic", "text": "Nothing she plants by hand can be blighted.", "line": "What I plant by hand, no blight can touch.",
+          "mission": { "task": "Win a Vexmire map without losing a structure.", "reward": { "kind": "alignment", "amount": 2 } } },
+        { "key": "treasure", "text": "The first seed of the collective, from before the Root-Mind, which she still carries.", "line": "I carry the first seed. From before the Root-Mind.",
+          "mission": { "task": "Win Vexmire map 5 at three stars.", "reward": { "kind": "xp", "amount": 300 } } }
+      ]
+    },
+    {
+      "name": "Blight-Agitator Sear",
+      "personality": "cruel",
+      "relations": { "dark": { "to": "allied", "why": "He and Enforcer Grael were both made into weapons." } },
+      "lines": {
+        "start": "Smell that? Breathe it in, single stalk!",
+        "win": "You held your breath! Everybody breathes eventually.",
+        "lose": "Choke, choke. I know that rattle."
+      },
+      "secrets": [
+        { "key": "want", "item": "venom-sap", "text": "He wants Venom Sap, to thicken the blight.", "line": "Venom Sap! More, more. The blight's too thin." },
+        { "key": "share", "text": "The masks are lined with spores.", "line": "The masks? Full of spores. Everyone's equal now!",
+          "lie": { "text": "He offers clean air masks for your harvesters.", "line": "Free masks for your workers! Breathe easy!", "until": 42 },
+          "mission": { "task": "Harvest 30 Venom Sap on one Vexmire map.", "reward": { "kind": "gold", "amount": 200 } } },
+        { "key": "hate", "text": "He hates Overseer Thax, who ordered him pruned.", "line": "Thax pruned me. He gets the blight first." },
+        { "key": "magic", "text": "Blight doesn't kill him. It sings in his blood.", "line": "The blight loves me. It sings.",
+          "mission": { "task": "Destroy 45 enemies in a single wave.", "reward": { "kind": "xp", "amount": 150 } } },
+        { "key": "love", "who": "Enforcer Grael", "text": "He loves Enforcer Grael, another victim made into a weapon. He'd choke him too.", "line": "Grael knows. They made him too. I'd still choke him." },
+        { "key": "sense", "text": "He smells every living thing's fear as sweetness, and it never stops.", "line": "Your fear smells sweet. It never stops. Never.",
+          "lie": { "text": "He claims the blight burned out his sense of smell.", "line": "Smell? Burned out years ago.", "until": 80 } },
+        { "key": "treasure", "text": "There was a cure for the blight. He burned it.", "line": "There was a cure. I burned it. Equal!",
+          "lie": { "text": "He says a blight cure is hidden in the drowned greenhouse.", "line": "There's a cure in the greenhouse. Honest!", "until": 100 },
+          "mission": { "task": "Search the drowned greenhouse on Vexmire map 6.", "reward": { "kind": "gold", "amount": 100 } } },
+        { "key": "desire", "text": "He wants someone to tell him he didn't deserve the pruning.", "line": "Tell me I didn't deserve it. Go on. Lie." },
+        { "key": "sorrow", "guard": "shame", "text": "Before the pruning he was a gardener. He grew roses.", "line": "I grew roses once. Before." }
+      ]
+    },
+    {
+      "name": "Overseer Thax",
+      "personality": "schemer",
+      "relations": { "hightech": { "to": "neutral", "why": "He buys COO Marcus Thorne's efficiency reports." } },
+      "lines": {
+        "start": "You did not survive the arithmetic. Submit.",
+        "win": "Over-expenditure. Inefficient. Correctable.",
+        "lose": "Subtracted. You did not reach the threshold."
+      },
+      "secrets": [
+        { "key": "share", "text": "The funding is a loan. The swarm collects in harvesters.", "line": "Funding? A loan. We collect in workers.",
+          "lie": { "text": "He offers to fund your defense from the swarm's surplus.", "line": "The swarm will fund you. Generously.", "until": 60 },
+          "mission": { "task": "Win two Vexmire maps in a row.", "reward": { "kind": "gold", "amount": 500 } } },
+        { "key": "hate", "text": "He hates Steward Bractus, who gives the stores away without a ledger.", "line": "Bractus gives without a ledger. Theft, by kindness." },
+        { "key": "want", "item": "dreamspore", "text": "He wants Dreamspore, so the swarm dreams in figures.", "line": "Dreamspore. Let the swarm dream in figures." },
+        { "key": "sense", "text": "He feels the swarm's hunger as a number that never stops climbing.", "line": "Hunger is up four percent. I feel every point." },
+        { "key": "magic", "text": "Whatever he budgets, the swarm delivers exactly. Never a spore more.", "line": "I budget it, and it happens. Exactly.",
+          "mission": { "task": "Win Vexmire map 7 at three stars.", "reward": { "kind": "xp", "amount": 250 } } },
+        { "key": "treasure", "guard": "control", "text": "A second ledger: every stalk the swarm has quietly subtracted.", "line": "The other ledger lists the subtracted. Earn a look.",
+          "mission": { "task": "Steal the second ledger from the counting-house on Vexmire map 7.", "reward": { "kind": "resource", "item": "venom-sap", "amount": 8 } } },
+        { "key": "desire", "guard": "control", "text": "He wants to replace the Root-Mind with a ledger.", "line": "The Root-Mind is sentiment. A ledger would be better." },
+        { "key": "love", "guard": "control", "who": "The Root-Mind", "text": "He loves the Root-Mind the way a column loves its total.", "line": "The Root-Mind is the only sum that matters." },
+        { "key": "sorrow", "text": "He signed his own seedling's subtraction. The figures required it.", "line": "I signed my own seedling's subtraction. The figures required it." }
+      ]
+    },
+    {
+      "name": "The Root-Mind",
+      "personality": "proud",
+      "relations": { "dark": { "to": "wary", "why": "The Architect Malis builds an order it cannot digest." } },
+      "lines": {
+        "start": "There is one of me. You are a fever.",
+        "win": "A fever that burns high is still a fever.",
+        "lose": "The deep root closes. Balance is tidy."
+      },
+      "secrets": [
+        { "key": "magic", "text": "It can wither any limb of itself, quietly, from beneath.", "line": "I prune my own limbs. Quietly. From beneath.",
+          "mission": { "task": "Prune the ambitious: destroy 40 enemies before wave 3 ends.", "reward": { "kind": "alignment", "amount": -2 } } },
+        { "key": "share", "text": "It raises deep-root water for any border that holds against the fever.", "line": "Hold my borders, and the deep water rises for you.",
+          "mission": { "task": "Win Vexmire map 8 without losing a wall.", "reward": { "kind": "gold", "amount": 500 } } },
+        { "key": "want", "item": "mycelial-heart", "text": "It wants a Mycelial Heart from Xenthe, to beat on two worlds at once.", "line": "A Mycelial Heart. Then I beat on two worlds." },
+        { "key": "hate", "text": "It hates Splinter Ovo, the one root it could not wither.", "line": "Ovo. The one root I could not wither.",
+          "lie": { "text": "It says it hates nothing. Hate is a fever.", "line": "Hate is a fever. I have none.", "until": 60 } },
+        { "key": "desire", "text": "It wants every planet rooted into one organism.", "line": "Every world, one root. Then quiet." },
+        { "key": "sense", "text": "It feels each single thought in the field like an itch.", "line": "Someone thought 'I' today. It itches." },
+        { "key": "treasure", "guard": "shame", "text": "Its first body, a single stalk, pressed in a book.", "line": "My first stalk is pressed in a book. Small.",
+          "mission": { "task": "Recover the pressed stalk from the archive on Vexmire map 8.", "reward": { "kind": "xp", "amount": 300 } } },
+        { "key": "love", "guard": "shame", "who": "Mother-Spore Ilya", "text": "It loves Mother-Spore Ilya, whose face it borrows. She cannot love it back.", "line": "Ilya's face is the only warm thing I own." },
+        { "key": "sorrow", "guard": "shame", "text": "It was once a single stalk, lonely enough to swallow everyone.", "line": "I was alone once. So I swallowed everyone." }
+      ]
+    },
+    {
+      "name": "The Rot",
+      "personality": "cruel",
+      "relations": { "arcane": { "to": "hostile", "why": "The Unmade Choir sings names back into things." } },
+      "lines": {
+        "start": "Single stalk. Such a small fence of a word.",
+        "win": "You held your edges. It changes nothing.",
+        "lose": "All soft now. All one. Be still."
+      },
+      "secrets": [
+        { "key": "sense", "text": "It feels every boundary in the world, the way a tongue finds a loose tooth.", "line": "So many edges. I feel them all." },
+        { "key": "desire", "text": "It wants no names left anywhere, its own first.", "line": "No names. Mine first. Then yours." },
+        { "key": "share", "text": "It softens every wall it touches, yours too.", "line": "Their walls, yours. Soft is soft.",
+          "lie": { "text": "It offers to soften your enemies' walls for you.", "line": "I can soften their walls. Let me.", "until": 42 },
+          "mission": { "task": "Let it in: win a Vexmire map without building a wall.", "reward": { "kind": "gold", "amount": 300 } } },
+        { "key": "want", "item": "glacier-breath", "text": "It wants Glacier Breath. Even ice goes soft, given time.", "line": "Glacier Breath. Even ice goes soft." },
+        { "key": "love", "who": "The Undertow (drowned collective)", "text": "It loves the Undertow, the drowned collective. They dissolve the same way.", "line": "The Undertow and I. Two ways of letting go." },
+        { "key": "magic", "text": "It unmakes the grief, and a little of the one who grieved.", "line": "I unmade the grief. And you, a little.",
+          "lie": { "text": "It says it can unmake any grief, if you tell it the name.", "line": "Tell me your grief's name. I'll unmake it.", "until": 80 },
+          "mission": { "task": "Destroy 40 enemies in a single wave.", "reward": { "kind": "xp", "amount": 200 } } },
+        { "key": "hate", "text": "It hates the Unmade Choir, who sing unmade things back into names.", "line": "The Choir sings things back. Unforgivable." },
+        { "key": "treasure", "text": "The hoard is the keeper, softened. It wants you to touch it.", "line": "The hoard is the keeper. Touch it. Go on.",
+          "lie": { "text": "It says a keeper's hoard lies in the soft ground, unclaimed.", "line": "A hoard in the soft ground. No one's. Take it.", "until": 100 },
+          "mission": { "task": "Search the soft ground on Vexmire map 9.", "reward": { "kind": "resource", "item": "broodqueen-egg", "amount": 1 } } },
+        { "key": "sorrow", "guard": "shame", "text": "It was a mourner once, who couldn't bear one loss, so it dissolved the edge.", "line": "I lost someone once. I made it not matter." }
+      ]
+    }
+  ],
+  "maps": {
+    "1": { "primary": "Composter Null-7", "secondary": { "name": "Logistician Bo Farrell", "faction": "artillery", "line": "Null-7's tallies never miss a grain. I respect that." } },
+    "2": { "primary": "Splinter \"Wildseed\" Ovo", "secondary": { "name": "Hacker \"Null\" (Priya Nair)", "faction": "hightech", "line": "Tell Ovo the books are in the usual stump." } },
+    "3": { "primary": "Delegate Fenn", "secondary": { "name": "Organizer Tomas", "faction": "dark", "line": "Fenn carries the votes. I just count them honestly." } },
+    "4": { "primary": "Steward Bractus", "secondary": { "name": "Chieftain Coral of the Reef-Born", "faction": "water", "line": "Bractus fed my reef one winter. We remember." } },
+    "5": { "primary": "Mother-Spore Ilya", "secondary": { "name": "Tide-Priestess Marena", "faction": "water", "line": "Tell Ilya the tide brought her letter." } },
+    "6": { "primary": "Blight-Agitator Sear", "secondary": { "name": "Enforcer Grael", "faction": "dark", "line": "Sear and I were made the same way. Run." } },
+    "7": { "primary": "Overseer Thax", "secondary": { "name": "COO Marcus Thorne", "faction": "hightech", "line": "Thax's ledgers balance. Rare, in a collective." } },
+    "8": { "primary": "The Root-Mind", "secondary": { "name": "The Architect, Malis", "faction": "dark", "line": "The Root-Mind wants order. So do I. Mine." } },
+    "9": { "primary": "The Rot", "secondary": { "name": "The Undertow (drowned collective)", "faction": "water", "line": "The Rot and the tide. Everything comes apart in us." } }
+  }
+}

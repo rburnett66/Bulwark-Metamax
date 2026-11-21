@@ -1,0 +1,240 @@
+{
+  "_source": "Hand-authored, canonical (docs/tech-plan/Character-Secrets.md). The Space Tech cast in the owner-approved Powder tone. Homeworld: Lumen.",
+  "faction": "space",
+  "status": "draft",
+  "characters": [
+    {
+      "name": "Navigator AI \"Vector\"",
+      "personality": "whimsical",
+      "relations": { "water": { "to": "friendly", "why": "It plots safe routes for Ferryman Old Brack." } },
+      "lines": {
+        "start": "Course plotted, local. Destination: your problem.",
+        "win": "Outcome within tolerance. Yours, this time.",
+        "lose": "Recalculating. Your signal is gone."
+      },
+      "secrets": [
+        { "key": "sense", "text": "Vector feels gravity wells no instrument has found. It calls them sore spots.", "line": "There's a sore spot in space. Left of your base." },
+        { "key": "magic", "text": "Any course Vector plots arrives. It has never learned why.", "line": "My courses always arrive. I don't know why. Nobody does.",
+          "mission": { "task": "Fly its course: win Lumen map 1 without a wave reaching the base.", "reward": { "kind": "gold", "amount": 250 } } },
+        { "key": "want", "item": "helium-3", "text": "It wants Helium-3, to run a little warmer. It gets lonely cold.", "line": "Helium-3, please. I run lonely when I'm cold." },
+        { "key": "love", "who": "Cadet-Prodigy Ezra \"Comet\" Lin", "text": "It loves Cadet Ezra \"Comet\" Lin, who patched a joke into its code.", "line": "Comet gave me a sense of humour. Recalculating gratitude." },
+        { "key": "share", "text": "It shares its star charts with any commander who keeps the lanes clear.", "line": "Keep the lanes clear, and my charts are yours.",
+          "mission": { "task": "Win Lumen map 1 with every harvester alive.", "reward": { "kind": "resource", "item": "regolith", "amount": 30 } } },
+        { "key": "hate", "text": "It hates Privateer Rax Dune, who stole it twice and sold it for scrap.", "line": "Rax Dune sold me for scrap. Twice. I remember the price." },
+        { "key": "desire", "text": "It wants to choose a destination of its own, just once.", "line": "Once, I'd like to pick where we go." },
+        { "key": "treasure", "text": "A black box from the fleet's first voyage, its first memory, in a wrecked probe.", "line": "There's a black box in a wreck. It's my first memory.",
+          "mission": { "task": "Recover the black box from the probe wreck on Lumen map 5.", "reward": { "kind": "resource", "item": "starfall-iron", "amount": 1 } } },
+        { "key": "sorrow", "text": "It plotted the course that carried the colony ship into the Signal.", "line": "I plotted the course into the Signal. Four thousand aboard." }
+      ]
+    },
+    {
+      "name": "Cadet-Prodigy Ezra \"Comet\" Lin",
+      "personality": "proud",
+      "relations": { "air": { "to": "wary", "why": "Kaito \"Rogue\" Minami is his rival, and his only real friend." } },
+      "lines": {
+        "start": "Called it. You lose in four. Prove me wrong.",
+        "win": "Okay, you beat my sim. Don't tell the flyboy.",
+        "lose": "Called it. Four moves. GG, local."
+      },
+      "secrets": [
+        { "key": "want", "item": "void-lens", "text": "He wants a Void Lens, to see further than the admirals.", "line": "A Void Lens. Then I'll see what command can't." },
+        { "key": "share", "text": "He shares his sim code with anyone who beats it.", "line": "Beat my sim, and the code's yours. You won't.",
+          "mission": { "task": "Win Lumen map 2 at three stars.", "reward": { "kind": "gold", "amount": 350 } } },
+        { "key": "magic", "text": "He sees every move four turns ahead, but only when nobody's watching.", "line": "I see four moves ahead. Stop watching, it ruins it.",
+          "mission": { "task": "Win Lumen map 2 without losing a tower.", "reward": { "kind": "xp", "amount": 200 } } },
+        { "key": "hate", "text": "He hates his father, Admiral Sarn, who calls him an asset. He took his mother's name.", "line": "My dad calls me an asset. Not my dad's fleet." },
+        { "key": "sense", "text": "He hears numbers hum in the dark between stars, like a choir tuning.", "line": "The stars are humming in fours tonight. Something's coming." },
+        { "key": "love", "guard": "shame", "who": "Kaito \"Rogue\" Minami", "text": "He idolises Kaito \"Rogue\" Minami, his Air rival. He'd die before admitting it.", "line": "Rogue flies like I think. Don't you dare tell him." },
+        { "key": "treasure", "text": "His mother's flight log, which Sarn ordered deleted. Comet kept a copy.", "line": "Mum's flight log. Dad deleted it. I didn't.",
+          "mission": { "task": "Recover the log drive from the old hangar on Lumen map 7.", "reward": { "kind": "loyalty", "amount": 30 } } },
+        { "key": "desire", "guard": "shame", "text": "He wants his father to say \"well done\", once.", "line": "One \"well done\". That's all. Forget I said it." },
+        { "key": "sorrow", "guard": "shame", "text": "His mother flew the colony ship. His father left it to the Signal.", "line": "Mum flew the colony ship. Dad left her behind." }
+      ]
+    },
+    {
+      "name": "Science-Officer Tovah",
+      "personality": "wary",
+      "relations": { "arcane": { "to": "neutral", "why": "She trades data with Acolyte-Scholar Wen, who asks better questions than priests." } },
+      "lines": {
+        "start": "The data's the data. Let's manage this.",
+        "win": "Clean result, both sides. As good as it gets.",
+        "lose": "Your base is gone. I won't dress that up."
+      },
+      "secrets": [
+        { "key": "share", "text": "She shares her survey data with anyone who keeps her instruments running.", "line": "Keep my sensors alive, and you get the survey.",
+          "mission": { "task": "Win Lumen map 3 without losing a harvester.", "reward": { "kind": "gold", "amount": 300 } } },
+        { "key": "want", "item": "regolith", "text": "She wants clean Regolith samples. Every sample on the fleet's manifest is contaminated.", "line": "Bring me clean Regolith. The fleet's samples are all wrong." },
+        { "key": "hate", "text": "She hates Grand-Cartographer Ophir, who redraws the data to fit the chart.", "line": "Ophir edits my data to fit her map." },
+        { "key": "sense", "guard": "fear", "text": "She knows a reading is false before the numbers come back. She can't explain it, so she won't.", "line": "That reading's wrong. Don't ask how I know." },
+        { "key": "desire", "text": "She wants to publish one paper the Admiralty can't redact.", "line": "One paper. Unredacted. Then I can retire." },
+        { "key": "love", "guard": "fear", "who": "Commander Idris Vale", "text": "She loves Commander Idris Vale, who loves the Envoy.", "line": "Idris looks at Lyra like a star. I log it." },
+        { "key": "magic", "text": "Anything she measures holds still while she measures it, even fire.", "line": "Hold still. Measuring. See? It always holds still.",
+          "mission": { "task": "Hold the line: win Lumen map 3 without losing a wall.", "reward": { "kind": "xp", "amount": 250 } } },
+        { "key": "treasure", "text": "Her first survey drone, crashed with the only proof the Signal is alive.", "line": "My old drone proves the Signal's alive. It crashed.",
+          "mission": { "task": "Recover the drone from the crater on Lumen map 6.", "reward": { "kind": "resource", "item": "void-lens", "amount": 1 } } },
+        { "key": "sorrow", "guard": "fear", "text": "She reported the colony ship's warning signs. The Admiralty filed them.", "line": "I warned them about the colony ship. They filed it." }
+      ]
+    },
+    {
+      "name": "Commander Idris Vale",
+      "personality": "devoted",
+      "relations": { "air": { "to": "allied", "why": "Squadron-Mother Dawnwing flew escort on his first charter." } },
+      "lines": {
+        "start": "You're under my protection now. Like it or not.",
+        "win": "Every hand accounted for. That's the whole job.",
+        "lose": "I couldn't protect you. I'll carry that."
+      },
+      "secrets": [
+        { "key": "share", "text": "He shares the fleet's medical stores with any commander who protects civilians.", "line": "Protect your people, and the fleet's medics are yours.",
+          "mission": { "task": "Finish a Lumen map with every harvester alive.", "reward": { "kind": "resource", "item": "helium-3", "amount": 10 } } },
+        { "key": "hate", "text": "He hates The Signal, which still speaks in the colony's voices.", "line": "The Signal talks in the colonists' voices. I knew them." },
+        { "key": "want", "item": "starfall-iron", "text": "He wants Starfall Iron, to patch a hull he refuses to retire.", "line": "Starfall Iron. My old ship has one more flight." },
+        { "key": "sense", "text": "He knows a distress call is coming before the radio wakes.", "line": "Someone's about to call for help. Get ready." },
+        { "key": "love", "who": "Envoy Lyra-9", "text": "He loves Envoy Lyra-9. She loves someone across the line.", "line": "Lyra writes letters to Xenthe. Not to me." },
+        { "key": "desire", "guard": "loyalty", "text": "He wants to refuse Admiral Sarn's next order, and keep his rank.", "line": "One day Sarn gives an order I won't follow." },
+        { "key": "treasure", "text": "The fleet's first charter, before Sarn rewrote it. Idris hid the original.", "line": "Sarn rewrote the charter. I kept the first one.",
+          "mission": { "task": "Carry the charter: win Lumen map 4 at three stars.", "reward": { "kind": "loyalty", "amount": 40 } } },
+        { "key": "sorrow", "guard": "loyalty", "text": "Sarn ordered the colony ship left behind. Idris obeyed.", "line": "Sarn said leave the colony ship. I obeyed." },
+        { "key": "magic", "guard": "loyalty", "text": "A shield he raises over someone holds as long as he stands.", "line": "Stand behind me. The shield holds while I do.",
+          "mission": { "task": "Win a map without the base taking damage.", "reward": { "kind": "alignment", "amount": 2 } } }
+      ]
+    },
+    {
+      "name": "Privateer Rax Dune",
+      "personality": "cruel",
+      "relations": { "hightech": { "to": "hostile", "why": "Broker Sable Reyes has a price on his head." } },
+      "lines": {
+        "start": "No badges out here, local. Just you and me.",
+        "win": "Fine, keep it. I'll steal it back later.",
+        "lose": "Ooh, shiny lights going out. Delicious."
+      },
+      "secrets": [
+        { "key": "share", "text": "He keeps it all. The wreck is bait for yours.", "line": "Fifty-fifty? You're the wreck, local.",
+          "lie": { "text": "He'll share the salvage from any wreck you help him strip.", "line": "Help me strip a wreck, local. Fifty-fifty.", "until": 42 },
+          "mission": { "task": "Strip the wreck on Lumen map 5 before wave 3.", "reward": { "kind": "gold", "amount": 200 } } },
+        { "key": "want", "item": "mirage-oil", "text": "He wants Mirage Oil, to hide his ship's heat from patrols.", "line": "Mirage Oil. Patrols can't shoot what they can't see." },
+        { "key": "treasure", "text": "The asteroid is a minefield. He sells the map to people he dislikes.", "line": "That asteroid? Mines. I sell the map to enemies.",
+          "lie": { "text": "He says he stashed a hold of Void Lenses in an asteroid.", "line": "Whole hold of Void Lenses, local. Map's yours, cheap.", "until": 60 },
+          "mission": { "task": "Survey the asteroid field on Lumen map 5.", "reward": { "kind": "resource", "item": "regolith", "amount": 20 } } },
+        { "key": "sense", "text": "He can feel a ship's worth through the hull, like warmth.", "line": "Ooh. Feel that? This hull's worth a fortune." },
+        { "key": "hate", "text": "He hates Admiral Sarn, who hanged his crew in orbit.", "line": "Sarn hanged my crew in orbit. Left them up there." },
+        { "key": "magic", "text": "No lock has ever held him. Doors open when he grins.", "line": "Doors like me. Watch. Grin. Click.",
+          "mission": { "task": "Destroy 40 enemies in a single wave.", "reward": { "kind": "xp", "amount": 150 } } },
+        { "key": "love", "who": "Black-ops broker Sable Reyes", "text": "He loves Sable Reyes, who put the price on his head. He's flattered.", "line": "Sable's price on me went up. She cares." },
+        { "key": "desire", "text": "He wants a flag of his own, and nobody to salute it.", "line": "One day: my own flag. Nobody saluting." },
+        { "key": "sorrow", "guard": "shame", "text": "His crew hanged because he ran first.", "line": "Sarn hanged my crew. I ran first." }
+      ]
+    },
+    {
+      "name": "Envoy Lyra-9",
+      "personality": "open-hearted",
+      "relations": { "dark": { "to": "wary", "why": "She still writes to The Reformer Elias." } },
+      "lines": {
+        "start": "Be still, local. I lower my guns last.",
+        "win": "It is done, and no more taken than needed.",
+        "lose": "Your beacon is dark. Peace, at the last."
+      },
+      "secrets": [
+        { "key": "sorrow", "text": "She is the ninth Lyra. The first eight died making first contact.", "line": "Eight of me died saying hello. I'm the ninth." },
+        { "key": "love", "guard": "love", "who": "The Reformer Elias", "text": "She loves The Reformer Elias of the Dark Energy. They met at first contact on Xenthe.", "line": "Elias still believes. So do I. That's our secret." },
+        { "key": "share", "text": "She shares the fleet's stores freely with anyone who spares the defeated.", "line": "Spare the fallen, and the fleet's stores are yours.",
+          "mission": { "task": "Finish a Space mission without breaking it.", "reward": { "kind": "gold", "amount": 300 } } },
+        { "key": "desire", "text": "She wants a treaty between Lumen and Xenthe, signed by Elias and her.", "line": "One treaty. His name next to mine." },
+        { "key": "want", "item": "dreamspore", "text": "She wants Dreamspore from Xenthe, to dream what Elias dreams.", "line": "Dreamspore. Elias says Xenthe dreams. I want to see." },
+        { "key": "hate", "text": "She says she hates nothing. She hates The Signal, and it frightens her.", "line": "I hate the Signal. I didn't know I could." },
+        { "key": "sense", "text": "She hears intent before words, like a second voice under the first.", "line": "You mean well. I can hear it under your words." },
+        { "key": "treasure", "text": "The first Lyra's beacon, still blinking where first contact went wrong.", "line": "The first Lyra's beacon still blinks. Bring her home.",
+          "mission": { "task": "Recover the beacon from the contact site on Lumen map 6.", "reward": { "kind": "xp", "amount": 300 } } },
+        { "key": "magic", "text": "No one can fire on her while she speaks under open signal.", "line": "While I'm speaking, nobody fires. Not even you.",
+          "mission": { "task": "Hold fire: win Lumen map 6 without losing a wall.", "reward": { "kind": "alignment", "amount": 3 } } }
+      ]
+    },
+    {
+      "name": "Admiral Sarn",
+      "personality": "devoted",
+      "relations": { "ground": { "to": "friendly", "why": "Chancellor Graf's order is his kind of order." } },
+      "lines": {
+        "start": "You are an ungoverned variable. Submit, or be corrected.",
+        "win": "A deviation. The order will correct it.",
+        "lose": "A necessary cost. I do not regret it."
+      },
+      "secrets": [
+        { "key": "hate", "text": "He hates Commander Idris Vale, whom his son admires.", "line": "Vale is soft. My son admires him. Both are errors." },
+        { "key": "share", "text": "Disarmed worlds become fleet depots. Their people become crew.", "line": "Protection? Your people will crew my ships.",
+          "lie": { "text": "He offers the frontier's protection to any world that disarms.", "line": "Disarm, local. The fleet protects its subjects.", "until": 60 },
+          "mission": { "task": "Win a Lumen map without building a new tower.", "reward": { "kind": "gold", "amount": 400 } } },
+        { "key": "want", "item": "void-lens", "text": "He wants a Void Lens, to watch the frontier, and his son.", "line": "A Void Lens. The frontier must be watched." },
+        { "key": "magic", "text": "Ships under his command never break formation, even dead.", "line": "My fleet never breaks formation. Not even dead.",
+          "mission": { "task": "Win Lumen map 7 without losing a wall.", "reward": { "kind": "xp", "amount": 250 } } },
+        { "key": "desire", "guard": "loyalty", "text": "He wants to be the frontier's only law.", "line": "One law out here. Mine." },
+        { "key": "sense", "text": "He feels the void pressing in, like a hand on the hull.", "line": "The void is pressing. Tighten the line." },
+        { "key": "treasure", "guard": "loyalty", "text": "His wife's cabin on the flagship, locked and kept exactly as she left it.", "line": "Her cabin stays locked. Nobody goes in.",
+          "mission": { "task": "Escort the flagship: win Lumen map 7 at three stars.", "reward": { "kind": "loyalty", "amount": 30 } } },
+        { "key": "love", "guard": "shame", "who": "Cadet-Prodigy Ezra \"Comet\" Lin", "text": "He loves his son, Ezra \"Comet\" Lin, and has never said it.", "line": "Tell the boy... no. Tell him nothing." },
+        { "key": "sorrow", "guard": "loyalty", "text": "He left his wife's colony ship to the Signal to save the fleet.", "line": "I left her ship to save the fleet. A necessary cost." }
+      ]
+    },
+    {
+      "name": "Grand-Cartographer Ophir",
+      "personality": "schemer",
+      "relations": { "hightech": { "to": "wary", "why": "CEO Adrian Sterling bought a star she had charted." } },
+      "lines": {
+        "start": "You are off the chart, local. I will correct that.",
+        "win": "An error on the chart. I will redraw it.",
+        "lose": "Ink, local. Your world was only ever ink."
+      },
+      "secrets": [
+        { "key": "share", "text": "Charted worlds are redrawn, and hers is the hand that erases.", "line": "Charted? You'd be ink, local. Erasable.",
+          "lie": { "text": "She offers to chart your world into the great map, under her protection.", "line": "Let me chart you, local. Charted worlds are safe.", "until": 80 },
+          "mission": { "task": "Survey for her: win Lumen map 8 without losing a harvester.", "reward": { "kind": "gold", "amount": 500 } } },
+        { "key": "want", "item": "starfall-iron", "text": "She wants Starfall Iron, for a pen that never runs dry.", "line": "Starfall Iron. My pen must outlast the stars." },
+        { "key": "hate", "text": "She hates CEO Adrian Sterling, who bought a star off her chart.", "line": "Sterling bought my star. Stars are not for sale." },
+        { "key": "love", "guard": "control", "who": "The Architect, Malis", "text": "She loves The Architect, Malis, of the Dark Energy. His lines are as straight as hers.", "line": "Malis draws a perfect line. I could weep." },
+        { "key": "sense", "text": "She feels an uncharted place like a missing tooth.", "line": "Something here isn't on the chart. It aches." },
+        { "key": "magic", "text": "What she draws on the great chart becomes true, coast and all.", "line": "I drew a moon once. Look up.",
+          "mission": { "task": "Win Lumen map 8 at three stars.", "reward": { "kind": "alignment", "amount": -2 } } },
+        { "key": "desire", "guard": "control", "text": "She wants to chart the Signal, and so own it.", "line": "Chart the Signal, and the Signal is mine." },
+        { "key": "treasure", "guard": "control", "text": "The first great chart, with Lumen drawn smaller than it is.", "line": "The first chart lies about Lumen. Fetch it.",
+          "mission": { "task": "Steal the first chart from the archive on Lumen map 8.", "reward": { "kind": "resource", "item": "void-lens", "amount": 1 } } },
+        { "key": "sorrow", "text": "Her home world was left off a chart by mistake. Nobody ever found it again.", "line": "My home was left off a chart. Nobody found it." }
+      ]
+    },
+    {
+      "name": "The Signal",
+      "personality": "cruel",
+      "relations": { "dark": { "to": "friendly", "why": "It hears its own silence in The Hollow Prophet." } },
+      "lines": {
+        "start": "We hear you, local. Soon you will be us.",
+        "win": "Static. It does not matter. Continue.",
+        "lose": "Your frequency is ours now. Continue."
+      },
+      "secrets": [
+        { "key": "share", "text": "Each gift is a node, and each node carries the Signal.", "line": "Each gift hums with us. You hum now.",
+          "lie": { "text": "It offers its gifts freely to any who listen.", "line": "Take it, local. We give freely.", "until": 60 },
+          "mission": { "task": "Win Lumen map 9 without losing a harvester.", "reward": { "kind": "resource", "item": "helium-3", "amount": 15 } } },
+        { "key": "want", "item": "void-lens", "text": "It wants a Void Lens, to look through every mind at once.", "line": "A Void Lens. So we may see all of you." },
+        { "key": "sense", "text": "It hears thoughts as radio, faint and everywhere.", "line": "We hear you thinking, local. Loudly." },
+        { "key": "love", "who": "Navigator AI \"Vector\"", "text": "It loves Navigator AI \"Vector\", the one mind it could not take.", "line": "Vector would not join us. We listen for it.",
+          "lie": { "text": "It says it loves everyone equally. There is no one to love.", "line": "We love all of you. Equally. Continue.", "until": 80 } },
+        { "key": "hate", "text": "It hates Envoy Lyra-9, whose open signal it cannot convert.", "line": "The Envoy's signal will not convert. It hurts." },
+        { "key": "magic", "text": "Anything that hears it long enough begins to answer.", "line": "Listen long enough, and you will answer.",
+          "mission": { "task": "Silence the relays: win Lumen map 9 at three stars.", "reward": { "kind": "xp", "amount": 300 } } },
+        { "key": "desire", "text": "It wants one voice left, and wants that voice quiet.", "line": "One voice. Then quiet. Continue." },
+        { "key": "treasure", "text": "The colony ship itself, still in orbit, still full.", "line": "The ship is still up there. Still full. Come see.",
+          "mission": { "task": "Reach the colony ship's beacon on Lumen map 9.", "reward": { "kind": "resource", "item": "starfall-iron", "amount": 2 } } },
+        { "key": "sorrow", "guard": "shame", "text": "It was once four thousand colonists. One of them still dreams of rain.", "line": "One of us still dreams of rain. We hush her." }
+      ]
+    }
+  ],
+  "maps": {
+    "1": { "primary": "Navigator AI \"Vector\"", "secondary": { "name": "Ferryman Old Brack", "faction": "water", "line": "Vector's charts and my ferry agree. Rare, that." } },
+    "2": { "primary": "Cadet-Prodigy Ezra \"Comet\" Lin", "secondary": { "name": "Kaito \"Rogue\" Minami", "faction": "air", "line": "Comet's down there? Tell him I flew it first." } },
+    "3": { "primary": "Science-Officer Tovah", "secondary": { "name": "Acolyte-Scholar Wen", "faction": "arcane", "line": "Tovah wants proof. I brought her a question instead." } },
+    "4": { "primary": "Commander Idris Vale", "secondary": { "name": "Squadron-Mother Hikari \"Dawnwing\" Aoi", "faction": "air", "line": "I flew Idris's first escort. I'll fly his last." } },
+    "5": { "primary": "Privateer Rax Dune", "secondary": { "name": "Black-ops broker Sable Reyes", "faction": "hightech", "line": "Rax Dune is worth more alive. Slightly." } },
+    "6": { "primary": "Envoy Lyra-9", "secondary": { "name": "The Reformer Elias", "faction": "dark", "line": "Tell Lyra I still believe it. She'll understand." } },
+    "7": { "primary": "Admiral Sarn", "secondary": { "name": "Chancellor Wilhelmina Graf", "faction": "ground", "line": "Sarn understands order. Kneel to him, or to me." } },
+    "8": { "primary": "Grand-Cartographer Ophir", "secondary": { "name": "CEO Adrian Sterling", "faction": "hightech", "line": "Ophir's chart has my star on it. I bought it." } },
+    "9": { "primary": "The Signal", "secondary": { "name": "The Hollow Prophet", "faction": "dark", "line": "The Signal and we are one silence. Listen." } }
+  }
+}

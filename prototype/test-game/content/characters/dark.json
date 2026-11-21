@@ -1,0 +1,241 @@
+{
+  "_source": "Hand-authored, canonical (docs/tech-plan/Character-Secrets.md). The Dark Energy cast in the owner-approved Powder tone. Homeworld: Xenthe.",
+  "faction": "dark",
+  "status": "draft",
+  "characters": [
+    {
+      "name": "Doctrinist Vera",
+      "personality": "devoted",
+      "relations": { "hightech": { "to": "neutral", "why": "Actuary Devlin Cho checks her drafts for free." } },
+      "lines": {
+        "start": "Per the manifesto, you're a line item. Noted.",
+        "win": "Revision accepted. Yours, this time.",
+        "lose": "Base removed. Entry closed. Filed."
+      },
+      "secrets": [
+        { "key": "want", "item": "duskmoss-resin", "text": "She wants Duskmoss Resin. It binds the manifesto's pages against rot.", "line": "Duskmoss Resin. The manifesto is rotting at the spine." },
+        { "key": "share", "text": "She shares the old order's archives with anyone who files on time.", "line": "File on time, and the archives are yours.",
+          "mission": { "task": "Win Xenthe map 1 without losing a harvester.", "reward": { "kind": "resource", "item": "glowcap-spores", "amount": 30 } } },
+        { "key": "sense", "text": "She can feel a sentence that will get people killed, before it's written.", "line": "That clause will kill someone. I can feel it." },
+        { "key": "hate", "text": "She hates The Hollow Prophet, who wants the manifesto blank.", "line": "The Prophet wants blank pages. I edit. I don't erase." },
+        { "key": "love", "guard": "loyalty", "who": "The Reformer Elias", "text": "She loves The Reformer Elias, who wrote the first draft by hand.", "line": "Elias wrote the first draft. I still have it." },
+        { "key": "desire", "text": "She wants the final draft finished, and then to stop.", "line": "One final draft. Then I put the pen down." },
+        { "key": "magic", "text": "What she strikes from the manifesto, the Movement forgets.", "line": "I struck a name once. Everyone forgot him.",
+          "mission": { "task": "Edit the record: win Xenthe map 1 at three stars.", "reward": { "kind": "xp", "amount": 200 } } },
+        { "key": "sorrow", "guard": "loyalty", "text": "She once struck a name from the manifesto. It was her sister's.", "line": "The name I struck was my sister's." },
+        { "key": "treasure", "guard": "loyalty", "text": "Elias's first handwritten draft, with no violence in it.", "line": "The first draft had no violence. I hid it.",
+          "mission": { "task": "Recover the first draft from the old press on Xenthe map 6.", "reward": { "kind": "loyalty", "amount": 30 } } }
+      ]
+    },
+    {
+      "name": "Firebrand Lux",
+      "personality": "whimsical",
+      "relations": { "arcane": { "to": "friendly", "why": "Heretic Isolde taught her to burn." } },
+      "lines": {
+        "start": "Ooh, a holdout with a spine. Love it.",
+        "win": "HA! You nearly had me. Wait, you did.",
+        "lose": "Aw, your fortress went boom. Ashes are warm."
+      },
+      "secrets": [
+        { "key": "magic", "text": "Anything she sets alight burns only what she wants it to.", "line": "My fire's picky. It only eats the old stuff.",
+          "mission": { "task": "Light the night: win Xenthe map 2 without losing a tower.", "reward": { "kind": "gold", "amount": 250 } } },
+        { "key": "love", "who": "Enforcer Grael", "text": "She loves Enforcer Grael. She thinks she can save him.", "line": "Grael's not a monster. He's just never been hugged." },
+        { "key": "sense", "text": "She can see the old order on people, like soot on their faces.", "line": "You've got soot on you. Old order. I'll fix it." },
+        { "key": "want", "item": "ember-obsidian", "text": "She wants Ember Obsidian. It keeps a spark alive for a week.", "line": "Ember Obsidian! Keeps a spark for a week." },
+        { "key": "share", "text": "She shares whatever she liberates with anyone who fights loud.", "line": "Fight loud, and I'll share the loot.",
+          "mission": { "task": "Destroy 40 enemies in a single wave.", "reward": { "kind": "resource", "item": "dreamspore", "amount": 1 } } },
+        { "key": "hate", "text": "She hates The Architect, Malis, and every ruler he owns.", "line": "Malis owns forty rulers. I've burned six." },
+        { "key": "desire", "text": "She wants to burn the old order down, then plant something.", "line": "Burn it, then plant flowers. That's the plan." },
+        { "key": "sorrow", "text": "She burned her family's house at fifteen. They never spoke to her again.", "line": "Burned my family's house at fifteen. They stopped calling." },
+        { "key": "treasure", "text": "A tin of matches from the Movement's first night, buried in the old square.", "line": "First-night matches. I buried them. Shh.",
+          "mission": { "task": "Dig up the tin in the old square on Xenthe map 2.", "reward": { "kind": "xp", "amount": 150 } } }
+      ]
+    },
+    {
+      "name": "Organizer Tomas",
+      "personality": "wary",
+      "relations": { "greenies": { "to": "allied", "why": "He organized strikes beside Delegate Fenn." } },
+      "lines": {
+        "start": "Come over now and nobody gets hurt. Your call.",
+        "win": "Long and ugly, but people left standing. Good.",
+        "lose": "Base is down. Get your people clear."
+      },
+      "secrets": [
+        { "key": "share", "text": "He shares the Movement's supply lines with anyone who spares the workers.", "line": "Spare the workers, and the supply lines are yours.",
+          "mission": { "task": "Finish Xenthe map 3 with every harvester alive.", "reward": { "kind": "resource", "item": "duskmoss-resin", "amount": 10 } } },
+        { "key": "hate", "text": "He hates The Vanguard, Corin, who spends people like paper.", "line": "Corin spends people like paper. I count them." },
+        { "key": "want", "item": "loam-grain", "text": "He wants Loam Grain to feed the strike kitchens.", "line": "Loam Grain. Strikers can't march hungry." },
+        { "key": "sense", "text": "He knows a crowd will turn ugly an hour before it does.", "line": "This crowd turns in an hour. Keep it clean." },
+        { "key": "love", "guard": "fear", "who": "Sister Maren", "text": "He loves Sister Maren. He's afraid the Movement will use it.", "line": "Maren's the best of us. Don't let Corin hear that." },
+        { "key": "magic", "text": "No crowd he leads ever tramples anyone.", "line": "Nobody gets trampled when I lead. Nobody, ever.",
+          "mission": { "task": "Lead the march: win Xenthe map 3 without losing a wall.", "reward": { "kind": "xp", "amount": 250 } } },
+        { "key": "desire", "guard": "fear", "text": "He wants to quit the Movement and organize against it.", "line": "Some nights I want to organize against us." },
+        { "key": "treasure", "text": "The real membership rolls, before Vera's edits, hidden in a print shop.", "line": "The real rolls are in a print shop. Names matter.",
+          "mission": { "task": "Recover the rolls from the print shop on Xenthe map 1.", "reward": { "kind": "loyalty", "amount": 30 } } },
+        { "key": "sorrow", "guard": "fear", "text": "A strike he called ended in Grael's first killing.", "line": "My strike. Grael's first kill. I called it." }
+      ]
+    },
+    {
+      "name": "Sister Maren",
+      "personality": "open-hearted",
+      "relations": { "arcane": { "to": "friendly", "why": "She left Hierophant Aurelia's order, not her prayers." } },
+      "lines": {
+        "start": "Yield, holdout. I'll shelter you myself.",
+        "win": "You live. I'll count that a kindness.",
+        "lose": "I couldn't hold the shield. I'll carry your name."
+      },
+      "secrets": [
+        { "key": "sorrow", "text": "She buried her own brother, a holdout who wouldn't awaken.", "line": "My brother wouldn't awaken. I buried him myself." },
+        { "key": "love", "who": "Organizer Tomas", "text": "She loves Organizer Tomas, and tells everyone but him.", "line": "Tomas thinks no one notices. Everyone notices." },
+        { "key": "share", "text": "She shares her blessed stores with anyone who keeps a promise to her.", "line": "Keep one promise to me, and my stores are yours.",
+          "mission": { "task": "Finish a Dark mission without breaking it.", "reward": { "kind": "gold", "amount": 300 } } },
+        { "key": "want", "item": "glowcap-spores", "text": "She wants Glowcap Spores, to light the infirmary at night.", "line": "Glowcap Spores. The wounded hate the dark." },
+        { "key": "hate", "text": "She hates The Hollow Prophet, who calls mercy a self to be erased.", "line": "The Prophet calls mercy a sickness. It's the cure." },
+        { "key": "sense", "text": "She can feel who will die tonight, and sits with them first.", "line": "Someone goes tonight. I'll sit with them." },
+        { "key": "desire", "text": "She wants a Movement that needs no shields at all.", "line": "One day, no shields. Not for anyone." },
+        { "key": "magic", "text": "Her prayer turns aside one killing blow a day.", "line": "One blow a day, my prayer turns aside.",
+          "mission": { "task": "Win Xenthe map 4 without losing a harvester.", "reward": { "kind": "alignment", "amount": 2 } } },
+        { "key": "treasure", "text": "Her brother's letters, hidden in the chapel she left.", "line": "His letters are in my old chapel. Please.",
+          "mission": { "task": "Recover the letters from the chapel ruins on Xenthe map 4.", "reward": { "kind": "xp", "amount": 200 } } }
+      ]
+    },
+    {
+      "name": "Enforcer Grael",
+      "personality": "cruel",
+      "relations": { "artillery": { "to": "hostile", "why": "Warlord-Gunner Vex Marrow shelled his town flat." } },
+      "lines": {
+        "start": "They bled me first, holdout. My turn now.",
+        "win": "You fought! Sweeter next time. Much sweeter.",
+        "lose": "Look at it burn. Chew slow, Grael."
+      },
+      "secrets": [
+        { "key": "share", "text": "Unarmed holdouts are the ones he enjoys.", "line": "Safe passage? I just like you unarmed.",
+          "lie": { "text": "He promises safe passage to any holdout who gives up their guns.", "line": "Hand over your guns. Safe passage. Promise.", "until": 60 },
+          "mission": { "task": "Win a Xenthe map without building a new tower.", "reward": { "kind": "gold", "amount": 200 } } },
+        { "key": "hate", "text": "He hates Warlord-Gunner Vex Marrow, who shelled his town flat.", "line": "Vex Marrow shelled my town. I'm coming." },
+        { "key": "want", "item": "dreamspore", "text": "He wants Dreamspore. Without it he dreams of the shelling.", "line": "Dreamspore. Or I dream of the shells again." },
+        { "key": "desire", "text": "He wants it never to stop. Revenge is the only time he feels warm.", "line": "Justice? No. I want it to never end.",
+          "lie": { "text": "He says he wants justice for his town.", "line": "Justice for my town. That's all.", "until": 80 } },
+        { "key": "sense", "text": "He can smell fear through walls, like smoke.", "line": "Smell that? Fear. Your walls are full of it." },
+        { "key": "magic", "text": "Wounds he takes close by morning. The pain stays.", "line": "Cuts close overnight. The hurt doesn't.",
+          "mission": { "task": "Win Xenthe map 5 at three stars.", "reward": { "kind": "xp", "amount": 150 } } },
+        { "key": "love", "who": "Firebrand Lux", "text": "He loves Firebrand Lux, the only one who isn't afraid of him.", "line": "Lux isn't scared of me. I don't know what to do." },
+        { "key": "treasure", "text": "His mother's music box, the one thing the shells missed.", "line": "Mum's music box survived. Bring it, gently.",
+          "mission": { "task": "Recover the music box from the ruins on Xenthe map 5.", "reward": { "kind": "resource", "item": "duskmoss-resin", "amount": 8 } } },
+        { "key": "sorrow", "guard": "shame", "text": "He was the town's watchman. He was asleep when the shells came.", "line": "I was the watchman. I slept." }
+      ]
+    },
+    {
+      "name": "The Reformer Elias",
+      "personality": "proud",
+      "relations": { "space": { "to": "wary", "why": "He still writes to Envoy Lyra-9." } },
+      "lines": {
+        "start": "Lay down the old order. Please, make me keep my promise.",
+        "win": "You beat me cleanly. I'm almost glad.",
+        "lose": "Your walls are ash. I feel no triumph."
+      },
+      "secrets": [
+        { "key": "share", "text": "He shares the Movement's grain with any holdout who will talk instead of fight.", "line": "Talk with me, not at me, and the grain is yours.",
+          "mission": { "task": "Win Xenthe map 6 without losing a harvester.", "reward": { "kind": "gold", "amount": 400 } } },
+        { "key": "want", "item": "choir-lily", "text": "He wants a Choir Lily, for the song the Movement used to sing.", "line": "A Choir Lily. We used to sing, once." },
+        { "key": "hate", "text": "He hates The Vanguard, Corin, who made his gentle cause a weapon.", "line": "Corin took my words and sharpened them." },
+        { "key": "magic", "text": "Anyone who hears him out cannot hate him, for an hour.", "line": "Listen for an hour. You won't be able to hate me.",
+          "mission": { "task": "Win Xenthe map 6 at three stars.", "reward": { "kind": "alignment", "amount": 2 } } },
+        { "key": "sense", "text": "He feels the Movement's mood like weather in his joints.", "line": "The Movement's mood is turning. My knees ache." },
+        { "key": "love", "guard": "shame", "who": "Envoy Lyra-9", "text": "He loves Envoy Lyra-9 of the Space Tech, his faction's sworn enemy.", "line": "Lyra-9. If she asks, I still believe." },
+        { "key": "treasure", "text": "The Movement's first banner, white, before the Prophet dyed it.", "line": "Our first banner was white. Find it for me.",
+          "mission": { "task": "Recover the banner from the meeting hall on Xenthe map 6.", "reward": { "kind": "xp", "amount": 300 } } },
+        { "key": "desire", "guard": "shame", "text": "He wants to dissolve the Movement himself.", "line": "Some nights I want to end what I started." },
+        { "key": "sorrow", "guard": "shame", "text": "He wrote the first manifesto. Every cruelty since quotes it.", "line": "Every cruelty quotes my words. I wrote them." }
+      ]
+    },
+    {
+      "name": "The Vanguard, Corin",
+      "personality": "devoted",
+      "relations": { "hightech": { "to": "friendly", "why": "COO Marcus Thorne funds his outcomes." } },
+      "lines": {
+        "start": "You are a variable. Variables are resolved.",
+        "win": "A cost extracted. The objective holds.",
+        "lose": "You fought for people. I fought for the outcome."
+      },
+      "secrets": [
+        { "key": "want", "item": "mycelial-heart", "text": "He wants a Mycelial Heart, to keep the Prophet beating.", "line": "A Mycelial Heart. The Prophet must not stop." },
+        { "key": "share", "text": "There is no vote. There was never going to be one.", "line": "The vote? There's no vote. There never was.",
+          "lie": { "text": "He offers holdouts a place in the new order, after the vote.", "line": "Join, and you'll vote in the new order.", "until": 60 },
+          "mission": { "task": "Win Xenthe map 7 without losing a tower.", "reward": { "kind": "gold", "amount": 400 } } },
+        { "key": "hate", "text": "He hates The Reformer Elias, whose mercy delays everything.", "line": "Every kindness of Elias costs us a year." },
+        { "key": "sense", "text": "He knows how many will die before he gives an order. He gives it anyway.", "line": "Forty die if I give this order. Giving it." },
+        { "key": "desire", "guard": "loyalty", "text": "He wants to lead the Movement when the Prophet is gone.", "line": "When the Prophet is quiet, someone must lead." },
+        { "key": "magic", "text": "Orders he gives are followed, even by the dying.", "line": "The dying obey me. Ask them.",
+          "mission": { "task": "Destroy 60 enemies in a single wave.", "reward": { "kind": "xp", "amount": 250 } } },
+        { "key": "sorrow", "text": "He was the boy Elias carried out of the old order's mines.", "line": "Elias carried me out of the mines. I was nine." },
+        { "key": "love", "guard": "loyalty", "who": "The Hollow Prophet", "text": "He loves The Hollow Prophet as the end of every road.", "line": "The Prophet is the end of the road. I love it." },
+        { "key": "treasure", "guard": "loyalty", "text": "The Movement's war chest, hidden from Malis's audits.", "line": "Malis wants the war chest. Malis won't find it.",
+          "mission": { "task": "Move the war chest: win Xenthe map 7 at three stars.", "reward": { "kind": "resource", "item": "dreamspore", "amount": 2 } } }
+      ]
+    },
+    {
+      "name": "The Architect, Malis",
+      "personality": "schemer",
+      "relations": { "space": { "to": "wary", "why": "He and Grand-Cartographer Ophir admire each other's lines." } },
+      "lines": {
+        "start": "You are a crooked line in a perfect plan.",
+        "win": "A deviation survives. The design will absorb it.",
+        "lose": "Symmetry restored, holdout. As drawn."
+      },
+      "secrets": [
+        { "key": "share", "text": "He wants Corin blamed for the theft, and you to carry it.", "line": "Corin's hoard? You're carrying the blame, holdout.",
+          "lie": { "text": "He offers you the Vanguard's hoard, to set the balance right.", "line": "Take Corin's hoard. Balance demands it.", "until": 60 },
+          "mission": { "task": "Win Xenthe map 8 without losing a harvester.", "reward": { "kind": "resource", "item": "mycelial-heart", "amount": 1 } } },
+        { "key": "want", "item": "dune-quartz", "text": "He wants Dune Quartz. It holds a straight edge forever.", "line": "Dune Quartz. The only stone that keeps its edge." },
+        { "key": "sense", "text": "He feels a crooked line like a splinter, even miles off.", "line": "Something's crooked out there. A splinter. A person." },
+        { "key": "magic", "text": "Whatever he designs, people walk exactly where he drew.", "line": "I drew the streets. Watch them walk my lines.",
+          "mission": { "task": "Win Xenthe map 8 at three stars.", "reward": { "kind": "alignment", "amount": -2 } } },
+        { "key": "hate", "guard": "control", "text": "He hates The Vanguard, Corin, whose ambition bends the design.", "line": "Corin bends the design. Bent things break." },
+        { "key": "love", "who": "Grand-Cartographer Ophir", "text": "He loves Grand-Cartographer Ophir of the Space Tech, his enemy.", "line": "Ophir's lines are straighter than mine. I adore her.",
+          "lie": { "text": "He says he loves only the design.", "line": "I love the design. Nothing else bends me.", "until": 100 } },
+        { "key": "desire", "guard": "control", "text": "He wants to redraw the Movement with the Prophet removed.", "line": "The design needs no Prophet. Only an Architect." },
+        { "key": "treasure", "text": "The true plan of Xenthe, with every holdout already marked.", "line": "Every holdout is on my plan. Even you.",
+          "mission": { "task": "Steal the plan from the drafting tower on Xenthe map 8.", "reward": { "kind": "xp", "amount": 300 } } },
+        { "key": "sorrow", "text": "His father beat him straight, and it worked.", "line": "My father beat me straight. It worked." }
+      ]
+    },
+    {
+      "name": "The Hollow Prophet",
+      "personality": "cruel",
+      "relations": { "ground": { "to": "friendly", "why": "It was the first to hear the Iron Regent." } },
+      "lines": {
+        "start": "No one is speaking to you, holdout. Only us.",
+        "win": "You clung. Clinging is only noise. It passes.",
+        "lose": "Your home is void. Be still."
+      },
+      "secrets": [
+        { "key": "share", "text": "Those who set down their names are never found again.", "line": "Peace? Nobody who took it was ever found.",
+          "lie": { "text": "It offers peace to any holdout who sets down their name.", "line": "Set down your name, holdout. Find peace.", "until": 60 },
+          "mission": { "task": "Win Xenthe map 9 without losing a harvester.", "reward": { "kind": "gold", "amount": 600 } } },
+        { "key": "sense", "text": "It hears the self in people, like a second heartbeat it wants stopped.", "line": "We hear your second heartbeat. It is you. Stop it." },
+        { "key": "want", "item": "dreamspore", "text": "It wants Dreamspore, to dream the Movement's dreams for it.", "line": "Bring Dreamspore. We will dream for everyone." },
+        { "key": "hate", "text": "It hates The Reformer Elias, the last who remembers its name.", "line": "Elias remembers our name. He must forget." },
+        { "key": "love", "who": "The Iron Regent (masked)", "text": "It loves the Iron Regent, whose furnace it heard before anyone.", "line": "The Regent's furnace. We heard it first. We love it.",
+          "lie": { "text": "It says it loves nothing. There is no one to love.", "line": "Love needs a self. We have none.", "until": 80 } },
+        { "key": "magic", "text": "A name it speaks is forgotten by everyone who hears.", "line": "Say a name to us. Watch it go.",
+          "mission": { "task": "Unmake the map: win Xenthe map 9 at three stars.", "reward": { "kind": "resource", "item": "mycelial-heart", "amount": 1 } } },
+        { "key": "desire", "text": "It wants to be forgotten too, last of all.", "line": "When all are unmade, unmake us. Last." },
+        { "key": "treasure", "guard": "control", "text": "Its old name, written in a book in Hierophant Aurelia's library.", "line": "Our name is in Aurelia's library. Leave it.",
+          "mission": { "task": "Steal the book from the reliquary on Xenthe map 9.", "reward": { "kind": "xp", "amount": 400 } } },
+        { "key": "sorrow", "guard": "shame", "text": "It was once a novice of Hierophant Aurelia. It remembers her voice, nothing else.", "line": "We were Aurelia's novice once. We remember her voice." }
+      ]
+    }
+  ],
+  "maps": {
+    "1": { "primary": "Doctrinist Vera", "secondary": { "name": "Actuary Devlin Cho", "faction": "hightech", "line": "Vera's drafts balance. I checked twice. Don't tell her." } },
+    "2": { "primary": "Firebrand Lux", "secondary": { "name": "Heretic Isolde", "faction": "arcane", "line": "Lux learned fire from me. She improved on it." } },
+    "3": { "primary": "Organizer Tomas", "secondary": { "name": "Delegate Fenn", "faction": "greenies", "line": "Tomas keeps it clean. Help him keep it that way." } },
+    "4": { "primary": "Sister Maren", "secondary": { "name": "Hierophant Aurelia", "faction": "arcane", "line": "Maren left my order. Not my prayers." } },
+    "5": { "primary": "Enforcer Grael", "secondary": { "name": "Warlord-Gunner Vex Marrow", "faction": "artillery", "line": "Grael? I shelled his town. He's still sore." } },
+    "6": { "primary": "The Reformer Elias", "secondary": { "name": "Envoy Lyra-9", "faction": "space", "line": "Elias, if you hear this: I still keep the charter." } },
+    "7": { "primary": "The Vanguard, Corin", "secondary": { "name": "COO Marcus Thorne", "faction": "hightech", "line": "Corin delivers outcomes. I just invoice them." } },
+    "8": { "primary": "The Architect, Malis", "secondary": { "name": "Grand-Cartographer Ophir", "faction": "space", "line": "Malis drew this world straight. I'd have drawn it straighter." } },
+    "9": { "primary": "The Hollow Prophet", "secondary": { "name": "The Iron Regent (masked)", "faction": "ground", "line": "The Prophet heard me first. Now hear it." } }
+  }
+}
