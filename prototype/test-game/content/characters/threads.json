@@ -1,0 +1,50 @@
+{
+  "_source": "docs/tech-plan/Character-System.md §5 [MM-story_mwp61a5f_32]. Directed, asymmetric relationships above the symmetric alignment matrix (GDD §12). kind: love · kin · confidant · comrade (in the circle) · hunts · rival · uses (across the line). tag: the GDD §12 thread it belongs to, if any. gdd: true marks a thread the GDD names outright (the gate requires it). public: whether others know of it.",
+  "kinds": ["love", "kin", "confidant", "comrade", "hunts", "rival", "uses"],
+  "threads": [
+    { "from": "Captain Otto von Halbrecht", "to": "Rei \"Skylark\" Tanaka", "kind": "love", "tag": "DL", "gdd": true, "public": false },
+    { "from": "Rei \"Skylark\" Tanaka", "to": "Captain Otto von Halbrecht", "kind": "love", "tag": "DL", "gdd": true, "public": false },
+
+    { "from": "Kaito \"Rogue\" Minami", "to": "Cadet-Prodigy Ezra \"Comet\" Lin", "kind": "rival", "tag": "TA", "gdd": true, "public": true },
+    { "from": "Cadet-Prodigy Ezra \"Comet\" Lin", "to": "Kaito \"Rogue\" Minami", "kind": "rival", "tag": "TA", "gdd": true, "public": true },
+
+    { "from": "Hierophant Aurelia", "to": "The Ordained Prime, Vaelith", "kind": "confidant", "tag": "RE", "gdd": true, "public": false },
+    { "from": "The Ordained Prime, Vaelith", "to": "Hierophant Aurelia", "kind": "confidant", "tag": "RE", "gdd": true, "public": false },
+    { "from": "Hierophant Aurelia", "to": "Heretic Isolde", "kind": "hunts", "tag": "RE", "gdd": true, "public": true },
+    { "from": "The Ordained Prime, Vaelith", "to": "Heretic Isolde", "kind": "hunts", "tag": "RE", "gdd": true, "public": true },
+    { "from": "Inquisitor Mordane", "to": "Heretic Isolde", "kind": "hunts", "tag": "RE", "gdd": true, "public": true },
+    { "from": "Hierophant Aurelia", "to": "Inquisitor Mordane", "kind": "uses", "tag": "RE", "gdd": true, "public": false },
+    { "from": "The Hollow Prophet", "to": "Hierophant Aurelia", "kind": "rival", "tag": "RE", "gdd": true, "public": false },
+
+    { "from": "Wavecaller Nerea", "to": "Warlord-Gunner Vex Marrow", "kind": "hunts", "tag": "RV", "gdd": true, "public": true },
+
+    { "from": "Chieftain Coral of the Reef-Born", "to": "Raider-Chief Drowned Kael", "kind": "rival", "tag": "TW", "gdd": true, "public": true },
+    { "from": "Raider-Chief Drowned Kael", "to": "Chieftain Coral of the Reef-Born", "kind": "rival", "tag": "TW", "gdd": true, "public": true },
+    { "from": "Splinter \"Wildseed\" Ovo", "to": "The Root-Mind", "kind": "rival", "tag": "TW", "gdd": true, "public": true },
+
+    { "from": "Field-Marshal Seraphine von Halbrecht", "to": "Captain Otto von Halbrecht", "kind": "kin", "tag": "FL", "gdd": true, "public": true },
+    { "from": "Captain Otto von Halbrecht", "to": "Field-Marshal Seraphine von Halbrecht", "kind": "kin", "tag": "FL", "gdd": true, "public": true },
+    { "from": "Captain Otto von Halbrecht", "to": "General Kord Stahl", "kind": "kin", "tag": "FL", "gdd": true, "public": true, "note": "his uncle (Otto's hate secret)" },
+    { "from": "General Kord Stahl", "to": "Captain Otto von Halbrecht", "kind": "kin", "tag": "FL", "gdd": true, "public": true },
+    { "from": "Field-Marshal Seraphine von Halbrecht", "to": "General Kord Stahl", "kind": "kin", "tag": "FL", "gdd": true, "public": true },
+    { "from": "General Kord Stahl", "to": "Field-Marshal Seraphine von Halbrecht", "kind": "kin", "tag": "FL", "gdd": true, "public": true },
+    { "from": "Chief Ethicist Dr. Grace Sterling", "to": "CEO Adrian Sterling", "kind": "kin", "tag": "FL", "gdd": true, "public": true },
+    { "from": "CEO Adrian Sterling", "to": "Chief Ethicist Dr. Grace Sterling", "kind": "kin", "tag": "FL", "gdd": true, "public": true },
+
+    { "from": "Quartermaster Ines Roth", "to": "Mechanic Sora Ito", "kind": "love", "public": false, "note": "Powder love secret" },
+    { "from": "Sergeant \"Bricks\" Malloy", "to": "Quartermaster Ines Roth", "kind": "love", "public": false, "note": "Powder love secret" },
+    { "from": "Colonel Aldric Vane", "to": "Major Elena Ruiz", "kind": "love", "public": false, "note": "Powder love secret" },
+    { "from": "Freikorps raider Grigor Vosk", "to": "Raider-Chief Drowned Kael", "kind": "love", "public": false, "note": "Powder love secret" },
+    { "from": "General Kord Stahl", "to": "Sky-Marshal Reiko Kurogane", "kind": "love", "public": false, "note": "Powder love secret" },
+    { "from": "Chancellor Wilhelmina Graf", "to": "The Iron Regent (masked)", "kind": "love", "public": false, "note": "Powder love secret" },
+    { "from": "The Iron Regent (masked)", "to": "The Hollow Prophet", "kind": "love", "public": false, "note": "Powder love secret" },
+
+    { "from": "Sergeant \"Bricks\" Malloy", "to": "General Kord Stahl", "kind": "rival", "public": false, "note": "Powder hate secret" },
+    { "from": "Captain Otto von Halbrecht", "to": "General Kord Stahl", "kind": "rival", "public": false, "note": "Powder hate secret" },
+    { "from": "Freikorps raider Grigor Vosk", "to": "Colonel Aldric Vane", "kind": "hunts", "public": false, "note": "Powder hate secret: sure Vane burned his village" },
+    { "from": "Field-Marshal Seraphine von Halbrecht", "to": "Chancellor Wilhelmina Graf", "kind": "rival", "public": false, "note": "Powder hate secret" },
+    { "from": "General Kord Stahl", "to": "Captain Otto von Halbrecht", "kind": "rival", "public": false, "note": "Powder hate secret" },
+    { "from": "Chancellor Wilhelmina Graf", "to": "Field-Marshal Seraphine von Halbrecht", "kind": "rival", "public": false, "note": "Powder hate secret" },
+    { "from": "The Iron Regent (masked)", "to": "Chancellor Wilhelmina Graf", "kind": "rival", "public": false, "note": "Powder hate secret" }
+  ]
+}

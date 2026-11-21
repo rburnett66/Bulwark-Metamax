@@ -517,6 +517,13 @@ Rules and checks are in `Magic-System.md` §9; the player's own magic skills are
 9. Every faction has two strengths and two weaknesses (§2a) and at least one against-type character; its traits
    agree with its home magic; a strength or weakness that names a battle stat agrees with its units' data.
 
+**Built** (MM-story_mwp61a5f_32): `alignment.js`, `factionTraits.js`, `magic.js`, `flaws.js`, `characterModel.js`,
+`characterGate.js` and `content/characters/threads.json`. The rules (the matrix, the tables, the GDD threads, the worked
+examples) must hold outright. The content's known problems are listed in `content/characters/gate-baseline.json`, and
+the suite fails on any problem not on that list, or on a listed one that no longer happens. The work list is
+`docs/16 Bulwark MM/create/Character-Gate-Report.md` (`node tools/dialog/character_gate.mjs`; add `--write-baseline`
+after fixing content).
+
 ## 10. Data changes
 
 | File | Change |
