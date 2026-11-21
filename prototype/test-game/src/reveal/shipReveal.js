@@ -43,8 +43,8 @@ import '../data/factions.js';
 import { createStandingsScreen } from '../menu/standingsScreen.js';
 import { loadSave, updateSave } from '../save/save.js';
 import { noteRapportEvent, noteMoodSeen } from '../save/standings.js';
-import { loadCharacterFiles, aboardSecretCalls } from '../comm/mapCast.js';
-import { noteSecretTold } from '../save/secrets.js';
+import { loadCharacterFiles, loadThreads, aboardScene } from '../comm/mapCast.js';
+import { buildModel } from '../data/characterModel.js';
 import { withMood as callWithMood } from '../comm/mapCast.js';
 import { FACTOR_ROOM, factorOf, factorDesk, factorLines, factorCard, noteFactorTalk } from '../farm/factor.js';
 
@@ -249,12 +249,13 @@ async function aboard(S, { story = false, onContract = () => {}, missions = [], 
   // on a ship visit is +1" · "greeting limit is 1 per day": standings.noteRapportEvent keeps the day). A story boarding has spoken the greeting above; a free boarding shows it now and does not wait on it.
   // then SECRETS ABOARD (owner 2026-11-21: "Secrets should usually be delivered at the capital ships"): up to three of
   // the faction's characters with a newly unlocked secret come forward and tell it, once each [MM-story_mwpsuo5b_3x]
+  // and RUMOURS: one with nothing new of their own passes on what they know about someone (Character-System §7)
   const secretsAboard = async (pk) => {
     if (ship.isCollective) return [];
-    const files = await loadCharacterFiles();
-    const told = aboardSecretCalls(files, pk, ship.key, loadSave(), factionNameOf(ship.key));
-    if (told.length) updateSave((sv) => { for (const t of told) noteSecretTold(sv, t.name, t.secret); });
-    return told.map((t) => withMood(t.spec, t.name));
+    const [files, threads] = await Promise.all([loadCharacterFiles(), loadThreads()]);
+    const scene = aboardScene(buildModel({ packs: pk, files, threads }), files, pk, ship.key, loadSave(), factionNameOf(ship.key));
+    if (scene.calls.length) updateSave((sv) => scene.commit(sv));
+    return scene.calls.map((c) => withMood(c, c.name));
   };
   if (!ship.isCollective && ship.captain) {
     if (!story) {

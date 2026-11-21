@@ -23,6 +23,7 @@ import {
   isMuted, setMuted, getChannelVolume, setChannelVolume, onAudioChange,
 } from './voice.js';
 import { MOOD_PORTRAITS, PLACEHOLDER_PORTRAITS } from '../data/portraitMoods.js';
+import { pausePoints } from './tells.js';
 
 /* Authored portrait lookup: content/dialog/portraits/<slug(name)>.png, silhouette SVG fallback
    (same authored-art-with-fallback pattern as unitArt.js). */
@@ -228,14 +229,29 @@ export function centerScale(card, vw, vh) {
 }
 
 /* type text over durMs with signal-glyph noise at the caret (tool's typeText; skips under reduced motion) */
+/** The character count typed after `elapsed` ms: steady, with a breath held after every ".." (a tell, comm/tells.js). */
+export function typedCount(len, durMs, elapsed, pauses = [], holdMs = PAUSE_MS) {
+  const per = Math.max(120, durMs) / Math.max(1, len);
+  let t = elapsed;
+  for (const at of pauses) {
+    const reach = at * per;
+    if (t <= reach) break;
+    t = Math.max(reach, t - holdMs);
+  }
+  return Math.min(len, Math.floor(t / per));
+}
+export const PAUSE_MS = 400;
+
 function typeText(el, text, durMs, isLive, isRushed = null) {
   const glyphs = '▚▞░▒▓/\\|<>#*+=';
   return new Promise((res) => {
     const start = performance.now(), len = text.length, rm = reducedMotion();
+    // the ".." of a tell holds about 400 ms; under reduced motion the dots stay and the hold goes [MM-story_mwp61bjm_33]
+    const pauses = rm ? [] : pausePoints(text), total = Math.max(120, durMs) + pauses.length * PAUSE_MS;
     (function frame(now) {
       if (!isLive() || (isRushed && isRushed())) { el.textContent = text; res(); return; }
-      const prog = Math.min(1, (now - start) / Math.max(120, durMs));
-      const tgt = Math.floor(prog * len);
+      const prog = Math.min(1, (now - start) / total);
+      const tgt = typedCount(len, durMs, now - start, pauses);
       let s = text.slice(0, tgt);
       if (tgt < len && !rm) s += glyphs[Math.floor(Math.random() * glyphs.length)];
       el.textContent = s;

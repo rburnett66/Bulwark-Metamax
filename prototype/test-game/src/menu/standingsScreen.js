@@ -16,7 +16,9 @@ import { alignWord } from '../save/contracts.js';
 import { ensureMissionStyle } from './missionLog.js';
 import { esc, fsvg, factionColor } from './missionView.js';
 import { portraitImg, relationLabel } from '../comm/commCard.js';
-import { revealSecrets, PERSONALITIES } from '../save/secrets.js';
+import { revealSecrets, PERSONALITIES, SECRET_LABEL } from '../save/secrets.js';
+import { rumoursFor } from '../save/rumours.js';
+import { shortName } from '../comm/shortName.js';
 import { characterRelations, factionRelationRow } from '../data/factionRelations.js';
 import { loadCharacterFiles, characterEntry } from '../comm/mapCast.js';
 
@@ -53,6 +55,9 @@ const STYLE = String.raw`
 .bwm-ml .stand .secs li.out{border-left-color:var(--fc)}
 .bwm-ml .stand .secs li b{display:block;font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--fc)}
 .bwm-ml .stand .secs li.held,.bwm-ml .stand .secs li.locked{opacity:.6;font-style:italic}
+.bwm-ml .stand .secs li.rumour{border-left:2px dashed var(--fc);opacity:.85}
+.bwm-ml .stand .secs li.rumour i{font-style:normal;font-weight:700;margin-right:4px}
+.bwm-ml .stand .secs li small{display:block;margin-top:3px;opacity:.75}
 .bwm-ml .stand .secs li small{display:block;margin-top:3px;color:var(--cyan2)}
 .bwm-ml .stand .secs li em{color:var(--s-failed);font-style:normal;font-weight:800}
 .bwm-ml .stand .rels{display:grid;grid-template-columns:auto 1fr;gap:3px 10px;margin:0;font-size:12px}
@@ -104,14 +109,32 @@ export function rewardWords(r) {
   }
 }
 /** The SECRETS list: revealed (lies marked once uncovered), held back, locked. view: secrets.js revealSecrets. */
-export function secretsHtml(view) {
-  if (!view.met) return `<p class="inote">Meet this character to learn their secrets.</p>`;
+/**
+ * The secrets list. rumours: what others have said about this character (save/rumours.js rumoursFor); liedBefore: the
+ * tellers caught out (s.liedBefore). A secret not yet heard from its owner shows the rumour, who said it, and whether
+ * others agree; once the owner tells it, a rumour that was not the truth is named for what it was (Character-System
+ * §7.3) [MM-story_mwp61bjm_33].
+ */
+export function secretsHtml(view, rumours = [], liedBefore = {}) {
+  const heard = (key) => rumours.filter((r) => r.key === key);
+  const who = (list) => list.map((r) => `${esc(shortName(r.teller))}${liedBefore[r.teller] ? ' <em>They lied before.</em>' : ''}`).join(', ');
+  const rumoured = (x, list) => {
+    const same = list.filter((r) => r.text === list[0].text).length;
+    return `<li class="rumour"><b>${esc(x.label || x.key)}</b><i>Rumoured:</i> ${esc(list[0].text)}<small>Heard from ${who(list)}${same > 1 ? ` · ${same} people say this` : ''}${list.some((r) => r.text !== list[0].text) ? ' · the stories disagree' : ''}</small></li>`;
+  };
+  if (!view.met) {
+    const any = rumours.length ? `<ol class="secs">${[...new Set(rumours.map((r) => r.key))].map((k) => rumoured({ key: k, label: SECRET_LABEL[k] || k }, heard(k))).join('')}</ol>` : '';
+    return `<p class="inote">Meet this character to learn their secrets.</p>${any}`;
+  }
   return `<ol class="secs">${view.secrets.map((x) => {
+    const list = heard(x.key);
+    if ((x.state === 'locked' || x.state === 'held') && list.length) return rumoured(x, list);
     if (x.state === 'locked') return `<li class="locked"><b>???</b>Rapport ${x.step} to learn more.</li>`;
     if (x.state === 'held') return `<li class="held"><b>${esc(x.label)}</b>Keeping something back. ${esc(x.hint || '')}.</li>`;
     const extra = x.mission ? `<small>Mission: ${esc(x.mission.task)} · Reward: ${esc(rewardWords(x.mission.reward))}</small>`
       : x.item ? `<small>Wants: ${esc(itemName(x.item))}</small>` : '';
-    return `<li class="out"><b>${esc(x.label)}</b>${esc(x.text)}${x.wasLie ? ' <em>They lied before.</em>' : ''}${extra}</li>`;
+    const wrong = list.filter((r) => r.version !== 'true').map((r) => `<small>${esc(shortName(r.teller))}'s version was ${r.version === 'lie' ? 'their lie, repeated' : 'a lie'}.</small>`).join('');
+    return `<li class="out"><b>${esc(x.label)}</b>${esc(x.text)}${x.wasLie ? ' <em>They lied before.</em>' : ''}${extra}${wrong}</li>`;
   }).join('')}</ol>`;
 }
 /** RELATIONS rows: the faction's (or a character's bent) view of the other factions. */
@@ -119,11 +142,11 @@ export function relationsHtml(rows) {
   return `<dl class="rels">${rows.map((r) => `<dt>${fsvg(r.key)}${esc(FACTION_NAME(r.key))}</dt><dd style="--rl:var(${BAND_VAR[r.relation]})">${r.label}${r.bent && r.why ? `<small>${esc(r.why)}</small>` : ''}</dd>`).join('')}</dl>`;
 }
 /** The fiction block of a character's detail. entry: the characters-file entry (null: not written yet). */
-export function fictionHtml(factionKey, entry, view) {
+export function fictionHtml(factionKey, entry, view, rumours = [], liedBefore = {}) {
   if (!entry) return '';
   const p = PERSONALITIES[entry.personality];
   return `<h3>Personality</h3><p class="inote"><b>${esc(entry.personality.replace(/^./, (m) => m.toUpperCase()))}.</b> ${esc(p || '')}</p>
-   <h3>Secrets <small class="num">${view.met ? `${view.out} of ${view.secrets.length}` : ''}</small></h3>${secretsHtml(view)}
+   <h3>Secrets <small class="num">${view.met ? `${view.out} of ${view.secrets.length}` : ''}</small></h3>${secretsHtml(view, rumours, liedBefore)}
    <h3>Relations</h3>${relationsHtml(characterRelations(factionKey, entry))}`;
 }
 
@@ -193,7 +216,7 @@ export function createStandingsScreen({ doc, host, onClose, faction = null }) {
       if (!groups.length) { $('[data-list]').innerHTML = `<div class="stale">No ratings are kept with this ship's crew.</div>`; $('[data-dp]').innerHTML = ''; return; }
       if (!selChar) selChar = (groups.flatMap((g) => g.characters).find((c) => c.met) || (groups[0] && groups[0].characters[0]) || {}).name;
       $('[data-list]').innerHTML = characterListHtml(groups, selChar);
-      const fiction = (g, c) => { const e = characterEntry(files, g.key, c.name); return e ? fictionHtml(g.key, e, revealSecrets(e, s, g.name)) : ''; };
+      const fiction = (g, c) => { const e = characterEntry(files, g.key, c.name); return e ? fictionHtml(g.key, e, revealSecrets(e, s, g.name), rumoursFor(s, c.name), s.liedBefore || {}) : ''; };
       $('[data-dp]').innerHTML = characterDetailHtml(groups, selChar, fiction);
     } else {
       if (!selFac) selFac = (rows.slice().sort((a, b) => Math.abs(b.loyalty) - Math.abs(a.loyalty))[0] || {}).key;

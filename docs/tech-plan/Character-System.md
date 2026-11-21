@@ -350,6 +350,13 @@ A knower K tells a rumour about owner O's secret when:
   rules 14–18, when the visitor is built).
 - The map opening is the main character's start line only.
 
+**Built** (MM-story_mwp61bjm_33): `src/save/rumours.js` (who tells, the version, credibility, the owner's reaction),
+`src/comm/tells.js` (tells; the ".." hold in `commCard.js` typing), `src/comm/shortName.js`, and the ship scene
+(`mapCast.js aboardScene`): on each visit up to three of the faction's characters speak; one with a new secret tells it
+(with a reaction if the player had heard it as a rumour), one with nothing new passes on a rumour. The Standings show
+rumoured secrets, who said them, agreement and disagreement, and name a twisted version once the truth is out. Not built
+yet: rumours at the wave 3 cut-in (the secondary stays one line and the contract), and the farm visitor.
+
 ### 7.2 What the knower says: true, twisted or false
 
 Generated from who is telling and how they stand with the owner; no randomness.
