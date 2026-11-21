@@ -18,6 +18,8 @@ test('with expression art: the mood portrait first, then the base portrait if it
     assert.match(h, /src="p\/colonel-aldric-vane-friendly\.png"/);
     assert.match(h, /data-base="p\/colonel-aldric-vane\.png"/);
     assert.match(portraitImg('Colonel Aldric Vane', 'smug', 'p/'), /src="p\/colonel-aldric-vane\.png"/, 'an unknown mood is ignored');
+    assert.match(portraitImg('Colonel Aldric Vane', 'neutral', 'p/'), /src="p\/colonel-aldric-vane\.png"/, 'neutral is the base portrait');
+    assert.doesNotMatch(portraitImg('Colonel Aldric Vane', 'neutral', 'p/'), /-neutral/);
   } finally { MOOD_PORTRAITS.delete('colonel-aldric-vane'); }
 });
 

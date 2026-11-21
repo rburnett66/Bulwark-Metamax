@@ -465,8 +465,9 @@ the teller gets the lied-before mark.
 > swapped into dialogs based on friend level. Even an angry character could appear neutral if given the right info or
 > gift."
 
-- Every character has three portraits besides their base: **antagonistic, neutral, friendly**
-  (`<slug>-<mood>.png`). The rating band picks one: Wary or Hostile → antagonistic; Friendly or Trusted → friendly;
+- Every character has three relationship portraits: **antagonistic, neutral, friendly**. The base portrait is the
+  neutral one (owner: "Can we assume all current images are neutral?"), so two more per character
+  (`<slug>-antagonistic.png`, `<slug>-friendly.png`). The rating band picks one: Wary or Hostile → antagonistic; Friendly or Trusted → friendly;
   otherwise neutral (`standings.js moodFor`).
 - A **mood shift** moves the portrait one step warmer or colder for the character's next few calls without moving the
   rating (`s.moodShift`): a kept promise or the right gift or news softens; a broken promise, a rumour told behind

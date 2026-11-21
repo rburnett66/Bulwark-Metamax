@@ -103,8 +103,9 @@ test('no authored portrait ships unreachable', () => {
   // the opening's speaker (content/dialog/opening.json) speaks on the comm card too
   const opening = JSON.parse(readFileSync(new URL('dialog/opening.json', CONTENT), 'utf8'));
   if (opening.speaker && opening.speaker.name) reachable.add(portraitSlug(opening.speaker.name));
-  // relationship portraits (<slug>-antagonistic|neutral|friendly.png, data/portraitMoods.js) belong to their character
-  for (const slug of [...reachable]) for (const m of ['antagonistic', 'neutral', 'friendly']) reachable.add(slug + '-' + m);
+  // relationship portraits (<slug>-antagonistic|friendly.png, data/portraitMoods.js) belong to their character; the
+  // base portrait is the neutral one, so a <slug>-neutral.png would never be shown
+  for (const slug of [...reachable]) for (const m of ['antagonistic', 'friendly']) reachable.add(slug + '-' + m);
   const files = readdirSync(new URL('dialog/portraits/', CONTENT)).filter((f) => f.endsWith('.png'));
   assert.ok(files.length, 'no portraits found at all — the directory moved');
   for (const file of files) {

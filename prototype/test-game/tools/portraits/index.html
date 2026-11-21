@@ -9,6 +9,7 @@
   Owner 2026-11-20: "strengthen the character creation tool for images. The character should all have 3 portraits
   invoking relationship as neutral, friendly, or antagonistic. These can be swapped into dialogs based on friend level.
   Even an angry character could appear neutral if given the right info or gift."
+  The base portrait is the NEUTRAL one (owner: "Can we assume all current images are neutral?"); two more per character.
   Data: prompts.json, written by tools/dialog/expression_prompts.py (re-run it after adding art). The "game shows"
   highlight uses the game's own moodFor (src/save/standings.js), so this page and the game never disagree.
 -->
@@ -46,7 +47,7 @@ main{padding:14px 16px;display:grid;grid-template-columns:repeat(auto-fill,minma
 <script src="../toolhead.js"></script>
 <div class="bar">
   <label>Faction <select id="fac"><option value="">All</option></select></label>
-  <label>Show <select id="show"><option value="all">All</option><option value="todo">Missing a portrait</option><option value="ready">All three ready</option><option value="base">Base art problems</option></select></label>
+  <label>Show <select id="show"><option value="all">All</option><option value="todo">Missing a portrait</option><option value="ready">Both ready</option><option value="base">Base art problems</option></select></label>
   <label>Rating <input id="score" type="range" min="-100" max="100" step="5" value="0"><b id="scoreV">0</b></label>
   <label>Mood shift <select id="shift"><option value="">None</option><option value="gift">Gift (+1)</option><option value="info">News (+1)</option><option value="kept">Promise kept (+1)</option><option value="broken">Promise broken (−1)</option><option value="slight">Slighted (−1)</option></select></label>
   <span class="sum" id="sum"></span>
@@ -79,7 +80,7 @@ function card(c) {
   return `<article class="card"><h3>${esc(c.name)}</h3>
     <div class="meta">${esc(c.factionName)} · ${esc(c.alignName)} · ${esc(c.personality)} <span title="${esc(c.personalitySource)}">ⓘ</span></div>
     <div class="flags">${flags}</div>
-    <div class="row">${slot('base', 'Base', c.base, '', '')}
+    <div class="row">${slot('neutral', 'Neutral (base)', c.base, '', '')}
       ${data.moods.map((m) => slot(m, m, c.moods[m].file, c.moods[m].problems.join(', ') || 'ready', c.moods[m].prompt)).join('')}</div></article>`;
 }
 
@@ -89,10 +90,10 @@ function render() {
     && (show === 'all' || (show === 'ready' && c.ready) || (show === 'todo' && !c.ready) || (show === 'base' && c.baseProblems.length)));
   $('grid').innerHTML = list.length ? list.map(card).join('') : '<div class="empty">Nothing matches.</div>';
   const ready = data.characters.filter((c) => c.ready).length;
-  $('sum').textContent = `${ready} of ${data.characters.length} characters have all three · showing ${list.length}`;
+  $('sum').textContent = `${ready} of ${data.characters.length} characters have both · showing ${list.length}`;
   highlight();
   // live size check: the file on disk may be newer than prompts.json
-  for (const img of $('grid').querySelectorAll('.slot:not(.base) img')) {
+  for (const img of $('grid').querySelectorAll('.slot:not(.neutral) img')) {
     img.addEventListener('load', () => {
       const st = img.closest('.slot').querySelector('.st');
       const okSize = img.naturalWidth === data.size[0] && img.naturalHeight === data.size[1];

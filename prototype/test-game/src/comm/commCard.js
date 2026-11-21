@@ -36,7 +36,9 @@ export const MOODS = Object.freeze(['antagonistic', 'neutral', 'friendly']);   /
  */
 export function portraitImg(name, mood = null, dir = PORTRAIT_DIR) {
   const base = dir + portraitSlug(name) + '.png';
-  if (!mood || !MOODS.includes(mood) || !MOOD_PORTRAITS.has(portraitSlug(name))) return '<img alt="" src="' + base + '" onerror="this.remove()">';
+  // neutral IS the base portrait (owner 2026-11-20: "Can we assume all current images are neutral?"); only the
+  // antagonistic and friendly portraits are extra files
+  if (!mood || mood === 'neutral' || !MOODS.includes(mood) || !MOOD_PORTRAITS.has(portraitSlug(name))) return '<img alt="" src="' + base + '" onerror="this.remove()">';
   const first = dir + portraitSlug(name) + '-' + mood + '.png';
   return '<img alt="" src="' + first + '" data-base="' + base + '" onerror="if(this.dataset.base){this.src=this.dataset.base;this.removeAttribute(\'data-base\')}else{this.remove()}">';
 }
