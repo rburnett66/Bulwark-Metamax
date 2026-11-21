@@ -43,24 +43,24 @@
    "name": "Field-Marshal Seraphine von Halbrecht",
    "slug": "field-marshal-seraphine-von-halbrecht",
    "align": "AG",
-   "personality": "proud",
+   "personality": "devoted",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/field-marshal-seraphine-von-halbrecht-antagonistic.png",
    "base": "content/dialog/portraits/field-marshal-seraphine-von-halbrecht.png",
    "baseArt": "Final",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Field-Marshal Seraphine von Halbrecht, Ground / Powder faction, absolute good, proud. Relationship: antagonistic, looking at someone they consider an enemy. New expression: haughty disdain: chin raised, looking down the nose, lids half-lowered, lips thin."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Field-Marshal Seraphine von Halbrecht, Ground / Powder faction, absolute good, devoted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: stern, disappointed anger, as at someone who broke faith: brows drawn down and together, eyes hard and level, jaw set, lips pressed thin."
   },
   {
    "faction": "ground",
    "name": "Field-Marshal Seraphine von Halbrecht",
    "slug": "field-marshal-seraphine-von-halbrecht",
    "align": "AG",
-   "personality": "proud",
+   "personality": "devoted",
    "mood": "friendly",
    "file": "content/dialog/portraits/field-marshal-seraphine-von-halbrecht-friendly.png",
    "base": "content/dialog/portraits/field-marshal-seraphine-von-halbrecht.png",
    "baseArt": "Final",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Field-Marshal Seraphine von Halbrecht, Ground / Powder faction, absolute good, proud. Relationship: friendly, looking at someone they like and trust. New expression: gracious approval: a restrained smile, a slight approving nod of the head, eyes warm."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Field-Marshal Seraphine von Halbrecht, Ground / Powder faction, absolute good, devoted. Relationship: friendly, looking at someone they like and trust. New expression: solemn warmth, as to a trusted comrade: a small sincere smile, softened eyes, brows relaxed."
   },
   {
    "faction": "ground",
@@ -187,24 +187,24 @@
    "name": "General Kord Stahl",
    "slug": "general-kord-stahl",
    "align": "E",
-   "personality": "proud",
+   "personality": "schemer",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/general-kord-stahl-antagonistic.png",
    "base": "content/dialog/portraits/general-kord-stahl.png",
    "baseArt": "Final",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is General Kord Stahl, Ground / Powder faction, evil, proud. Relationship: antagonistic, looking at someone they consider an enemy. New expression: haughty disdain: chin raised, looking down the nose, lids half-lowered, lips thin."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is General Kord Stahl, Ground / Powder faction, evil, schemer. Relationship: antagonistic, looking at someone they consider an enemy. New expression: quiet threat: a thin smile that does not reach the eyes, eyes cold and fixed, head slightly tilted."
   },
   {
    "faction": "ground",
    "name": "General Kord Stahl",
    "slug": "general-kord-stahl",
    "align": "E",
-   "personality": "proud",
+   "personality": "schemer",
    "mood": "friendly",
    "file": "content/dialog/portraits/general-kord-stahl-friendly.png",
    "base": "content/dialog/portraits/general-kord-stahl.png",
    "baseArt": "Final",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is General Kord Stahl, Ground / Powder faction, evil, proud. Relationship: friendly, looking at someone they like and trust. New expression: gracious approval: a restrained smile, a slight approving nod of the head, eyes warm. Keep an edge of menace even in warmth."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is General Kord Stahl, Ground / Powder faction, evil, schemer. Relationship: friendly, looking at someone they like and trust. New expression: satisfied and sly: a crooked smirk, one brow raised, eyes glinting, as with a useful ally. Keep an edge of menace even in warmth."
   },
   {
    "faction": "ground",
@@ -475,24 +475,24 @@
    "name": "Chief Ethicist Dr. Grace Sterling",
    "slug": "chief-ethicist-dr-grace-sterling",
    "align": "AG",
-   "personality": "devoted",
+   "personality": "open-hearted",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/chief-ethicist-dr-grace-sterling-antagonistic.png",
    "base": "content/dialog/portraits/chief-ethicist-dr-grace-sterling.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Chief Ethicist Dr. Grace Sterling, High Tech faction, absolute good, devoted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: stern, disappointed anger, as at someone who broke faith: brows drawn down and together, eyes hard and level, jaw set, lips pressed thin."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Chief Ethicist Dr. Grace Sterling, High Tech faction, absolute good, open-hearted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: hurt more than hostile: brows pinched upward, eyes wounded and wary, mouth turned down."
   },
   {
    "faction": "hightech",
    "name": "Chief Ethicist Dr. Grace Sterling",
    "slug": "chief-ethicist-dr-grace-sterling",
    "align": "AG",
-   "personality": "devoted",
+   "personality": "open-hearted",
    "mood": "friendly",
    "file": "content/dialog/portraits/chief-ethicist-dr-grace-sterling-friendly.png",
    "base": "content/dialog/portraits/chief-ethicist-dr-grace-sterling.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Chief Ethicist Dr. Grace Sterling, High Tech faction, absolute good, devoted. Relationship: friendly, looking at someone they like and trust. New expression: solemn warmth, as to a trusted comrade: a small sincere smile, softened eyes, brows relaxed."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Chief Ethicist Dr. Grace Sterling, High Tech faction, absolute good, open-hearted. Relationship: friendly, looking at someone they like and trust. New expression: warm, open pleasure: a genuine smile showing a little teeth, eyes crinkled at the corners, brows lifted."
   },
   {
    "faction": "hightech",
@@ -523,24 +523,24 @@
    "name": "CFO Julian Vance",
    "slug": "cfo-julian-vance",
    "align": "G",
-   "personality": "open-hearted",
+   "personality": "wary",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/cfo-julian-vance-antagonistic.png",
    "base": "content/dialog/portraits/cfo-julian-vance.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is CFO Julian Vance, High Tech faction, good, open-hearted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: hurt more than hostile: brows pinched upward, eyes wounded and wary, mouth turned down."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is CFO Julian Vance, High Tech faction, good, wary. Relationship: antagonistic, looking at someone they consider an enemy. New expression: cold suspicion: eyes narrowed and sidelong, brows lowered, mouth a flat line, chin tucked."
   },
   {
    "faction": "hightech",
    "name": "CFO Julian Vance",
    "slug": "cfo-julian-vance",
    "align": "G",
-   "personality": "open-hearted",
+   "personality": "wary",
    "mood": "friendly",
    "file": "content/dialog/portraits/cfo-julian-vance-friendly.png",
    "base": "content/dialog/portraits/cfo-julian-vance.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is CFO Julian Vance, High Tech faction, good, open-hearted. Relationship: friendly, looking at someone they like and trust. New expression: warm, open pleasure: a genuine smile showing a little teeth, eyes crinkled at the corners, brows lifted."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is CFO Julian Vance, High Tech faction, good, wary. Relationship: friendly, looking at someone they like and trust. New expression: a reluctant, earned smile: one corner of the mouth up, eyes still watchful but softened."
   },
   {
    "faction": "hightech",
@@ -595,24 +595,24 @@
    "name": "Black-ops broker Sable Reyes",
    "slug": "black-ops-broker-sable-reyes",
    "align": "CE",
-   "personality": "cruel",
+   "personality": "schemer",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/black-ops-broker-sable-reyes-antagonistic.png",
    "base": "content/dialog/portraits/black-ops-broker-sable-reyes.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Black-ops broker Sable Reyes, High Tech faction, chaotic evil, cruel. Relationship: antagonistic, looking at someone they consider an enemy. New expression: open menace: eyes narrowed to slits, a snarl baring the teeth, brows sharply knitted, head forward."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Black-ops broker Sable Reyes, High Tech faction, chaotic evil, schemer. Relationship: antagonistic, looking at someone they consider an enemy. New expression: quiet threat: a thin smile that does not reach the eyes, eyes cold and fixed, head slightly tilted."
   },
   {
    "faction": "hightech",
    "name": "Black-ops broker Sable Reyes",
    "slug": "black-ops-broker-sable-reyes",
    "align": "CE",
-   "personality": "cruel",
+   "personality": "schemer",
    "mood": "friendly",
    "file": "content/dialog/portraits/black-ops-broker-sable-reyes-friendly.png",
    "base": "content/dialog/portraits/black-ops-broker-sable-reyes.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Black-ops broker Sable Reyes, High Tech faction, chaotic evil, cruel. Relationship: friendly, looking at someone they like and trust. New expression: a predatory grin: teeth showing, eyes bright with appetite, as to a useful tool. Keep an edge of menace even in warmth."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Black-ops broker Sable Reyes, High Tech faction, chaotic evil, schemer. Relationship: friendly, looking at someone they like and trust. New expression: satisfied and sly: a crooked smirk, one brow raised, eyes glinting, as with a useful ally. Keep an edge of menace even in warmth."
   },
   {
    "faction": "hightech",
@@ -691,24 +691,24 @@
    "name": "Chaplain-Gunner Ruth Bellamy",
    "slug": "chaplain-gunner-ruth-bellamy",
    "align": "AG",
-   "personality": "devoted",
+   "personality": "open-hearted",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/chaplain-gunner-ruth-bellamy-antagonistic.png",
    "base": "content/dialog/portraits/chaplain-gunner-ruth-bellamy.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Chaplain-Gunner Ruth Bellamy, Artillery faction, absolute good, devoted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: stern, disappointed anger, as at someone who broke faith: brows drawn down and together, eyes hard and level, jaw set, lips pressed thin."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Chaplain-Gunner Ruth Bellamy, Artillery faction, absolute good, open-hearted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: hurt more than hostile: brows pinched upward, eyes wounded and wary, mouth turned down."
   },
   {
    "faction": "artillery",
    "name": "Chaplain-Gunner Ruth Bellamy",
    "slug": "chaplain-gunner-ruth-bellamy",
    "align": "AG",
-   "personality": "devoted",
+   "personality": "open-hearted",
    "mood": "friendly",
    "file": "content/dialog/portraits/chaplain-gunner-ruth-bellamy-friendly.png",
    "base": "content/dialog/portraits/chaplain-gunner-ruth-bellamy.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Chaplain-Gunner Ruth Bellamy, Artillery faction, absolute good, devoted. Relationship: friendly, looking at someone they like and trust. New expression: solemn warmth, as to a trusted comrade: a small sincere smile, softened eyes, brows relaxed."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Chaplain-Gunner Ruth Bellamy, Artillery faction, absolute good, open-hearted. Relationship: friendly, looking at someone they like and trust. New expression: warm, open pleasure: a genuine smile showing a little teeth, eyes crinkled at the corners, brows lifted."
   },
   {
    "faction": "artillery",
@@ -739,24 +739,24 @@
    "name": "Major Elena Ruiz",
    "slug": "major-elena-ruiz",
    "align": "G",
-   "personality": "open-hearted",
+   "personality": "wary",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/major-elena-ruiz-antagonistic.png",
    "base": "content/dialog/portraits/major-elena-ruiz.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Major Elena Ruiz, Artillery faction, good, open-hearted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: hurt more than hostile: brows pinched upward, eyes wounded and wary, mouth turned down."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Major Elena Ruiz, Artillery faction, good, wary. Relationship: antagonistic, looking at someone they consider an enemy. New expression: cold suspicion: eyes narrowed and sidelong, brows lowered, mouth a flat line, chin tucked."
   },
   {
    "faction": "artillery",
    "name": "Major Elena Ruiz",
    "slug": "major-elena-ruiz",
    "align": "G",
-   "personality": "open-hearted",
+   "personality": "wary",
    "mood": "friendly",
    "file": "content/dialog/portraits/major-elena-ruiz-friendly.png",
    "base": "content/dialog/portraits/major-elena-ruiz.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Major Elena Ruiz, Artillery faction, good, open-hearted. Relationship: friendly, looking at someone they like and trust. New expression: warm, open pleasure: a genuine smile showing a little teeth, eyes crinkled at the corners, brows lifted."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Major Elena Ruiz, Artillery faction, good, wary. Relationship: friendly, looking at someone they like and trust. New expression: a reluctant, earned smile: one corner of the mouth up, eyes still watchful but softened."
   },
   {
    "faction": "artillery",
@@ -835,24 +835,24 @@
    "name": "Colonel Hargreave",
    "slug": "colonel-hargreave",
    "align": "E",
-   "personality": "schemer",
+   "personality": "devoted",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/colonel-hargreave-antagonistic.png",
    "base": "content/dialog/portraits/colonel-hargreave.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Colonel Hargreave, Artillery faction, evil, schemer. Relationship: antagonistic, looking at someone they consider an enemy. New expression: quiet threat: a thin smile that does not reach the eyes, eyes cold and fixed, head slightly tilted."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Colonel Hargreave, Artillery faction, evil, devoted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: stern, disappointed anger, as at someone who broke faith: brows drawn down and together, eyes hard and level, jaw set, lips pressed thin."
   },
   {
    "faction": "artillery",
    "name": "Colonel Hargreave",
    "slug": "colonel-hargreave",
    "align": "E",
-   "personality": "schemer",
+   "personality": "devoted",
    "mood": "friendly",
    "file": "content/dialog/portraits/colonel-hargreave-friendly.png",
    "base": "content/dialog/portraits/colonel-hargreave.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Colonel Hargreave, Artillery faction, evil, schemer. Relationship: friendly, looking at someone they like and trust. New expression: satisfied and sly: a crooked smirk, one brow raised, eyes glinting, as with a useful ally. Keep an edge of menace even in warmth."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Colonel Hargreave, Artillery faction, evil, devoted. Relationship: friendly, looking at someone they like and trust. New expression: solemn warmth, as to a trusted comrade: a small sincere smile, softened eyes, brows relaxed. Keep an edge of menace even in warmth."
   },
   {
    "faction": "artillery",
@@ -955,24 +955,24 @@
    "name": "Wavecaller Nerea",
    "slug": "wavecaller-nerea",
    "align": "G",
-   "personality": "open-hearted",
+   "personality": "wary",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/wavecaller-nerea-antagonistic.png",
    "base": "content/dialog/portraits/wavecaller-nerea.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Wavecaller Nerea, Water faction, good, open-hearted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: hurt more than hostile: brows pinched upward, eyes wounded and wary, mouth turned down."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Wavecaller Nerea, Water faction, good, wary. Relationship: antagonistic, looking at someone they consider an enemy. New expression: cold suspicion: eyes narrowed and sidelong, brows lowered, mouth a flat line, chin tucked."
   },
   {
    "faction": "water",
    "name": "Wavecaller Nerea",
    "slug": "wavecaller-nerea",
    "align": "G",
-   "personality": "open-hearted",
+   "personality": "wary",
    "mood": "friendly",
    "file": "content/dialog/portraits/wavecaller-nerea-friendly.png",
    "base": "content/dialog/portraits/wavecaller-nerea.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Wavecaller Nerea, Water faction, good, open-hearted. Relationship: friendly, looking at someone they like and trust. New expression: warm, open pleasure: a genuine smile showing a little teeth, eyes crinkled at the corners, brows lifted."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Wavecaller Nerea, Water faction, good, wary. Relationship: friendly, looking at someone they like and trust. New expression: a reluctant, earned smile: one corner of the mouth up, eyes still watchful but softened."
   },
   {
    "faction": "water",
@@ -1267,24 +1267,24 @@
    "name": "Inquisitor Mordane",
    "slug": "inquisitor-mordane",
    "align": "E",
-   "personality": "schemer",
+   "personality": "devoted",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/inquisitor-mordane-antagonistic.png",
    "base": "content/dialog/portraits/inquisitor-mordane.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Inquisitor Mordane, Arcane / Energy faction, evil, schemer. Relationship: antagonistic, looking at someone they consider an enemy. New expression: quiet threat: a thin smile that does not reach the eyes, eyes cold and fixed, head slightly tilted."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Inquisitor Mordane, Arcane / Energy faction, evil, devoted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: stern, disappointed anger, as at someone who broke faith: brows drawn down and together, eyes hard and level, jaw set, lips pressed thin."
   },
   {
    "faction": "arcane",
    "name": "Inquisitor Mordane",
    "slug": "inquisitor-mordane",
    "align": "E",
-   "personality": "schemer",
+   "personality": "devoted",
    "mood": "friendly",
    "file": "content/dialog/portraits/inquisitor-mordane-friendly.png",
    "base": "content/dialog/portraits/inquisitor-mordane.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Inquisitor Mordane, Arcane / Energy faction, evil, schemer. Relationship: friendly, looking at someone they like and trust. New expression: satisfied and sly: a crooked smirk, one brow raised, eyes glinting, as with a useful ally. Keep an edge of menace even in warmth."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Inquisitor Mordane, Arcane / Energy faction, evil, devoted. Relationship: friendly, looking at someone they like and trust. New expression: solemn warmth, as to a trusted comrade: a small sincere smile, softened eyes, brows relaxed. Keep an edge of menace even in warmth."
   },
   {
    "faction": "arcane",
@@ -1339,24 +1339,24 @@
    "name": "Envoy Lyra-9",
    "slug": "envoy-lyra-9",
    "align": "AG",
-   "personality": "devoted",
+   "personality": "open-hearted",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/envoy-lyra-9-antagonistic.png",
    "base": "content/dialog/portraits/envoy-lyra-9.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Envoy Lyra-9, Space Tech faction, absolute good, devoted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: stern, disappointed anger, as at someone who broke faith: brows drawn down and together, eyes hard and level, jaw set, lips pressed thin."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Envoy Lyra-9, Space Tech faction, absolute good, open-hearted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: hurt more than hostile: brows pinched upward, eyes wounded and wary, mouth turned down."
   },
   {
    "faction": "space",
    "name": "Envoy Lyra-9",
    "slug": "envoy-lyra-9",
    "align": "AG",
-   "personality": "devoted",
+   "personality": "open-hearted",
    "mood": "friendly",
    "file": "content/dialog/portraits/envoy-lyra-9-friendly.png",
    "base": "content/dialog/portraits/envoy-lyra-9.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Envoy Lyra-9, Space Tech faction, absolute good, devoted. Relationship: friendly, looking at someone they like and trust. New expression: solemn warmth, as to a trusted comrade: a small sincere smile, softened eyes, brows relaxed."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Envoy Lyra-9, Space Tech faction, absolute good, open-hearted. Relationship: friendly, looking at someone they like and trust. New expression: warm, open pleasure: a genuine smile showing a little teeth, eyes crinkled at the corners, brows lifted."
   },
   {
    "faction": "space",
@@ -1387,24 +1387,24 @@
    "name": "Science-Officer Tovah",
    "slug": "science-officer-tovah",
    "align": "G",
-   "personality": "open-hearted",
+   "personality": "wary",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/science-officer-tovah-antagonistic.png",
    "base": "content/dialog/portraits/science-officer-tovah.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Science-Officer Tovah, Space Tech faction, good, open-hearted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: hurt more than hostile: brows pinched upward, eyes wounded and wary, mouth turned down."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Science-Officer Tovah, Space Tech faction, good, wary. Relationship: antagonistic, looking at someone they consider an enemy. New expression: cold suspicion: eyes narrowed and sidelong, brows lowered, mouth a flat line, chin tucked."
   },
   {
    "faction": "space",
    "name": "Science-Officer Tovah",
    "slug": "science-officer-tovah",
    "align": "G",
-   "personality": "open-hearted",
+   "personality": "wary",
    "mood": "friendly",
    "file": "content/dialog/portraits/science-officer-tovah-friendly.png",
    "base": "content/dialog/portraits/science-officer-tovah.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Science-Officer Tovah, Space Tech faction, good, open-hearted. Relationship: friendly, looking at someone they like and trust. New expression: warm, open pleasure: a genuine smile showing a little teeth, eyes crinkled at the corners, brows lifted."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Science-Officer Tovah, Space Tech faction, good, wary. Relationship: friendly, looking at someone they like and trust. New expression: a reluctant, earned smile: one corner of the mouth up, eyes still watchful but softened."
   },
   {
    "faction": "space",
@@ -1435,24 +1435,24 @@
    "name": "Navigator AI \"Vector\"",
    "slug": "navigator-ai-vector",
    "align": "N",
-   "personality": "wary",
+   "personality": "whimsical",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/navigator-ai-vector-antagonistic.png",
    "base": "content/dialog/portraits/navigator-ai-vector.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Navigator AI \"Vector\", Space Tech faction, neutral, wary. Relationship: antagonistic, looking at someone they consider an enemy. New expression: cold suspicion: eyes narrowed and sidelong, brows lowered, mouth a flat line, chin tucked."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Navigator AI \"Vector\", Space Tech faction, neutral, whimsical. Relationship: antagonistic, looking at someone they consider an enemy. New expression: mocking scorn: one brow arched high, a lopsided sneer, eyes rolling slightly."
   },
   {
    "faction": "space",
    "name": "Navigator AI \"Vector\"",
    "slug": "navigator-ai-vector",
    "align": "N",
-   "personality": "wary",
+   "personality": "whimsical",
    "mood": "friendly",
    "file": "content/dialog/portraits/navigator-ai-vector-friendly.png",
    "base": "content/dialog/portraits/navigator-ai-vector.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Navigator AI \"Vector\", Space Tech faction, neutral, wary. Relationship: friendly, looking at someone they like and trust. New expression: a reluctant, earned smile: one corner of the mouth up, eyes still watchful but softened."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Navigator AI \"Vector\", Space Tech faction, neutral, whimsical. Relationship: friendly, looking at someone they like and trust. New expression: delighted mischief: a wide grin, bright eyes, brows lifted as if sharing a joke."
   },
   {
    "faction": "space",
@@ -1483,24 +1483,24 @@
    "name": "Admiral Sarn",
    "slug": "admiral-sarn",
    "align": "E",
-   "personality": "schemer",
+   "personality": "devoted",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/admiral-sarn-antagonistic.png",
    "base": "content/dialog/portraits/admiral-sarn.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Admiral Sarn, Space Tech faction, evil, schemer. Relationship: antagonistic, looking at someone they consider an enemy. New expression: quiet threat: a thin smile that does not reach the eyes, eyes cold and fixed, head slightly tilted."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Admiral Sarn, Space Tech faction, evil, devoted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: stern, disappointed anger, as at someone who broke faith: brows drawn down and together, eyes hard and level, jaw set, lips pressed thin."
   },
   {
    "faction": "space",
    "name": "Admiral Sarn",
    "slug": "admiral-sarn",
    "align": "E",
-   "personality": "schemer",
+   "personality": "devoted",
    "mood": "friendly",
    "file": "content/dialog/portraits/admiral-sarn-friendly.png",
    "base": "content/dialog/portraits/admiral-sarn.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Admiral Sarn, Space Tech faction, evil, schemer. Relationship: friendly, looking at someone they like and trust. New expression: satisfied and sly: a crooked smirk, one brow raised, eyes glinting, as with a useful ally. Keep an edge of menace even in warmth."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Admiral Sarn, Space Tech faction, evil, devoted. Relationship: friendly, looking at someone they like and trust. New expression: solemn warmth, as to a trusted comrade: a small sincere smile, softened eyes, brows relaxed. Keep an edge of menace even in warmth."
   },
   {
    "faction": "space",
@@ -1555,24 +1555,24 @@
    "name": "The Reformer Elias",
    "slug": "the-reformer-elias",
    "align": "AG",
-   "personality": "devoted",
+   "personality": "open-hearted",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/the-reformer-elias-antagonistic.png",
    "base": "content/dialog/portraits/the-reformer-elias.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is The Reformer Elias, Dark Energy faction, absolute good, devoted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: stern, disappointed anger, as at someone who broke faith: brows drawn down and together, eyes hard and level, jaw set, lips pressed thin."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is The Reformer Elias, Dark Energy faction, absolute good, open-hearted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: hurt more than hostile: brows pinched upward, eyes wounded and wary, mouth turned down."
   },
   {
    "faction": "dark",
    "name": "The Reformer Elias",
    "slug": "the-reformer-elias",
    "align": "AG",
-   "personality": "devoted",
+   "personality": "open-hearted",
    "mood": "friendly",
    "file": "content/dialog/portraits/the-reformer-elias-friendly.png",
    "base": "content/dialog/portraits/the-reformer-elias.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is The Reformer Elias, Dark Energy faction, absolute good, devoted. Relationship: friendly, looking at someone they like and trust. New expression: solemn warmth, as to a trusted comrade: a small sincere smile, softened eyes, brows relaxed."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is The Reformer Elias, Dark Energy faction, absolute good, open-hearted. Relationship: friendly, looking at someone they like and trust. New expression: warm, open pleasure: a genuine smile showing a little teeth, eyes crinkled at the corners, brows lifted."
   },
   {
    "faction": "dark",
@@ -1603,24 +1603,24 @@
    "name": "Organizer Tomas",
    "slug": "organizer-tomas",
    "align": "G",
-   "personality": "open-hearted",
+   "personality": "wary",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/organizer-tomas-antagonistic.png",
    "base": "content/dialog/portraits/organizer-tomas.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Organizer Tomas, Dark Energy faction, good, open-hearted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: hurt more than hostile: brows pinched upward, eyes wounded and wary, mouth turned down."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Organizer Tomas, Dark Energy faction, good, wary. Relationship: antagonistic, looking at someone they consider an enemy. New expression: cold suspicion: eyes narrowed and sidelong, brows lowered, mouth a flat line, chin tucked."
   },
   {
    "faction": "dark",
    "name": "Organizer Tomas",
    "slug": "organizer-tomas",
    "align": "G",
-   "personality": "open-hearted",
+   "personality": "wary",
    "mood": "friendly",
    "file": "content/dialog/portraits/organizer-tomas-friendly.png",
    "base": "content/dialog/portraits/organizer-tomas.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Organizer Tomas, Dark Energy faction, good, open-hearted. Relationship: friendly, looking at someone they like and trust. New expression: warm, open pleasure: a genuine smile showing a little teeth, eyes crinkled at the corners, brows lifted."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Organizer Tomas, Dark Energy faction, good, wary. Relationship: friendly, looking at someone they like and trust. New expression: a reluctant, earned smile: one corner of the mouth up, eyes still watchful but softened."
   },
   {
    "faction": "dark",
@@ -1699,24 +1699,24 @@
    "name": "The Vanguard, Corin",
    "slug": "the-vanguard-corin",
    "align": "E",
-   "personality": "schemer",
+   "personality": "devoted",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/the-vanguard-corin-antagonistic.png",
    "base": "content/dialog/portraits/the-vanguard-corin.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is The Vanguard, Corin, Dark Energy faction, evil, schemer. Relationship: antagonistic, looking at someone they consider an enemy. New expression: quiet threat: a thin smile that does not reach the eyes, eyes cold and fixed, head slightly tilted."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is The Vanguard, Corin, Dark Energy faction, evil, devoted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: stern, disappointed anger, as at someone who broke faith: brows drawn down and together, eyes hard and level, jaw set, lips pressed thin."
   },
   {
    "faction": "dark",
    "name": "The Vanguard, Corin",
    "slug": "the-vanguard-corin",
    "align": "E",
-   "personality": "schemer",
+   "personality": "devoted",
    "mood": "friendly",
    "file": "content/dialog/portraits/the-vanguard-corin-friendly.png",
    "base": "content/dialog/portraits/the-vanguard-corin.png",
    "baseArt": "Placeholder",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is The Vanguard, Corin, Dark Energy faction, evil, schemer. Relationship: friendly, looking at someone they like and trust. New expression: satisfied and sly: a crooked smirk, one brow raised, eyes glinting, as with a useful ally. Keep an edge of menace even in warmth."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is The Vanguard, Corin, Dark Energy faction, evil, devoted. Relationship: friendly, looking at someone they like and trust. New expression: solemn warmth, as to a trusted comrade: a small sincere smile, softened eyes, brows relaxed. Keep an edge of menace even in warmth."
   },
   {
    "faction": "dark",
@@ -1771,24 +1771,24 @@
    "name": "Mother-Spore Ilya",
    "slug": "mother-spore-ilya",
    "align": "AG",
-   "personality": "devoted",
+   "personality": "open-hearted",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/mother-spore-ilya-antagonistic.png",
    "base": "content/dialog/portraits/mother-spore-ilya.png",
    "baseArt": "Final",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Mother-Spore Ilya, Greenies (Chem) faction, absolute good, devoted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: stern, disappointed anger, as at someone who broke faith: brows drawn down and together, eyes hard and level, jaw set, lips pressed thin."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Mother-Spore Ilya, Greenies (Chem) faction, absolute good, open-hearted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: hurt more than hostile: brows pinched upward, eyes wounded and wary, mouth turned down."
   },
   {
    "faction": "greenies",
    "name": "Mother-Spore Ilya",
    "slug": "mother-spore-ilya",
    "align": "AG",
-   "personality": "devoted",
+   "personality": "open-hearted",
    "mood": "friendly",
    "file": "content/dialog/portraits/mother-spore-ilya-friendly.png",
    "base": "content/dialog/portraits/mother-spore-ilya.png",
    "baseArt": "Final",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Mother-Spore Ilya, Greenies (Chem) faction, absolute good, devoted. Relationship: friendly, looking at someone they like and trust. New expression: solemn warmth, as to a trusted comrade: a small sincere smile, softened eyes, brows relaxed."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Mother-Spore Ilya, Greenies (Chem) faction, absolute good, open-hearted. Relationship: friendly, looking at someone they like and trust. New expression: warm, open pleasure: a genuine smile showing a little teeth, eyes crinkled at the corners, brows lifted."
   },
   {
    "faction": "greenies",
@@ -1819,24 +1819,24 @@
    "name": "Delegate Fenn",
    "slug": "delegate-fenn",
    "align": "G",
-   "personality": "open-hearted",
+   "personality": "wary",
    "mood": "antagonistic",
    "file": "content/dialog/portraits/delegate-fenn-antagonistic.png",
    "base": "content/dialog/portraits/delegate-fenn.png",
    "baseArt": "Final",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Delegate Fenn, Greenies (Chem) faction, good, open-hearted. Relationship: antagonistic, looking at someone they consider an enemy. New expression: hurt more than hostile: brows pinched upward, eyes wounded and wary, mouth turned down."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Delegate Fenn, Greenies (Chem) faction, good, wary. Relationship: antagonistic, looking at someone they consider an enemy. New expression: cold suspicion: eyes narrowed and sidelong, brows lowered, mouth a flat line, chin tucked."
   },
   {
    "faction": "greenies",
    "name": "Delegate Fenn",
    "slug": "delegate-fenn",
    "align": "G",
-   "personality": "open-hearted",
+   "personality": "wary",
    "mood": "friendly",
    "file": "content/dialog/portraits/delegate-fenn-friendly.png",
    "base": "content/dialog/portraits/delegate-fenn.png",
    "baseArt": "Final",
-   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Delegate Fenn, Greenies (Chem) faction, good, open-hearted. Relationship: friendly, looking at someone they like and trust. New expression: warm, open pleasure: a genuine smile showing a little teeth, eyes crinkled at the corners, brows lifted."
+   "prompt": "Edit the attached portrait. Keep exactly the same person: face, age, skin, hair, scars, outfit, helmet or headgear, pose, framing, camera angle, lighting, colour palette and background. Change only the facial expression. Same painterly semi-realistic rendering as the original, same 3:4 portrait size (864 × 1152), saved as PNG. No text, no letters, no border. The character is Delegate Fenn, Greenies (Chem) faction, good, wary. Relationship: friendly, looking at someone they like and trust. New expression: a reluctant, earned smile: one corner of the mouth up, eyes still watchful but softened."
   },
   {
    "faction": "greenies",

@@ -375,7 +375,9 @@ to `characterSystem.test.mjs`:
 2. `use` matches the character's polarity, or is declared with a reason.
 3. Depth 3 only on declared extremes, and each one has a cost in a sorrow or magic secret.
 4. Every faction has at least one character off its home side.
-5. No secret at stage k is revealed by a map earlier than stage k's first map.
+5. No secret at stage k is revealed before stage k's place in the campaign. Built as a rule in play rather than a
+   content check (MM-story_mwpt846x_3z): a magic or sense secret of stage k is held, "Not yet understood", until the
+   player has surveyed stage k's homeworld (`magic.js STAGE_HOMEWORLD`: Verdance, Florael, Kessra, Cinder, Xenthe).
 6. Stage 5 pieces only in T3 characters, at least one in each of 5 factions.
 7. Before stage 2, lines say only "blessing" and "curse"; Brain, Soul and Body from stage 2; field names
    (Electrum, Quantum, Organum) only from stage 4.

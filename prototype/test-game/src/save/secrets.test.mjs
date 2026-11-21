@@ -68,3 +68,22 @@ test('told in person once: the next untold secret, then the one after; an uncove
   s.rapport[CH.name].score = 50;
   assert.deepEqual([untoldSecret(CH, s).key, untoldSecret(CH, s).line], ['share', 'share said'], 'the truth comes out in person');
 });
+
+// [MM-story_mwpt846x_3z] The discovery story keeps its order (Magic-System §6, §9 check 5): a magic or sense secret of a
+// later stage is held, "Not yet understood", until the player has surveyed that stage's homeworld.
+import { discoveryStage, STAGE_HINT } from './secrets.js';
+test('a later-stage magic secret waits for its homeworld; the rest of the character is unaffected', () => {
+  assert.equal(discoveryStage({}), 1);
+  assert.equal(discoveryStage({ reveals: { surveyed: { air: true } } }), 2);
+  assert.equal(discoveryStage({ reveals: { surveyed: { air: true, artillery: true, arcane: true } } }), 4);
+  const ch = { name: 'T', secrets: [
+    { key: 'magic', stage: 4, text: 'deep', line: 'Deep.' },
+    { key: 'sense', stage: 1, text: 'near', line: 'Near.' },
+  ] };
+  const s = { rapport: { T: { score: 100, kept: 1, broken: 0 } } };
+  let v = revealSecrets(ch, s);
+  assert.deepEqual([v.secrets[0].state, v.secrets[0].hint, v.secrets[1].state], ['held', STAGE_HINT, 'out']);
+  s.reveals = { surveyed: { air: true, artillery: true, arcane: true } };
+  v = revealSecrets(ch, s);
+  assert.equal(v.secrets[0].state, 'out', 'at Cinder the stage 4 secret comes out');
+});

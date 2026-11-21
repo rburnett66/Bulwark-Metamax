@@ -107,6 +107,14 @@ test('magic: the owner\'s names and home sides, three per side, intent from pola
   assert.ok(isSide('soul') && isSide('valor') && !isSide('fire'));
 });
 
+test('names before their stage: a field name in a stage-1 secret is caught (Magic-System §9 check 7)', () => {
+  const probe = JSON.parse(JSON.stringify(files));
+  const ch = probe.ground.characters[0], sec = ch.secrets.find((x) => x.key === 'magic');
+  sec.text = sec.text + ' Electrum, they call it.';
+  const ids = characterFindings(buildModel({ packs, files: probe, threads }), probe, statRanks(UNITS, packs)).map((f) => f.id);
+  assert.ok(ids.includes(`magic-names:${ch.name}:magic`), 'a field name at stage 1 is a finding');
+});
+
 test('the content\'s known problems: nothing new, nothing fixed and still listed (gate-baseline.json)', () => {
   const findings = characterFindings(model, files, statRanks(UNITS, packs)).map((f) => f.id);
   const base = new Set(json('../../content/characters/gate-baseline.json').findings);

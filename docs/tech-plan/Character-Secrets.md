@@ -79,6 +79,9 @@
   | loyalty | player loyalty with their faction ≥ 0 |
   | control | Trusted (rapport ≥ 60) |
   | love | the player has met the person they love (`who`) |
+- **Discovery stage.** A `magic` or `sense` secret of discovery stage k (Magic-System §6) is held, "Not yet
+  understood", until the player has surveyed stage k's homeworld (Verdance, Florael, Kessra, Cinder, Xenthe for stages
+  1–5) [MM-story_mwpt846x_3z].
 - **Lies.** A secret with `lie` shows the lie once its step is met, and the truth once rapport ≥ `lie.until`; the
   standings then mark it "was a lie".
 - `revealSecrets(char, s)` → `[{ key, label, text, lie, wasLie, mission, item }]` in order, plus `held` (count of
@@ -123,7 +126,7 @@
 - Secret missions: `share / treasure / magic` as Mission Log missions with their rewards (workbook rows).
 - Their sense: omens in play (e.g. a warning before a heavy wave once revealed).
 - Gifts: giving a character what they want (and `control` guards traded for it).
-- The other eight factions' characters files, in the Powder tone once the owner approves it.
+- ~~The other eight factions' characters files~~: done (#349, reworked to pass the character system in #356).
 
 ## 9. Files
 
