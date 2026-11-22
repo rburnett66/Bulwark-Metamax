@@ -1096,11 +1096,17 @@ cross-planet inputs, level carries through, super crops at the top.
 ### 11.3 Distilling [MM-story_mws5zzer_c]
 
 Owner, 2026-11-22: "Another way to create more sellable items is to add distillers which process crops into chemicals."
-and "Now a simple crop can be a drink, tonic, medicine, fuel."
+and "Now a simple crop can be a drink, tonic, medicine, fuel." Then: "Distilling turns a single crop into multiple
+items of a smaller volume, while a fabricator takes multiple items and creates something more complex."
 
-The **Distiller** is a second processing building beside the Refinery. Refining turns a good into its one refined form;
-distilling turns **one crop into one of four products**, and the player picks which when the job is queued. This is how
-a simple crop becomes many sellable items.
+The **Distiller** is a second processing building beside the Refinery. The two processing directions are opposite:
+
+- **Distilling splits.** One crop goes in; **several products come out of the same run**, each a smaller volume than
+  the crop that made it. A batch of grain comes out as some spirit, some tonic, some salve and some ethanol at once.
+- **Fabricating combines** (§11.2). Several goods go in, often from several planets; one more complex thing comes out.
+
+So distilling is how a simple crop becomes many sellable items, and the smaller volumes are worth more per unit: they
+take less silo and cargo space than the crop.
 
 | Product | What it is | Sells to (proposed) | Value vs the raw crop (proposed) |
 |---|---|---|---|
@@ -1109,18 +1115,23 @@ a simple crop becomes many sellable items.
 | **Medicine** | remedies, salves, serums | faction ships; the best price where a faction is at war | 2.5× |
 | **Fuel** | alcohols, oils, gases | faction ships; and a Fabricator input (fuel cells, §11.2) | 2× |
 
-Example, one crop four ways: **Loam Grain** → grain spirit (drink), malt tonic, grain salve (medicine), grain ethanol
-(fuel). Each crop's four products are named in its data; a crop that cannot make one leaves it blank.
+Example, one run (proposed numbers): **10 Loam Grain** → 3 grain spirit (drink) + 2 malt tonic + 1 grain salve
+(medicine) + 3 grain ethanol (fuel). Each crop's data names its products and its split; a crop that cannot make one
+leaves it out, and its share goes to the others. The split is the crop's character: a fruit runs heavy on drink, a resin
+heavy on fuel.
 
 Rules (proposed):
 
 - **What distils:** the plant crops (Grain, Vegetable, Fruit and the plant Materials of §9.3). Minerals and gems do not
   distil; they refine.
-- **A job** is a timed recipe queued at the Distiller like a refining job: a few units of one crop in, one product out.
+- **A job** is a timed run queued at the Distiller like a refining job: a batch of one crop in, its whole split out.
+  One crop per run, never a mix (mixing is the Fabricator's job).
+- **Smaller volume:** together the products of a run take less space than the crop (proposed: 9 units from 10), and each
+  sells above the crop's own price, so a run is worth more than selling the batch raw.
 - **Level carries through:** a Legendary crop makes a Legendary drink, in the same five colours.
 - **Factions want different products.** Each faction's buyers pay more for some products than others (a military
-  faction for medicine and fuel, a trading one for drinks), so the choice of product is a choice of buyer, and so a
-  loyalty choice (Character-System §7.9).
+  faction for medicine and fuel, a trading one for drinks), so where each product of a run is sold is a choice of
+  buyer, and so a loyalty choice (Character-System §7.9).
 - **Opens with research:** a **Distillery** node, opened by a crop mastered to a level, like the machines (proposed:
   level 3), and bought with gold.
 
@@ -1240,6 +1251,7 @@ What follows from the indoor rooms and the avatars:
 | D46 | Farming opens per planet at that planet's Rig Mk II, or everywhere at the first? | per planet; the first opens the FARM button |
 | D47 | Do the Distiller's products only sell, or do some have uses? | all sell; fuel is also a Fabricator input; tonic and medicine uses are D48 |
 | D48 | Can tonics and medicines be used, not just sold (a battle boost, crew healing on the ship)? | sell only for now; a use is a later design |
+| D50 | Can a run be tuned to favour one product (a still setting), or is the split fixed per crop? | fixed per crop for now |
 | D49 | Is the Distiller a farm building on the surface or a grow-room machine? | a farm building, like the Refinery |
 
 ## Dependencies
