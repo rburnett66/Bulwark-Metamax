@@ -1093,6 +1093,37 @@ refined goods.
 The full recipe book is its own design once Phase C lands (§13). This document fixes the shape: raw → refined → part,
 cross-planet inputs, level carries through, super crops at the top.
 
+### 11.3 Distilling [MM-story_mws5zzer_c]
+
+Owner, 2026-11-22: "Another way to create more sellable items is to add distillers which process crops into chemicals."
+and "Now a simple crop can be a drink, tonic, medicine, fuel."
+
+The **Distiller** is a second processing building beside the Refinery. Refining turns a good into its one refined form;
+distilling turns **one crop into one of four products**, and the player picks which when the job is queued. This is how
+a simple crop becomes many sellable items.
+
+| Product | What it is | Sells to (proposed) | Value vs the raw crop (proposed) |
+|---|---|---|---|
+| **Drink** | spirits, cordials, brews | crews, stations, any faction ship | 1.5× |
+| **Tonic** | a restorative or stimulant | faction ships; a short boost item (open, D48) | 2× |
+| **Medicine** | remedies, salves, serums | faction ships; the best price where a faction is at war | 2.5× |
+| **Fuel** | alcohols, oils, gases | faction ships; and a Fabricator input (fuel cells, §11.2) | 2× |
+
+Example, one crop four ways: **Loam Grain** → grain spirit (drink), malt tonic, grain salve (medicine), grain ethanol
+(fuel). Each crop's four products are named in its data; a crop that cannot make one leaves it blank.
+
+Rules (proposed):
+
+- **What distils:** the plant crops (Grain, Vegetable, Fruit and the plant Materials of §9.3). Minerals and gems do not
+  distil; they refine.
+- **A job** is a timed recipe queued at the Distiller like a refining job: a few units of one crop in, one product out.
+- **Level carries through:** a Legendary crop makes a Legendary drink, in the same five colours.
+- **Factions want different products.** Each faction's buyers pay more for some products than others (a military
+  faction for medicine and fuel, a trading one for drinks), so the choice of product is a choice of buyer, and so a
+  loyalty choice (Character-System §7.9).
+- **Opens with research:** a **Distillery** node, opened by a crop mastered to a level, like the machines (proposed:
+  level 3), and bought with gold.
+
 ## 12. Research: the FARMING division
 
 The tech tree gains a fifth division beside UNITS, BASES, MAP and OUTPOST (Tech-Tree-Design §2). It is bought with
@@ -1114,6 +1145,7 @@ in (§2.7) and raises its level with gold (§2.8).
 | Hunter Kennel, Kennel II | truffle hunting, a 2nd and 3rd drone | Xenthe F2 |
 | Pod Bench II | pod upgrades cost half | Verdance F3 |
 | Refinery | refining | research |
+| Distillery | distilling: drink, tonic, medicine, fuel (§11.3) | a crop mastered to level 3 (proposed) |
 | Fabricator | manufacturing (needs Research Level 3) | research |
 
 **Farming Research Level** counts FARMING nodes owned: Level 1 at 5, Level 2 at 12, **Level 3 at 20** (proposed;
@@ -1128,7 +1160,7 @@ manufacturing; reaching it takes farming contracts with most of the nine faction
 | **A — the loop** | the Rig Mk II gate and Verdance F1; the farmable-cell layer on the Verdance outpost map; Farmhouse, Silo; Traditional and Irrigated plots; **the avatar on the surface** (the ship's crew rig at outpost scale, walk-to, the work pose, the tap queue) and Verdance farmhands; the growth stages, Fruited and Dead; seed pods as items in five levels with the pod bench; Rare pods from battles; the SEED PODS view; the ember harvest effect; Sprinklers; harvest and sell taps; the Helium-4 rename | proves the mode is fun with the fewest methods, on the surface only |
 | **B — environment** | the atmosphere model; **the grow-room view**, built on the ship interior's room stack at the three-quarter angle, with the avatar's walk-to and plot actions; the room's **three thirds** and **machine slots**; the **Irrigation System** per third, then **Air Control**, **Light Rig**, **Climate Unit**, **Nutrient Doser**; **machine levels 1–4 and maintenance** (clock, MAINTAIN, MAINTAIN ROOM, overdue stop, offline catch-up of the clocks); **the Hydroponics room** (one full-screen set) behind the **glass dome**; **the Underground room** (one cavern kit plus nine accent sets) behind the **ammunition bunker**; **the Robot Bay and gro-bots I and II**; the **Vertical farm with levels 1–4** and Tub on the surface; Legendary's tech rule; mystery crops and the Growth Journal | the discovery game, and the indoor rooms arrive with the methods and machines that need them |
 | **C — the factions** | F1 – F3 on all nine planets (Distribution §5); the faction pod stores and loyalty ranks; the Collective's farm orders; the machine blueprints; Terraced, Orchard, Solo, Spatial, Hydrofarming, Truffle Hunting; crop models for all 36 (living and accreted); gems from mining; the farmable-cell layer on the other eight outpost maps | the reasons to build many farms, on many planets |
-| **D — processing** | Refinery, then Fabricator at Research Level 3; first ship parts; each faction's recipe line | the long game |
+| **D — processing** | Refinery and Distiller (§11.3), then Fabricator at Research Level 3; first ship parts; each faction's recipe line | the long game |
 
 What follows from the indoor rooms and the avatars:
 
@@ -1206,6 +1238,9 @@ What follows from the indoor rooms and the avatars:
 | D44 | The avatar's height on the surface | 0.45 of a battle cell (shown in the prototype) |
 | D45 | Farmhands: the faction's crew walking the surface farm as life, never changing a plot | yes, two or three per farmed planet |
 | D46 | Farming opens per planet at that planet's Rig Mk II, or everywhere at the first? | per planet; the first opens the FARM button |
+| D47 | Do the Distiller's products only sell, or do some have uses? | all sell; fuel is also a Fabricator input; tonic and medicine uses are D48 |
+| D48 | Can tonics and medicines be used, not just sold (a battle boost, crew healing on the ship)? | sell only for now; a use is a later design |
+| D49 | Is the Distiller a farm building on the surface or a grow-room machine? | a farm building, like the Refinery |
 
 ## Dependencies
 
