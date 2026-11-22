@@ -1251,8 +1251,8 @@ What follows from the indoor rooms and the avatars:
 | D46 | Farming opens per planet at that planet's Rig Mk II, or everywhere at the first? | per planet; the first opens the FARM button |
 | D47 | Do the Distiller's products only sell, or do some have uses? | all sell; fuel is also a Fabricator input; tonic and medicine uses are D48 |
 | D48 | Can tonics and medicines be used, not just sold (a battle boost, crew healing on the ship)? | sell only for now; a use is a later design |
-| D50 | Can a run be tuned to favour one product (a still setting), or is the split fixed per crop? | fixed per crop for now |
 | D49 | Is the Distiller a farm building on the surface or a grow-room machine? | a farm building, like the Refinery |
+| D50 | Can a run be tuned to favour one product (a still setting), or is the split fixed per crop? | fixed per crop for now |
 
 ## Dependencies
 
