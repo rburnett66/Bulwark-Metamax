@@ -1159,6 +1159,20 @@ Rules (proposed):
 - **The upgrades are expensive** (proposed: level 2, 3 and 4 cost 2×, 4× and 8× the machine's price, on top of
   Machine Engineering I–III and, for 3 and 4, the specialist faction's blueprint, §2.8). Getting a machine to 9 of 10 is
   a long-game goal.
+- **Upgrades need special parts** (owner, 2026-11-22: "These upgrades might require special parts too"). Each level past
+  1 names its parts as data, one kind per machine (proposed):
+
+  | Machine | Level 2 | Level 3 | Level 4 |
+  |---|---|---|---|
+  | Still | copper coil | pressure valve | reflux column |
+  | Infuser | fine mesh | heat exchanger | crystal filter |
+  | Apothecary Press | steel plate | pressure valve | precision die |
+  | Cracking Column | heat exchanger | catalyst bed | plasma core |
+
+  Parts come from the **Fabricator** (§11.2), so the two processing directions feed each other: the Fabricator makes
+  the parts that raise the Distiller's yield, and the Distiller's fuel goes into Fabricator recipes. Before the
+  Fabricator opens, level-2 parts can also come from faction contracts and the Pod Reward Chest (proposed); level 3 and
+  4 parts only from the Fabricator. The upgrade screen names any missing part, like a missing ingredient.
 - **A run always pays.** The products are concentrated, so each unit sells for 4–6× a raw crop (the table above). At
   level 1, 3 units at about 5× is roughly 1.5× the value of the 10 crops sold raw; at level 4, 9 units is roughly 4.5×.
   The products also take less silo and cargo space than the crop.
@@ -1289,6 +1303,7 @@ What follows from the indoor rooms and the avatars:
 | D50 | Can a run be tuned to favour one product (a still setting), or is the split fixed per crop? | fixed per crop for now |
 | D51 | A run missing a product's machine or ingredients: that share stays as crop, or is lost? | stays as crop, unused |
 | D52 | Where water and yeast come from: bought stock, or grown and gathered? | cheap stock at any outpost |
+| D53 | Where a Distiller upgrade's special parts come from | the Fabricator; level-2 parts also from faction contracts and the Pod Reward Chest |
 
 ## Dependencies
 
