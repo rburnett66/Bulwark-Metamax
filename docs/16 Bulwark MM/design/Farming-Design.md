@@ -1108,15 +1108,15 @@ The **Distiller** is a second processing building beside the Refinery. The two p
 So distilling is how a simple crop becomes many sellable items, and the smaller volumes are worth more per unit: they
 take less silo and cargo space than the crop.
 
-| Product | What it is | Sells to (proposed) | Value vs the raw crop (proposed) |
+| Product | What it is | Sells to (proposed) | Value per unit vs one raw crop (proposed) |
 |---|---|---|---|
-| **Drink** | spirits, cordials, brews | crews, stations, any faction ship | 1.5× |
-| **Tonic** | a restorative or stimulant | faction ships; a short boost item (open, D48) | 2× |
-| **Medicine** | remedies, salves, serums | faction ships; the best price where a faction is at war | 2.5× |
-| **Fuel** | alcohols, oils, gases | faction ships; and a Fabricator input (fuel cells, §11.2) | 2× |
+| **Drink** | spirits, cordials, brews | crews, stations, any faction ship | 4× |
+| **Tonic** | a restorative or stimulant | faction ships; a short boost item (open, D48) | 5× |
+| **Medicine** | remedies, salves, serums | faction ships; the best price where a faction is at war | 6× |
+| **Fuel** | alcohols, oils, gases | faction ships; and a Fabricator input (fuel cells, §11.2) | 5× |
 
-Example, one run (proposed numbers): **10 Loam Grain** → 3 grain spirit (drink) + 2 malt tonic + 1 grain salve
-(medicine) + 3 grain ethanol (fuel). Each crop's data names its products and its split; a crop that cannot make one
+Example, one run on fully upgraded machines (proposed numbers): **10 Loam Grain** → 3 grain spirit (drink) + 2 malt
+tonic + 1 grain salve (medicine) + 3 grain ethanol (fuel), the grain's split of 3 : 2 : 1 : 3. Each crop's data names its products and its split; a crop that cannot make one
 leaves it out, and its share goes to the others. The split is the crop's character: a fruit runs heavy on drink, a resin
 heavy on fuel.
 
@@ -1147,8 +1147,21 @@ Rules (proposed):
 - **A job** is a timed run queued at the Distiller like a refining job: a batch of one crop in, its split out (the
   shares the player is equipped for).
   One crop per run, never a mix (mixing is the Fabricator's job).
-- **Smaller volume:** together the products of a run take less space than the crop (proposed: 9 units from 10), and each
-  sells above the crop's own price, so a run is worth more than selling the batch raw.
+- **Yield grows with the machine** (owner, 2026-11-22: "it should start at 3, then 5, then 7 and gets to 9 when the
+  machine is fully upgraded. And these upgrades will be expensive."). Per 10 crop in, a product's machine makes:
+
+  | Machine level | 1 | 2 | 3 | 4 (fully upgraded) |
+  |---|---|---|---|---|
+  | Units out per 10 crop | **3** | **5** | **7** | **9** |
+
+  Each product's machine has its own level, so it is applied to that product's share: a Still at level 2 makes 5 of
+  every 10 units of the crop's drink share. The four levels follow the machine levels of §2.8.
+- **The upgrades are expensive** (proposed: level 2, 3 and 4 cost 2×, 4× and 8× the machine's price, on top of
+  Machine Engineering I–III and, for 3 and 4, the specialist faction's blueprint, §2.8). Getting a machine to 9 of 10 is
+  a long-game goal.
+- **A run always pays.** The products are concentrated, so each unit sells for 4–6× a raw crop (the table above). At
+  level 1, 3 units at about 5× is roughly 1.5× the value of the 10 crops sold raw; at level 4, 9 units is roughly 4.5×.
+  The products also take less silo and cargo space than the crop.
 - **Level carries through:** a Legendary crop makes a Legendary drink, in the same five colours.
 - **Factions want different products.** Each faction's buyers pay more for some products than others (a military
   faction for medicine and fuel, a trading one for drinks), so where each product of a run is sold is a choice of
