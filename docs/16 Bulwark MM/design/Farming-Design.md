@@ -1120,11 +1120,32 @@ Example, one run (proposed numbers): **10 Loam Grain** → 3 grain spirit (drink
 leaves it out, and its share goes to the others. The split is the crop's character: a fruit runs heavy on drink, a resin
 heavy on fuel.
 
+**Every product needs its machine and its ingredients** (owner, 2026-11-22: "Each crop has a different split. But the
+user needs the machine and the ingredients"). The split says what a crop *can* become; what a run actually makes is
+the products the player is equipped for.
+
+| Product | Machine in the Distiller (proposed) | Ingredients beside the crop (proposed) |
+|---|---|---|
+| Drink | **Still** | yeast, water |
+| Tonic | **Infuser** | a mineral salt (e.g. Sunsalt), water |
+| Medicine | **Apothecary Press** | a resin or sap (e.g. Duskmoss Resin), a salt |
+| Fuel | **Cracking Column** | a catalyst (e.g. Slag Iron or Mesa Copper) |
+
+- A run makes only the products whose machine is installed and whose ingredients are in stock; ingredients are used up
+  per run, scaled to that product's share.
+- **The missing shares are not made.** Their part of the crop stays in the silo, unused (proposed), so a run is never
+  wasted, but a fully equipped Distiller gets the most from each crop. The job screen shows each product's share and
+  names what is missing ("Needs a Cracking Column", "Needs 2 Sunsalt"), like a crop's unlock hint.
+- Ingredients come from other crops and planets, so distilling, like fabricating, pulls the player across the galaxy;
+  water and yeast are cheap stock bought at any outpost (proposed).
+- The machines are bought and levelled like the grow-room machines (§2.7, §2.8).
+
 Rules (proposed):
 
 - **What distils:** the plant crops (Grain, Vegetable, Fruit and the plant Materials of §9.3). Minerals and gems do not
   distil; they refine.
-- **A job** is a timed run queued at the Distiller like a refining job: a batch of one crop in, its whole split out.
+- **A job** is a timed run queued at the Distiller like a refining job: a batch of one crop in, its split out (the
+  shares the player is equipped for).
   One crop per run, never a mix (mixing is the Fabricator's job).
 - **Smaller volume:** together the products of a run take less space than the crop (proposed: 9 units from 10), and each
   sells above the crop's own price, so a run is worth more than selling the batch raw.
@@ -1253,6 +1274,8 @@ What follows from the indoor rooms and the avatars:
 | D48 | Can tonics and medicines be used, not just sold (a battle boost, crew healing on the ship)? | sell only for now; a use is a later design |
 | D49 | Is the Distiller a farm building on the surface or a grow-room machine? | a farm building, like the Refinery |
 | D50 | Can a run be tuned to favour one product (a still setting), or is the split fixed per crop? | fixed per crop for now |
+| D51 | A run missing a product's machine or ingredients: that share stays as crop, or is lost? | stays as crop, unused |
+| D52 | Where water and yeast come from: bought stock, or grown and gathered? | cheap stock at any outpost |
 
 ## Dependencies
 
