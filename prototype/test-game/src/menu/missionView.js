@@ -141,7 +141,7 @@ export function listHtml(rows, catalog, tab, selectedId) {
 const GATE_KIND = Object.freeze({ rank_at_least: 'Level', tech_node: 'Tech node', planet_open: 'Planet', planet_map_unlocked: 'Map', planet_map_beaten: 'Map', planet_map_stars: 'Stars',
   replay_improves: 'Unlocked by', capital_ship_arrived: 'Capital ship', quest_step_collected: 'Quest line', loyalty: 'Loyalty',
   outpost_online: 'Outpost', ore_sold: 'Delivered', raids_held: 'Raids held', outpost_contract_step: 'Contract',
-  farm_plots_planted: 'Planted', crop_delivered: 'Delivered', farm_methods_growing: 'Methods' });
+  farm_plots_planted: 'Planted', crop_delivered: 'Delivered', farm_methods_growing: 'Methods', crop_level: 'Crop level' });
 
 /** The gates, met or not. A logged mission met them all when it was granted, so only a Locked one is re-judged. */
 export function gateViews(row, s, ctx) {

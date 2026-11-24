@@ -204,6 +204,35 @@ Notes:
 - **Kessra teaches no enhancement**: it brings automation (the Robot Bay's levels and Gro-bot II). Every other faction
   teaches at least one enhancement, and the five grow-light colours come from five different factions.
 
+### 5.3 The terms in the workbook [MM-story_mwu3uc19_1v]
+
+All 27 are rows of `Farm_Contracts` in `docs/sources/Bulwark-Map-Data.xlsx` (owner, 2026-11-23: *"We should add the rest
+of the farm contracts"*; written by `tools/economy/write_farm_sheets.py Farm_Contracts`). Every number is proposed (D14):
+
+| | Ask | Gate | Pays |
+|---|---|---|---|
+| **F1** | plant 3 plots of the common-tier crop (Traditional; Lumen in its granted Vertical farm), deliver 2½ plots' yield, 2 methods growing at once | the planet finished, ship in orbit | 1,500 gold, 300 XP, +15 loyalty, Pod Crate of 12 |
+| **F2** | plant 2 plots of the specialty method with the rare-tier crop, raise it to **Uncommon**, deliver 2 plots' yield | F1 collected, **Trusted** (25 loyalty) | 3,000 gold, 500 XP, +20, 8 pods |
+| **F3** | plant the epic-tier crop in its best method (1 plot), raise it to **Epic**, deliver 2 plots' yield | F2 collected, **Honoured** (50 loyalty) | 6,000 gold, 800 XP, +25, 4 pods |
+
+Gold is ¾ of the outpost contract at the same step (2,000 / 4,000 / 8,000). The `Unlocks` column carries §5.2's methods,
+enhancements, blueprints and upgrades as words (`method:orchard`, `blueprint:air_control_3`, `enh:grow_lights_red`…);
+F3 also names the faction's manufacturing line (`line:<faction>`).
+
+**Live and planned.** A `Live` column says which the game plays. Today that is Verdance F1 alone: the other planets'
+outpost maps have no farm layer yet (C8), and F2 and F3 need methods, crop levels and blueprints still to come (C4, C5).
+`tools/extract_missions.py` writes the planned 26 to `missions.json` `plannedMissions`, which the game never reads, so
+the Mission Log and the Factors' desks stay as they are. Setting a row live puts it in the game, and the extractor refuses
+a live step whose step before is still planned. Each Factor's lines are drafted for all nine planets
+(`reveals.json` `factionShip.farm`, owner review).
+
+**For the owner (X11).** §5.2 pairs several F2 methods with a rare-tier crop whose best method is another: Verdance
+Orchard with Rootsong Seeds (Subterrain), Ochre Hydroponic with Mirage Oil (Tub), Kessra Terraced with Ghost Brass
+(Spatial), Rime Hydrofarm with Glacier Breath (Subterrain), Cinder Solo with Phoenix Glass (Vertical), Lumen Vertical
+with Starfall Iron (Subterrain), Vexmire Tub with Hive Jelly (Vertical). The rows follow §5.2 as written: the crop grows
+there at a lower match, which makes F2 harder. Swapping the crop to the faction's uncommon tier, or the method to the
+crop's best, is a one-cell change.
+
 ## 6. Machine upgrades across the factions
 
 ### 6.1 The level ladder
@@ -294,6 +323,7 @@ player with friends on several planets reaches.
 | X8 | Collective farm orders open after two farmed planets | yes |
 | X9 | Wanted crops at 1.5×, unadvertised | yes |
 | X10 | Mystery crop names and affinities (§7) | working names; affinities a derangement |
+| X11 | F2 grows the rare-tier crop in the specialty method, which is not that crop's best method on seven planets (§5.3) | keep §5.2 as written (F2 is harder) |
 
 ## Dependencies
 

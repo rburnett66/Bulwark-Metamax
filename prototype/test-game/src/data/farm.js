@@ -100,8 +100,12 @@ export const FARM_BUILDINGS = Object.freeze((MAPDATA.farmBuildings || []).map((r
 /** A farm building by kind, or null. */
 export const farmBuildingOf = (kind) => FARM_BUILDINGS.find((b) => b.kind === kind) || null;
 
-/** The farming contracts this build ships (Phase A: Verdance F1). */
-export const FARM_CONTRACTS = Object.freeze((MAPDATA.farmContracts || []).map((r) => Object.freeze({
+/**
+ * The farming contracts this build plays: the Live rows of Farm_Contracts (Verdance F1 today). The sheet holds all 27
+ * (F1-F3 x 9 planets) [MM-story_mwu3uc19_1v]; the planned ones wait on their maps, methods and blueprints, and the game
+ * never offers, lists or counts them.
+ */
+export const FARM_CONTRACTS = Object.freeze((MAPDATA.farmContracts || []).filter((r) => r.Live === true).map((r) => Object.freeze({
   planetKey: r.Planet_Key, code: r.Contract, title: r.Title, crop: r.Crop_Id, plantPlots: num(r.Plant_Plots),
   deliver: num(r.Deliver), methodsAtOnce: num(r.Methods_At_Once), gold: num(r.Gold), loyalty: num(r.Loyalty),
   xp: num(r.XP), podCrate: num(r.Pod_Crate),

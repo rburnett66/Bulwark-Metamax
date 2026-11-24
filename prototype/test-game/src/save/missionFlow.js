@@ -71,7 +71,7 @@ const GATE = Object.freeze({
   outpost_contract_step: (s, c) => (((s.outpostContracts || {})[c.param] || {}).step || 0) >= c.value,
   // the farming contracts (Farming tech plan §5 A5) [MM-story_mwabgpsa_e]: the gate is a Rig Mk II at the planet's outpost
   farming_open: (s, c) => farmingOpen(s, c.param),
-  farm_plots_planted: (s, c) => measureFarmPlanted(s, c.param) >= c.value,
+  farm_plots_planted: (s, c) => measureFarmPlanted(s, c.param, c.method) >= c.value,
   crop_delivered: (s, c) => measureCropDelivered(s, c.param) >= c.value,
   farm_methods_growing: (s, c) => measureMethodsGrowing(s, c.param) >= c.value,
 });

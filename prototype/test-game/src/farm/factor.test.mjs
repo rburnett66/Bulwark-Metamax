@@ -64,7 +64,11 @@ test('F1 is given by the planet\'s Factor (the catalog giver), and every farming
   }
   // the gate is discoverable: before the rig is Mk II the Factor says what to bring
   assert.match(factorLines(FARM_LINES, 'ground', 'gate').map((l) => l.line).join(' '), /Finish the fight for Verdance/);
-  assert.deepEqual(factorLines(FARM_LINES, 'air', 'offer'), [], 'no farming contract on Florael yet: nothing to say');
+  // Florael's lines are drafted (all nine Factors, MM-story_mwu3uc19_1v) but its F1 is planned, not live: the desk is
+  // silent, so they are never spoken
+  assert.ok(factorLines(FARM_LINES, 'air', 'offer').length, 'Florael lines drafted');
+  const fl = defaultSave(); fl.capitalShips = { Florael: { arrived: true } };
+  assert.equal(factorDesk(fl, 'air'), null, 'no live farming contract on Florael yet: nothing to say');
 });
 
 test('the Trade Station\'s offer flag: gate → offer (flagged) → farm', () => {

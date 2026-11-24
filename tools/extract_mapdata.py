@@ -420,6 +420,8 @@ def farm_problems(data, planets):
         if need not in kinds:
             out.append(f"Farm_Buildings: Phase A needs {need}")
     ids = {r.get("Resource_Id") for r in crops}
+    built = {r.get("Method") for r in data["farmMethods"]}
+    method_words = built | {w for c in crops for w in str(c.get("Best_Method") or "").split()} | {"truffle_hunting"}
     for r in data["farmContracts"]:
         tag = f"Farm_Contracts {r.get('Planet_Key')} {r.get('Contract')}"
         if r.get("Planet_Key") not in planets:
@@ -429,6 +431,28 @@ def farm_problems(data, planets):
         for k in ("Plant_Plots", "Deliver", "Gold", "Pod_Crate"):
             if not (isinstance(r.get(k), int) and r[k] > 0):
                 out.append(f"{tag}: {k} must be a positive whole number")
+        # the 27 contracts [MM-story_mwu3uc19_1v]: F1 grows two ways; F2/F3 ask for a crop level and a loyalty rank
+        code = r.get("Contract")
+        if code not in ("F1", "F2", "F3"):
+            out.append(f"{tag}: Contract must be F1, F2 or F3")
+        elif code == "F1" and not (isinstance(r.get("Methods_At_Once"), int) and r["Methods_At_Once"] > 0):
+            out.append(f"{tag}: an F1 asks for Methods_At_Once methods growing (a positive whole number)")
+        elif code != "F1":
+            if r.get("Min_Level") not in (2, 3, 4, 5):
+                out.append(f"{tag}: Min_Level must be a crop level 2-5")
+            if not (isinstance(r.get("Min_Loyalty"), int) and r["Min_Loyalty"] > 0):
+                out.append(f"{tag}: Min_Loyalty must be a positive whole number")
+        if r.get("Method") not in method_words:
+            out.append(f"{tag}: Method {r.get('Method')!r} is not a farming method (Farm_Methods or a crop's Best_Method)")
+        if r.get("Live") not in (None, True):
+            out.append(f"{tag}: Live is 'yes' or blank")
+        elif r.get("Live") is True and r.get("Method") not in built:
+            out.append(f"{tag}: a live contract needs a method the game has built ({sorted(built)})")
+    pairs = [(r.get("Planet_Key"), r.get("Contract")) for r in data["farmContracts"]]
+    if len(set(pairs)) != len(pairs):
+        out.append("Farm_Contracts: a planet has the same contract twice")
+    if len(pairs) != 27 or {p for p, _ in pairs} != set(planets):
+        out.append(f"Farm_Contracts: expected 27 rows, F1-F3 on all nine planets, got {len(pairs)}")
     return out
 
 
