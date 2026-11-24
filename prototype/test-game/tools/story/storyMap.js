@@ -318,8 +318,14 @@ function draw(now) {
       ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, size * 3.2, 0, Math.PI * 2); ctx.fill();
     }
     if (active) { ctx.shadowColor = '#fff'; ctx.shadowBlur = 20; }
+    if (n.planned) ctx.globalAlpha = e * 0.55;   // planned: in the design, not yet in the game
     shape(ctx, n, x, y, size, planet.color);
     ctx.shadowBlur = 0;
+    if (n.planned) {
+      ctx.globalAlpha = e;
+      ctx.strokeStyle = hexA('#ffffff', 0.75); ctx.lineWidth = 1.2; ctx.setLineDash([2.5, 2.5]);
+      ctx.beginPath(); ctx.arc(x, y, size + 1.8, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+    }
     // theme ring segments
     if (lit.length && e > 0.5) {
       const seg = (Math.PI * 2) / lit.length;
@@ -613,7 +619,7 @@ function showBranchTip(b, x, y) {
   placeTip(x, y);
 }
 function hideTip() { tip.classList.remove('show'); }
-function kindName(n) { return n.kind === 'secondary' ? `${n.variant === 'shadow' ? 'Shadow' : 'Light'} contract` : KIND[n.kind].name; }
+function kindName(n) { return (n.kind === 'secondary' ? `${n.variant === 'shadow' ? 'Shadow' : 'Light'} contract` : KIND[n.kind].name) + (n.planned ? ' · planned' : ''); }
 
 // ─── the panel ────────────────────────────────────────────────────────────────────────────────────────────────────
 const panel = document.getElementById('panel'), pinner = document.getElementById('pinner');
@@ -681,7 +687,7 @@ function detailsHTML(n) {
   }
   if (m) {
     h += `<dl class="kv" style="margin-top:14px"><dt>Giver</dt><dd>${esc(m.giver ? m.giver.name : '—')}${m.giver ? ' · ' + esc(factionName(m.giver.faction)) + ' · ' + esc(m.giver.align) : ''}</dd>
-      <dt>Granted at</dt><dd>${esc(m.grantedAt || '—')}</dd><dt>Collect at</dt><dd>${esc(m.collectAt || '—')}</dd><dt>Status</dt><dd>${esc(m.status || '—')}</dd></dl>`;
+      <dt>Granted at</dt><dd>${esc(m.grantedAt || '—')}</dd><dt>Collect at</dt><dd>${esc(m.collectAt || '—')}</dd><dt>Status</dt><dd>${esc(m.status === 'Planned' ? 'Planned: in the design, not yet in the game' : m.status || '—')}</dd></dl>`;
     if ((m.rewards || []).length) h += `<h4>Rewards</h4><div class="rw">${m.rewards.map((r) => `<span><b>${r.kind === 'tech_unlock' ? '⚙' : r.amount}</b>${esc(r.label)}</span>`).join('')}</div>`;
     const im = m.impact || {};
     const imp = [['loyaltyPlanet', 'Loyalty with the planet'], ['loyaltyRival', 'Loyalty with its rival'], ['alignment', 'Alignment'], ['brokenPenalty', 'Broken promise']]
@@ -796,7 +802,7 @@ q.addEventListener('keydown', (e) => {
   if (hit) { select(hit, false); flyTo(hit.x, Math.max(state.tk, 180)); }
 });
 document.getElementById('fit').addEventListener('click', () => fit());
-document.getElementById('stats').textContent = `${S.nodes.filter((n) => n.mission).length} missions · ${S.branches.filter((b) => b.forks).length} branches · ${S.order.length} planets`;
+document.getElementById('stats').textContent = `${S.nodes.filter((n) => n.mission).length} missions${S.nodes.some((n) => n.planned) ? ` (${S.nodes.filter((n) => n.planned).length} planned)` : ''} · ${S.branches.filter((b) => b.forks).length} branches · ${S.order.length} planets`;
 
 // ─── loop ─────────────────────────────────────────────────────────────────────────────────────────────────────────
 function frame(now) {

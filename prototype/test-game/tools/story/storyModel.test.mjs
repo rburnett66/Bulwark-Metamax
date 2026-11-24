@@ -25,7 +25,12 @@ test('planets follow the portal chain, Verdance first', () => {
 test('every mission is on the map exactly once', () => {
   const ids = S.nodes.filter((n) => n.mission).map((n) => n.id);
   assert.equal(new Set(ids).size, ids.length);
-  assert.equal(ids.length, src.missions.missions.length);
+  assert.equal(ids.length, src.missions.missions.length + (src.missions.plannedMissions || []).length);
+});
+
+test('planned contracts are on the map, marked planned, and the game missions are not', () => {
+  for (const m of src.missions.plannedMissions || []) assert.ok(S.nodes.find((n) => n.id === m.id).planned, m.id);
+  for (const m of src.missions.missions) assert.ok(!S.nodes.find((n) => n.id === m.id).planned, m.id);
 });
 
 test('the campaign runs in sequence: map m of planet p sits in its own slot', () => {

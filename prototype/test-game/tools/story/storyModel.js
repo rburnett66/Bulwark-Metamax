@@ -141,7 +141,9 @@ function tagThemes(node, ctx) {
  * → { order, planets: [{ name, key, color, from, to }], nodes, branches, lanes, themes, end, density(t) }
  */
 export function buildStory(src) {
-  const missions = (src.missions && src.missions.missions) || [];
+  // the game's missions, and the contracts the design has but the game cannot play yet (missions.json plannedMissions,
+  // e.g. the 26 farming contracts not live) [MM-story_mwu3uc19_1v]: on the map, marked planned
+  const missions = [...((src.missions && src.missions.missions) || []), ...((src.missions && src.missions.plannedMissions) || [])];
   const order = planetOrder(missions);
   const planetsByName = {};
   for (const [key, p] of Object.entries(src.planets || {})) planetsByName[p.name] = { key, ...p };
@@ -151,7 +153,7 @@ export function buildStory(src) {
   const rare = ((src.mapdata || {}).rareContracts) || [];
   const ships = (src.missions && src.missions.capitalShips) || {};
   const nodes = [];
-  const add = (n) => { n.themes = tagThemes(n, ctx); nodes.push(n); return n; };
+  const add = (n) => { n.themes = tagThemes(n, ctx); n.planned = !!(n.mission && n.mission.status === 'Planned'); nodes.push(n); return n; };
 
   const castOf = (planet, map) => {
     const key = (planetsByName[planet] || {}).key;
