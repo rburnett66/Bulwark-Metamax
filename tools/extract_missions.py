@@ -20,6 +20,7 @@ results), so the workbook does not need recalculating first. Missions with Statu
 """
 import json
 import os
+import re
 import sys
 
 try:
@@ -44,6 +45,7 @@ FARM_CONDS = {
     "farm_plots_planted": {"stages": ["Complete"], "tier": "A"},
     "crop_delivered": {"stages": ["Complete"], "tier": "A"},
     "farm_methods_growing": {"stages": ["Complete"], "tier": "A"},
+    "crop_level": {"stages": ["Complete"], "tier": "A"},   # a crop's level by mastery (src/farm/levels.js cropLevel)
 }
 OUT = os.path.join(ROOT, "prototype", "test-game", "content", "missions", "missions.json")
 STAGES = ("View", "Unlock", "Execute", "Complete", "Fail")
@@ -136,17 +138,38 @@ def outpost_missions(ships, givers, problems):
     return missions, lines
 
 
+# a crop's level names (Pod_Levels) and the farming methods' names, for the contracts' words
+LEVEL_NAME = {1: "Common", 2: "Uncommon", 3: "Rare", 4: "Epic", 5: "Legendary"}
+METHOD_NAME = {"traditional": "Traditional", "irrigated": "Irrigated", "orchard": "Orchard", "spatial": "Spatial",
+               "hydroponic": "Hydroponic", "terraced": "Terraced", "hydrofarm": "Hydrofarm", "solo": "Solo",
+               "vertical": "Vertical farm", "subterrain": "Subterrain", "tub": "Tub"}
+RANK_NAME = {25: "Trusted", 50: "Honoured", 100: "Exalted"}   # Distribution §4.1 (names proposed, tech plan X6)
+
+
+def faction_names():
+    """Faction registry key -> name, the key of s.loyalty (src/data/factions.js is the one list)."""
+    src = open(os.path.join(ROOT, "prototype", "test-game", "src", "data", "factions.js"), encoding="utf-8").read()
+    return dict(re.findall(r"key:\s*'([a-z]+)',\s*prefix:\s*'[A-Z]+',\s*name:\s*'([^']+)'", src))
+
+
 def farm_missions(ships, givers, problems):
     """
     The farming contracts as missions (Farming tech plan §5 A5, Farming-Design §2.2): one per Farm_Contracts row of the
     map-data workbook, quest line QL-<PLA>-F, offered in person by the planet faction's Factor at the Trade Station aboard
-    its capital ship once that planet is finished, every campaign map beaten (farming_open; owner 2026-11-12). Phase A ships Verdance F1. → (missions, lines).
+    its capital ship once that planet is finished, every campaign map beaten (farming_open; owner 2026-11-12).
+    All 27 rows (F1-F3 x 9 planets, Distribution §5) [MM-story_mwu3uc19_1v]:
+      F1 Break ground: plant plots of its method, deliver the common-tier crop, grow two ways.
+      F2 Our way / F3 The prize: after the step before and a loyalty rank, plant the specialty method, raise the crop to
+      a level (crop_level), deliver it.
+    → (live missions, planned missions, lines). Only Live rows are played; the rest go to plannedMissions, which the game
+    never reads (tools such as the Story Map show them).
     """
     wb = openpyxl.load_workbook(MAP_XLSX, data_only=True)
     if "Farm_Contracts" not in wb.sheetnames:
-        return [], {}
+        return [], [], {}
     crops = {c["Resource_Id"]: c for c in sheet_from(wb["Crops"], "Planet_Key")}
-    missions, lines = [], {}
+    fnames = faction_names()
+    live, planned, lines = [], [], {}
     for c in sheet_from(wb["Farm_Contracts"], "Planet_Key"):
         key, code = c["Planet_Key"], c["Contract"]
         crop = crops.get(c["Crop_Id"])
@@ -164,29 +187,63 @@ def farm_missions(ships, givers, problems):
         if not factor:
             problems.append(f"Farm_Contracts {key}: no Neutral (N) giver of faction {key} on Givers to be its Factor")
             continue
+        if key not in fnames:
+            problems.append(f"Farm_Contracts {key}: not a faction in src/data/factions.js")
+            continue
         fname, g = factor
+        is_live = str(c.get("Live") or "").lower() in ("yes", "true")
+        method = c.get("Method") or "traditional"
+        mname = METHOD_NAME.get(method, method)
+        plots = c["Plant_Plots"]
         ql = f"QL-{abbr}-F"
         lines[ql] = {"name": f"{planet} farm", "planet": planet, "role": "Primary", "variant": None, "ship": ship["ship"]}
-        complete = [
-            {"cond": "farm_plots_planted", "param": key, "op": "≥", "value": c["Plant_Plots"], "text": f"Break ground: prep {c['Plant_Plots']} Traditional plots and plant them"},
-            {"cond": "crop_delivered", "param": c["Crop_Id"], "op": "≥", "value": c["Deliver"], "text": f"Bring in a harvest: deliver {c['Deliver']} {crop['Crop']} to {ship['ship']}"},
-            {"cond": "farm_methods_growing", "param": key, "op": "≥", "value": c["Methods_At_Once"], "text": f"Grow {c['Methods_At_Once']} ways: have {c['Methods_At_Once']} methods growing at once"},
-        ]
-        view = [] if step == 1 else [{"cond": "quest_step_collected", "param": ql, "value": step - 1, "text": "The previous farming contract was collected"}]
+        plant = {"cond": "farm_plots_planted", "param": key, "op": "≥", "value": plots,
+                 "text": (f"Break ground: prep {plots} {mname} plots and plant them" if step == 1 else
+                          f"Build it: plant {crop['Crop']} in {plots} {mname} plot{'s' if plots > 1 else ''}")}
+        if method != "traditional":
+            plant["method"] = method   # the measure counts this method's plots (traditional when absent)
+        deliver = {"cond": "crop_delivered", "param": c["Crop_Id"], "op": "≥", "value": c["Deliver"],
+                   "text": f"Bring in a harvest: deliver {c['Deliver']} {crop['Crop']} to {ship['ship']}"}
+        if step == 1:
+            n = c["Methods_At_Once"]
+            complete = [plant, deliver,
+                        {"cond": "farm_methods_growing", "param": key, "op": "≥", "value": n,
+                         "text": f"Grow {n} ways: have {n} methods growing at once"}]
+        else:
+            lvl = c["Min_Level"]
+            complete = [plant,
+                        {"cond": "crop_level", "param": c["Crop_Id"], "op": "≥", "value": lvl,
+                         "text": f"Raise it: grow {crop['Crop']} to {LEVEL_NAME[lvl]} or better"},
+                        deliver]
+        view = [] if step == 1 else [{"cond": "quest_step_collected", "param": ql, "value": step - 1,
+                                      "text": f"Farming contract F{step - 1} was collected"}]
         unlock = [{"cond": "capital_ship_arrived", "param": planet, "text": f"{ship['ship']} is in orbit"},
                   {"cond": "farming_open", "param": key, "text": f"{planet} finished: every campaign map beaten"}]
-        missions.append({
+        if step > 1:
+            rank = c["Min_Loyalty"]
+            unlock.append({"cond": "loyalty", "param": fnames[key], "op": "≥", "value": rank,
+                           "text": f"{RANK_NAME.get(rank, str(rank))} with {fnames[key]} ({rank} loyalty)"})
+        m = {
             "id": f"FC-{abbr}-{step}", "questLine": ql, "step": step, "role": "primary", "variant": None,
             "planet": planet, "map": None, "title": c["Title"], "type": "farm",
             "giver": {"name": fname, **g}, "grantedAt": ship["ship"], "collectAt": ship["ship"],
             "briefing": f"Farming contract {code}, offered by {fname} at the Trade Station aboard {ship['ship']}. Run it from FARM on the main menu.",
-            "status": "Draft", "impact": {"loyaltyPlanet": c["Loyalty"]},
+            "status": "Draft" if is_live else "Planned", "impact": {"loyaltyPlanet": c["Loyalty"]},
             "view": view, "unlock": unlock, "execute": [], "complete": complete, "fail": [],
             "rewards": [{"kind": "gold", "amount": c["Gold"], "label": "Gold"}, {"kind": "xp", "amount": c["XP"], "label": "Commander XP"}],
-            "farm": {"planetKey": key, "contract": code, "grants": str(c["Grants"] or "").split(), "unlocks": str(c["Unlocks"] or "").split(),
+            "farm": {"planetKey": key, "contract": code, "method": method, "grants": str(c["Grants"] or "").split(),
+                     "unlocks": str(c["Unlocks"] or "").split(),
                      "podCrate": {"crop": c["Crop_Id"], "n": c["Pod_Crate"] or 0}},   # pods have no level (owner rule 9)
-        })
-    return missions, lines
+        }
+        (live if is_live else planned).append(m)
+    for ql in lines:   # each farm line runs F1, F2, F3 in order across live and planned
+        got = sorted(m["step"] for m in live + planned if m["questLine"] == ql)
+        if got != list(range(1, len(got) + 1)):
+            problems.append(f"farm quest line {ql}: steps {got} are not 1..{len(got)}")
+    for m in live:   # a live step must follow a live step: the game cannot offer F2 behind a planned F1
+        if m["step"] > 1 and not any(x["questLine"] == m["questLine"] and x["step"] == m["step"] - 1 for x in live):
+            problems.append(f"{m['id']} is live but the step before it is planned")
+    return live, planned, lines
 
 
 def main():
@@ -311,8 +368,8 @@ def main():
                 else:
                     unlocked_by[u[5:]] = m["id"]
     conds.update(OUTPOST_CONDS)
-    fm, flines = farm_missions(ships, givers, problems)
-    for m in fm:
+    fm, planned, flines = farm_missions(ships, givers, problems)
+    for m in fm + planned:
         if m["id"] in seen or any(x["id"] == m["id"] for x in om):
             problems.append(f"farm mission {m['id']} duplicates another mission")
     missions += fm
@@ -335,13 +392,16 @@ def main():
     data = {"_source": "docs/sources/Bulwark-Missions.xlsx", "_generator": "tools/extract_missions.py",
             "capitalShips": ships, "collective": collective, "questLines": lines, "resources": resources,
             "techUnlocks": {n: {"by": unlocked_by.get(n), **nodes[n]} for n in nodes},
-            "conditions": conds, "rewardKinds": kinds, "missions": missions}
+            "conditions": conds, "rewardKinds": kinds, "missions": missions,
+            # contracts the design has and the game cannot play yet (Live blank on Farm_Contracts): never loaded by the
+            # game; read by the authoring tools (the Story Map) [MM-story_mwu3uc19_1v]
+            "plannedMissions": planned}
     with open(OUT, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
         f.write("\n")
     roles = {r: sum(1 for m in missions if m["role"] == r) for r in ("primary", "secondary")}
     print(f"wrote {os.path.relpath(OUT, ROOT)}: {len(missions)} missions ({roles['primary']} primary, {roles['secondary']} secondary), "
-          f"{len(lines)} quest lines, {len(ships)} capital ships, {len(resources)} resources, {len(unlocked_by)} tech unlocks")
+          f"{len(planned)} planned, {len(lines)} quest lines, {len(ships)} capital ships, {len(resources)} resources, {len(unlocked_by)} tech unlocks")
 
 
 if __name__ == "__main__":

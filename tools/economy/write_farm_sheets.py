@@ -159,12 +159,57 @@ BUILDINGS = [
     ["pump", "Pump", 1, 1, 400, 60, 2, 4, "irrigated", 8],
 ]
 
-# Distribution §5.2 / Farming-Design §2.2: Verdance's F1, "Bread for the Regiments". Phase A ships F1 on Verdance only.
+# Distribution §5.2 / Farming-Design §2.2: the farming contracts, three per planet. Verdance F1 is the one in the game.
 CONTRACT_COLS = ["Planet_Key", "Contract", "Title", "Crop_Id", "Plant_Plots", "Deliver", "Methods_At_Once", "Gold",
-                 "Loyalty", "XP", "Pod_Crate", "Grants", "Unlocks"]
+                 "Loyalty", "XP", "Pod_Crate", "Grants", "Unlocks", "Method", "Min_Level", "Min_Loyalty", "Live"]
+# The 27 farming contracts (Distribution §5.1-§5.2) [MM-story_mwu3uc19_1v]. Every number PROPOSED (D14):
+#   F1 Break ground: plant Plant_Plots plots of Method with the common-tier crop, deliver 2.5 plots' yield, grow
+#      Methods_At_Once methods at once. 1,500 gold, 300 XP, +15 loyalty, a Pod Crate of 12.
+#   F2 Our way: Plant_Plots plots of the faction's specialty Method with its rare-tier crop, the crop at Min_Level 2
+#      (Uncommon) or better, deliver 2 plots' yield. Needs Min_Loyalty 25 (Trusted). 3,000 gold, 500 XP, +20, 8 pods.
+#   F3 The prize: the epic-tier crop in its best Method at Min_Level 4 (Epic) or better, deliver 2 plots' yield.
+#      Needs Min_Loyalty 50 (Honoured). 6,000 gold, 800 XP, +25, 4 pods. Gold is 0.75x the outpost contract's step.
+# Live = yes: the game loads it (only Verdance F1 can be played today). Planned rows wait on the other outpost maps'
+# farm layers (C8), the six methods (C5) and the blueprints (C4); tools/extract_missions.py writes them to
+# missions.json plannedMissions, which the game never reads.
+_F2 = (2, 3000, 20, 500, 8, 2, 25)
+_F3 = (6000, 25, 800, 4, 4, 50)
+def _f1(key, title, crop, deliver, unlocks, method="traditional", grants="farmhouse", live=""):
+    return [key, "F1", title, crop, 3, deliver, 2, 1500, 15, 300, 12, grants, unlocks, method, "", "", live]
+def _f2(key, title, crop, deliver, method, unlocks):
+    plots, gold, loy, xp, pods, lvl, min_loy = _F2
+    return [key, "F2", title, crop, plots, deliver, "", gold, loy, xp, pods, "", unlocks, method, lvl, min_loy, ""]
+def _f3(key, title, crop, deliver, method, unlocks):
+    gold, loy, xp, pods, lvl, min_loy = _F3
+    return [key, "F3", title, crop, 1, deliver, "", gold, loy, xp, pods, "", unlocks, method, lvl, min_loy, ""]
 CONTRACTS = [
-    ["ground", "F1", "Bread for the Regiments", "loam-grain", 3, 40, 2, 1500, 15, 300, 12, "farmhouse",
-     "button:farm tab:seedpods method:irrigated tech:sprinklers"],
+    _f1("ground", "Bread for the Regiments", "loam-grain", 40, "button:farm tab:seedpods method:irrigated tech:sprinklers", live="yes"),
+    _f2("ground", "The Old Groves", "rootsong-seeds", 10, "orchard", "method:orchard"),
+    _f3("ground", "Once a Century", "elder-bloom", 4, "solo", "upgrade:pod_bench_2 line:ground"),
+    _f1("air", "Silk Season", "petal-silk", 15, "enh:air_tanks_oxygen"),
+    _f2("air", "Let Them Compete", "dawnpollen", 4, "spatial", "method:spatial blueprint:air_control_3"),
+    _f3("air", "The Choir", "choir-lily", 4, "hydroponic", "blueprint:air_control_4 line:air"),
+    _f1("hightech", "White Pans", "sunsalt", 15, "enh:grow_lights_amber"),
+    _f2("hightech", "Clean Rooms", "mirage-oil", 4, "hydroponic", "method:hydroponic enh:hydroponic_chambers blueprint:light_rig_3"),
+    _f3("hightech", "Captured Noon", "solar-pearl", 2, "solo", "blueprint:light_rig_4 line:hightech"),
+    _f1("artillery", "Rust Harvest", "slag-iron", 15, ""),
+    _f2("artillery", "Up the Mesa", "ghost-brass", 4, "terraced", "method:terraced blueprint:robot_bay_3"),
+    _f3("artillery", "Wake the Core", "dreadnought-core", 4, "subterrain", "blueprint:robot_bay_4 upgrade:gro_bot_2 line:artillery"),
+    _f1("water", "Cutting Ice", "brine-ice", 15, "enh:grow_lights_blue"),
+    _f2("water", "Clam Beds", "glacier-breath", 4, "hydrofarm", "method:hydrofarm blueprint:irrigation_3"),
+    _f3("water", "What Moves Below", "leviathan-scale", 4, "hydrofarm", "blueprint:irrigation_4 enh:climate_chiller line:water"),
+    _f1("arcane", "Ash Fields", "ash-basalt", 15, "enh:grow_lights_red"),
+    _f2("arcane", "The Kiln", "phoenix-glass", 2, "solo", "method:solo blueprint:climate_unit_3"),
+    _f3("arcane", "Keep the Flame", "heartflame", 4, "solo", "blueprint:climate_unit_4 enh:climate_heater line:arcane"),
+    _f1("space", "Sealed Trays", "regolith", 15, "enh:air_tanks_pressurised", method="vertical", grants="farmhouse vertical_farm"),
+    _f2("space", "Towers", "starfall-iron", 4, "vertical", "method:vertical upgrade:vertical_floors_3_4"),
+    _f3("space", "The Lens", "void-lens", 2, "hydroponic", "enh:grow_lights_white line:space"),
+    _f1("dark", "Glowcap Dark", "glowcap-spores", 30, "enh:grow_lights_violet"),
+    _f2("dark", "Into the Rock", "dreamspore", 10, "subterrain", "method:subterrain method:truffle_hunting upgrade:hunter_kennel_2"),
+    _f3("dark", "The Network's Heart", "mycelial-heart", 4, "solo", "art:underground_accents line:dark"),
+    _f1("greenies", "Peat and Rot", "mire-peat", 15, "enh:fertilizer"),
+    _f2("greenies", "Pots of Poison", "hive-jelly", 6, "tub", "method:tub blueprint:nutrient_doser_3"),
+    _f3("greenies", "The Queen's Nest", "broodqueen-egg", 4, "subterrain", "blueprint:nutrient_doser_4 enh:air_tanks_scrubbed line:greenies"),
 ]
 
 PARAMS = [
@@ -283,7 +328,8 @@ def block(title, note, cols, rows):
 
 
 def main():
-    write_values_sheets([
+    only = set(sys.argv[1:])   # e.g. Farm_Contracts: write just that sheet, leave hand-tuned sheets alone
+    write_values_sheets([s for s in [
         ("Farm_Params", block("Farm tuning (Phase A)", "Farming-Design §5, §6, §8, §10. Read by src/data/farm.js as FARM. "
                               "Every value proposed (D14).", PARAMS[0], PARAMS[1:])),
         ("Crops", block("Crops (36) — each planet's four surface resources (Distribution §2.2)",
@@ -296,13 +342,13 @@ def main():
                              "Farming-Design §5.3, §8.2; colours and embers as tools/farming/scale.html.", LEVEL_COLS, LEVELS)),
         ("Farm_Buildings", block("Farm buildings (Phase A)", "Farming-Design §6. Cost and Build_Sec proposed.",
                                  BUILDING_COLS, BUILDINGS)),
-        ("Farm_Contracts", block("Farming contracts (Phase A: Verdance F1)", "Distribution §5; Farming-Design §2.2.",
+        ("Farm_Contracts", block("Farming contracts (27: F1-F3 x 9 planets; Live = yes is in the game)", "Distribution §5; Farming-Design §2.2. PROPOSED (D14).",
                                  CONTRACT_COLS, CONTRACTS)),
         ("Crop_Levels", block("Crop levels 2-5: mastery and machine", "Owner rules 12-13; 2026-11-21: no tree for crop "
                               "upgrades, only the farm equipment. Mastery is per crop, the same thresholds for every crop; "
                               "Machine is the MACHINERY node each level also needs. PROPOSED (D14).",
                               CROP_LEVEL_COLS, crop_level_rows())),
-    ])
+    ] if not only or s[0] in only])
 
 
 if __name__ == "__main__":

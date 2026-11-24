@@ -64,7 +64,7 @@
       ]
     },
     "farm": {
-      "_source": "Farming-Design §2.2 [MM-story_mwcuzyf7_3k]. The farming contract is offered in person by the planet faction's Factor, its Neutral (N) character, at the Trade Station (src/farm/factor.js). DRAFT LINES FOR OWNER REVIEW, written in the Factor's own voice (voicepacks.json phrases and motivation). One set per planet with a farming contract (Phase A: Verdance F1). gate: farming is shut (the planet is not finished yet: every campaign map beaten, owner 2026-11-12), so the Factor says what it waits on. offer: F1 is on offer, then the contract card. accept / later: the reply to the card. farm: the contract is the player's.",
+      "_source": "Farming-Design §2.2 [MM-story_mwcuzyf7_3k]. The farming contract is offered in person by the planet faction's Factor, its Neutral (N) character, at the Trade Station (src/farm/factor.js). DRAFT LINES FOR OWNER REVIEW, written in the Factor's own voice (voicepacks.json phrases and motivation). One set per planet (all nine drafted 2026-11-23 [MM-story_mwu3uc19_1v]; the game plays Verdance F1, so the other eight wait for their F1 to go live). gate: farming is shut (the planet is not finished yet: every campaign map beaten, owner 2026-11-12), so the Factor says what it waits on. offer: F1 is on offer, then the contract card. accept / later: the reply to the card. farm: the contract is the player's.",
       "ground": {
         "gate": [
           { "line": "Quartermaster's desk. Everything that comes aboard Halbrecht's Oath goes through my ledger, and everything that goes down to Verdance comes out of it.", "intent": "statement" },
@@ -84,6 +84,174 @@
         ],
         "farm": [
           { "line": "The Farmhouse is on the books. Bring the Loam Grain aboard when it's in; I count every sack.", "intent": "statement" }
+        ]
+      },
+      "air": {
+        "gate": [
+          { "line": "Trade Station, Dawnwing Carrier. I fix wings mostly. Lately I fix the seed ledger too.", "intent": "statement" },
+          { "line": "You want to grow silk down there? Sky's a machine. It doesn't care what you plant, but the raiders do.", "intent": "statement" },
+          { "line": "Finish Florael, every map of it, then come back. I'll have the crate ready. Logged it.", "intent": "statement" }
+        ],
+        "offer": [
+          { "line": "Florael's quiet. Quiet enough for flowers, anyway.", "intent": "statement" },
+          { "line": "The pilots need parachute silk and I'm tired of buying it off-planet. Petal Silk grows in rows beside your outpost.", "intent": "statement" },
+          { "line": "Farmhouse, a crate of Petal Silk seed, and an oxygen tank rig when you're done. Just tell me what's bent if it goes wrong. Deal?", "intent": "question" }
+        ],
+        "accept": [
+          { "line": "Logged it. Farmhouse goes down on the next lift. Don't crash it.", "intent": "statement" }
+        ],
+        "later": [
+          { "line": "Fine. The crate's not going anywhere. Neither am I.", "intent": "statement" }
+        ],
+        "farm": [
+          { "line": "Bring the silk up when it's in. I'll check the weave myself.", "intent": "statement" }
+        ]
+      },
+      "hightech": {
+        "gate": [
+          { "line": "Devlin Cho, actuarial. Every crate aboard Sterling Meridian has a price, and I set it.", "intent": "statement" },
+          { "line": "A farm on Ochre? The base rate for crops on a contested planet is zero. Not low. Zero.", "intent": "statement" },
+          { "line": "Finish Ochre, every map. Then the risk drops enough to price. Come see me.", "intent": "statement" }
+        ],
+        "offer": [
+          { "line": "Ochre's settled. I've rerun the tables; the variance is acceptable.", "intent": "statement" },
+          { "line": "Sunsalt grows in flooded pans, and the labs burn through it. Your outpost has the ground.", "intent": "statement" },
+          { "line": "A Farmhouse, a crate of Sunsalt cores, and amber grow lights when you deliver. The expected value is in your favour. Do you take it?", "intent": "question" }
+        ],
+        "accept": [
+          { "line": "Priced in. The Farmhouse ships down. Don't make me revise the forecast.", "intent": "statement" }
+        ],
+        "later": [
+          { "line": "Declining is also a position. The offer stays on my books.", "intent": "statement" }
+        ],
+        "farm": [
+          { "line": "Bring the Sunsalt aboard. I weigh every pan against the projection.", "intent": "statement" }
+        ]
+      },
+      "artillery": {
+        "gate": [
+          { "line": "Logistician Farrell. Shells in, targets out. Lately, rations in too.", "intent": "statement" },
+          { "line": "You can't farm a range while it's still taking fire. That's the cost, logged.", "intent": "statement" },
+          { "line": "Finish Kessra, every map. Then we talk about what grows on the mesa.", "intent": "statement" }
+        ],
+        "offer": [
+          { "line": "Kessra's quiet. The guns are cooling. Good.", "intent": "statement" },
+          { "line": "Slag Iron grows in rust beds, and the foundry eats it by the tonne. Your outpost has the flat ground.", "intent": "statement" },
+          { "line": "A Farmhouse and a crate of Slag Iron cores. Plant it, deliver it, and the ledger pays. The ledger doesn't lie. Agreed?", "intent": "question" }
+        ],
+        "accept": [
+          { "line": "Allocated. The Farmhouse goes down with the next supply drop.", "intent": "statement" }
+        ],
+        "later": [
+          { "line": "Understood. The order stays on file until you're ready to fill it.", "intent": "statement" }
+        ],
+        "farm": [
+          { "line": "Iron comes up, shells go out. Keep the beds turning.", "intent": "statement" }
+        ]
+      },
+      "water": {
+        "gate": [
+          { "line": "Old Brack. I ferry what Reefmother Leviathan needs and keep no side, landwalker.", "intent": "statement" },
+          { "line": "Ice farms on Rime? The tide doesn't wait for a war to finish, but the farmer has to.", "intent": "statement" },
+          { "line": "Finish Rime, every map, and come find me at the station. The fare's the fare.", "intent": "statement" }
+        ],
+        "offer": [
+          { "line": "Rime's waters are still now. Still enough to cut ice.", "intent": "statement" },
+          { "line": "Brine Ice freezes in pans by your outpost, and the ship drinks it. Every tribe drinks it.", "intent": "statement" },
+          { "line": "A Farmhouse, a crate of Brine Ice cores, and blue grow lights when the first load comes aboard. Will you take the passage?", "intent": "question" }
+        ],
+        "accept": [
+          { "line": "Another passage logged. The Farmhouse rides down with the next boat.", "intent": "statement" }
+        ],
+        "later": [
+          { "line": "The current will bring you back. It always does.", "intent": "statement" }
+        ],
+        "farm": [
+          { "line": "Bring the ice aboard before it melts on the deck.", "intent": "statement" }
+        ]
+      },
+      "arcane": {
+        "gate": [
+          { "line": "Archivist Balthus. Every grain that enters the Cathedral of the Lamp is recorded. I keep. I do not judge.", "intent": "statement" },
+          { "line": "You ask to till Cinder while it still burns with conflict. The entry would read 'premature'.", "intent": "statement" },
+          { "line": "Complete Cinder, every map. Then return, and we will write the terms.", "intent": "statement" }
+        ],
+        "offer": [
+          { "line": "Cinder is quiet. The record shows it.", "intent": "statement" },
+          { "line": "Ash Basalt grows in the lava beds beside your outpost. The kilns require it.", "intent": "statement" },
+          { "line": "A Farmhouse, a crate of Ash Basalt cores, and red grow lights on delivery. By the terms as written. Do you accept?", "intent": "question" }
+        ],
+        "accept": [
+          { "line": "Noted and shelved. The Farmhouse descends.", "intent": "statement" }
+        ],
+        "later": [
+          { "line": "The terms remain on the shelf. They do not expire.", "intent": "statement" }
+        ],
+        "farm": [
+          { "line": "Deliver the basalt. Each load is entered under your name.", "intent": "statement" }
+        ]
+      },
+      "space": {
+        "gate": [
+          { "line": "Navigator Vector. I plot supply courses for Vale's Horizon. Food is a course I have not yet plotted.", "intent": "statement" },
+          { "line": "Lumen has no air and an active war. Projected yield of a farm under those conditions: nil.", "intent": "statement" },
+          { "line": "Complete Lumen, all maps. Recalculating when you return.", "intent": "statement" }
+        ],
+        "offer": [
+          { "line": "Lumen secured. Outcome within tolerance.", "intent": "statement" },
+          { "line": "No air on the surface, so the trays are sealed. A Vertical farm stands by your outpost; Regolith grows inside.", "intent": "statement" },
+          { "line": "A Farmhouse, a sealed Vertical farm, a crate of Regolith cores, and pressurised air tanks on delivery. Course plotted. Confirm?", "intent": "question" }
+        ],
+        "accept": [
+          { "line": "Confirmed. Farmhouse and trays inbound. Course plotted.", "intent": "statement" }
+        ],
+        "later": [
+          { "line": "Holding pattern. The offer remains on the plot.", "intent": "statement" }
+        ],
+        "farm": [
+          { "line": "Deliver the Regolith. I will log each load against the forecast.", "intent": "statement" }
+        ]
+      },
+      "dark": {
+        "gate": [
+          { "line": "Doctrinist Vera. I edit the manifesto. Supply aboard The Manifesto is one of its clauses.", "intent": "statement" },
+          { "line": "A garden in the dark before the dark is settled? That's a revision, not a crusade, and it isn't due yet.", "intent": "statement" },
+          { "line": "Finish Xenthe, every map. Then the clause can be drafted. Noted.", "intent": "statement" }
+        ],
+        "offer": [
+          { "line": "Xenthe is quiet. The draft can proceed.", "intent": "statement" },
+          { "line": "Glowcap Spores grow in the shade by your outpost. The crew reads by their light.", "intent": "statement" },
+          { "line": "A Farmhouse, a crate of Glowcap spores, and violet grow lights on delivery. Per the manifesto, this is a fair clause. Do you sign?", "intent": "question" }
+        ],
+        "accept": [
+          { "line": "Signed. Filed. The Farmhouse goes down tonight.", "intent": "statement" }
+        ],
+        "later": [
+          { "line": "Unsigned, then. The draft stays open.", "intent": "statement" }
+        ],
+        "farm": [
+          { "line": "Bring the spores aboard. Count them in the dark; they glow.", "intent": "statement" }
+        ]
+      },
+      "greenies": {
+        "gate": [
+          { "line": "Composter Null-7. Intake station, Hivemother Ark. All grades return.", "intent": "statement" },
+          { "line": "Cultivation on Vexmire is scheduled after the conflict decomposes. Not before.", "intent": "statement" },
+          { "line": "Finish Vexmire, every map. Then report for intake.", "intent": "statement" }
+        ],
+        "offer": [
+          { "line": "Vexmire conflict: decomposed. Soil: ready.", "intent": "statement" },
+          { "line": "Mire Peat grows in the bog beds beside your outpost. The hive requires it. Yield noted.", "intent": "statement" },
+          { "line": "A Farmhouse, a crate of Mire Peat, and fertilizer on delivery. This is not a request; it is a schedule. Do you accept the schedule?", "intent": "question" }
+        ],
+        "accept": [
+          { "line": "Accepted. Farmhouse logged for descent.", "intent": "statement" }
+        ],
+        "later": [
+          { "line": "Deferred. The offer sits in the mulch. It will keep.", "intent": "statement" }
+        ],
+        "farm": [
+          { "line": "Deliver the peat. Logged for decomposition. That is a compliment.", "intent": "statement" }
         ]
       }
     },

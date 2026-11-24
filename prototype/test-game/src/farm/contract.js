@@ -114,7 +114,7 @@ export function declineFarmContract(s, key, { now }) {
   s.farmContracts[key] = { step: 1, state: 'offered', since: now, delivered: {} };
 }
 
-/** A farming contract step was collected (missionFlow.collect): the contract is complete (Phase A ships F1 only). */
+/** A farming contract step was collected (missionFlow.collect): the contract is complete (the game plays Verdance F1; F2-F3 are planned). */
 export function farmStepCollected(s, key, step, { now }) {
   if (!s.farmContracts) s.farmContracts = {};
   const prev = s.farmContracts[key] || { delivered: {} };
@@ -145,11 +145,11 @@ export function farmUnlocks(s, key) {
 }
 
 // ── the measures the farming missions read (missions.js SAVE_MEASURE, missionFlow.js GATE) ──────────────────────────
-/** Traditional plots on the planet's farm that have been planted at least once (F1 "Break ground"). */
-export function measureFarmPlanted(s, key) {
+/** Plots of a method (Traditional unless named) on the planet's farm planted at least once (F1 "Break ground", F2/F3 "Build it"). */
+export function measureFarmPlanted(s, key, method = 'traditional') {
   const f = s.outposts && s.outposts[key] && s.outposts[key].farm;
   if (!f) return 0;
-  return Object.values(f.plots).filter((p) => p.method === 'traditional' && p.cycle >= 1).length;
+  return Object.values(f.plots).filter((p) => p.method === (method || 'traditional') && p.cycle >= 1).length;
 }
 /** Units of a crop delivered to the ships over the farm's life. */
 export function measureCropDelivered(s, cropId) {

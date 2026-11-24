@@ -362,7 +362,7 @@ they come back; the owner will detail them first:
 
 | Story | Builds | Depends on |
 |---|---|---|
-| **C1** The 27 contracts | F1–F3 for every planet (data and flow) | F-A, F-B |
+| **C1** The 27 contracts | F1–F3 for every planet (data and flow). **Data done** 2026-11-23 [MM-story_mwu3uc19_1v]: all 27 on `Farm_Contracts` with a `Live` column; planned rows go to `missions.json` `plannedMissions` (Distribution §5.3). The flow (each F1 live, the Factor offering F2/F3) follows C5 and C8 | F-A, F-B |
 | **C2** Pod stores | each ship's pod store by loyalty rank | C1 |
 | **C3** The Collective's farm orders and wanted crops | orders after two farmed planets; the 1.5× wanted crop | C1 |
 | **C4** Machine blueprints | levels 3 and 4 from the specialist factions, Machine Engineering I–III | C1, B4 (future: waits with the grow rooms) |
