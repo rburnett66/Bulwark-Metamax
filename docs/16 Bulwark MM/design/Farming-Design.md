@@ -1093,6 +1093,96 @@ refined goods.
 The full recipe book is its own design once Phase C lands (§13). This document fixes the shape: raw → refined → part,
 cross-planet inputs, level carries through, super crops at the top.
 
+### 11.3 Distilling [MM-story_mws5zzer_c]
+
+Owner, 2026-11-22: "Another way to create more sellable items is to add distillers which process crops into chemicals."
+and "Now a simple crop can be a drink, tonic, medicine, fuel." Then: "Distilling turns a single crop into multiple
+items of a smaller volume, while a fabricator takes multiple items and creates something more complex."
+
+The **Distiller** is a second processing building beside the Refinery. The two processing directions are opposite:
+
+- **Distilling splits.** One crop goes in; **several products come out of the same run**, each a smaller volume than
+  the crop that made it. A batch of grain comes out as some spirit, some tonic, some salve and some ethanol at once.
+- **Fabricating combines** (§11.2). Several goods go in, often from several planets; one more complex thing comes out.
+
+So distilling is how a simple crop becomes many sellable items, and the smaller volumes are worth more per unit: they
+take less silo and cargo space than the crop.
+
+| Product | What it is | Sells to (proposed) | Value per unit vs one raw crop (proposed) |
+|---|---|---|---|
+| **Drink** | spirits, cordials, brews | crews, stations, any faction ship | 4× |
+| **Tonic** | a restorative or stimulant | faction ships; a short boost item (open, D48) | 5× |
+| **Medicine** | remedies, salves, serums | faction ships; the best price where a faction is at war | 6× |
+| **Fuel** | alcohols, oils, gases | faction ships; and a Fabricator input (fuel cells, §11.2) | 5× |
+
+Example, one run on fully upgraded machines (proposed numbers): **10 Loam Grain** → 3 grain spirit (drink) + 2 malt
+tonic + 1 grain salve (medicine) + 3 grain ethanol (fuel), the grain's split of 3 : 2 : 1 : 3. Each crop's data names its products and its split; a crop that cannot make one
+leaves it out, and its share goes to the others. The split is the crop's character: a fruit runs heavy on drink, a resin
+heavy on fuel.
+
+**Every product needs its machine and its ingredients** (owner, 2026-11-22: "Each crop has a different split. But the
+user needs the machine and the ingredients"). The split says what a crop *can* become; what a run actually makes is
+the products the player is equipped for.
+
+| Product | Machine in the Distiller (proposed) | Ingredients beside the crop (proposed) |
+|---|---|---|
+| Drink | **Still** | yeast, water |
+| Tonic | **Infuser** | a mineral salt (e.g. Sunsalt), water |
+| Medicine | **Apothecary Press** | a resin or sap (e.g. Duskmoss Resin), a salt |
+| Fuel | **Cracking Column** | a catalyst (e.g. Slag Iron or Mesa Copper) |
+
+- A run makes only the products whose machine is installed and whose ingredients are in stock; ingredients are used up
+  per run, scaled to that product's share.
+- **The missing shares are not made.** Their part of the crop stays in the silo, unused (proposed), so a run is never
+  wasted, but a fully equipped Distiller gets the most from each crop. The job screen shows each product's share and
+  names what is missing ("Needs a Cracking Column", "Needs 2 Sunsalt"), like a crop's unlock hint.
+- Ingredients come from other crops and planets, so distilling, like fabricating, pulls the player across the galaxy;
+  water and yeast are cheap stock bought at any outpost (proposed).
+- The machines are bought and levelled like the grow-room machines (§2.7, §2.8).
+
+Rules (proposed):
+
+- **What distils:** the plant crops (Grain, Vegetable, Fruit and the plant Materials of §9.3). Minerals and gems do not
+  distil; they refine.
+- **A job** is a timed run queued at the Distiller like a refining job: a batch of one crop in, its split out (the
+  shares the player is equipped for).
+  One crop per run, never a mix (mixing is the Fabricator's job).
+- **Yield grows with the machine** (owner, 2026-11-22: "it should start at 3, then 5, then 7 and gets to 9 when the
+  machine is fully upgraded. And these upgrades will be expensive."). Per 10 crop in, a product's machine makes:
+
+  | Machine level | 1 | 2 | 3 | 4 (fully upgraded) |
+  |---|---|---|---|---|
+  | Units out per 10 crop | **3** | **5** | **7** | **9** |
+
+  Each product's machine has its own level, so it is applied to that product's share: a Still at level 2 makes 5 of
+  every 10 units of the crop's drink share. The four levels follow the machine levels of §2.8.
+- **The upgrades are expensive** (proposed: level 2, 3 and 4 cost 2×, 4× and 8× the machine's price, on top of
+  Machine Engineering I–III and, for 3 and 4, the specialist faction's blueprint, §2.8). Getting a machine to 9 of 10 is
+  a long-game goal.
+- **Upgrades need special parts** (owner, 2026-11-22: "These upgrades might require special parts too"). Each level past
+  1 names its parts as data, one kind per machine (proposed):
+
+  | Machine | Level 2 | Level 3 | Level 4 |
+  |---|---|---|---|
+  | Still | copper coil | pressure valve | reflux column |
+  | Infuser | fine mesh | heat exchanger | crystal filter |
+  | Apothecary Press | steel plate | pressure valve | precision die |
+  | Cracking Column | heat exchanger | catalyst bed | plasma core |
+
+  Parts come from the **Fabricator** (§11.2), so the two processing directions feed each other: the Fabricator makes
+  the parts that raise the Distiller's yield, and the Distiller's fuel goes into Fabricator recipes. Before the
+  Fabricator opens, level-2 parts can also come from faction contracts and the Pod Reward Chest (proposed); level 3 and
+  4 parts only from the Fabricator. The upgrade screen names any missing part, like a missing ingredient.
+- **A run always pays.** The products are concentrated, so each unit sells for 4–6× a raw crop (the table above). At
+  level 1, 3 units at about 5× is roughly 1.5× the value of the 10 crops sold raw; at level 4, 9 units is roughly 4.5×.
+  The products also take less silo and cargo space than the crop.
+- **Level carries through:** a Legendary crop makes a Legendary drink, in the same five colours.
+- **Factions want different products.** Each faction's buyers pay more for some products than others (a military
+  faction for medicine and fuel, a trading one for drinks), so where each product of a run is sold is a choice of
+  buyer, and so a loyalty choice (Character-System §7.9).
+- **Opens with research:** a **Distillery** node, opened by a crop mastered to a level, like the machines (proposed:
+  level 3), and bought with gold.
+
 ## 12. Research: the FARMING division
 
 The tech tree gains a fifth division beside UNITS, BASES, MAP and OUTPOST (Tech-Tree-Design §2). It is bought with
@@ -1114,6 +1204,7 @@ in (§2.7) and raises its level with gold (§2.8).
 | Hunter Kennel, Kennel II | truffle hunting, a 2nd and 3rd drone | Xenthe F2 |
 | Pod Bench II | pod upgrades cost half | Verdance F3 |
 | Refinery | refining | research |
+| Distillery | distilling: drink, tonic, medicine, fuel (§11.3) | a crop mastered to level 3 (proposed) |
 | Fabricator | manufacturing (needs Research Level 3) | research |
 
 **Farming Research Level** counts FARMING nodes owned: Level 1 at 5, Level 2 at 12, **Level 3 at 20** (proposed;
@@ -1128,7 +1219,7 @@ manufacturing; reaching it takes farming contracts with most of the nine faction
 | **A — the loop** | the Rig Mk II gate and Verdance F1; the farmable-cell layer on the Verdance outpost map; Farmhouse, Silo; Traditional and Irrigated plots; **the avatar on the surface** (the ship's crew rig at outpost scale, walk-to, the work pose, the tap queue) and Verdance farmhands; the growth stages, Fruited and Dead; seed pods as items in five levels with the pod bench; Rare pods from battles; the SEED PODS view; the ember harvest effect; Sprinklers; harvest and sell taps; the Helium-4 rename | proves the mode is fun with the fewest methods, on the surface only |
 | **B — environment** | the atmosphere model; **the grow-room view**, built on the ship interior's room stack at the three-quarter angle, with the avatar's walk-to and plot actions; the room's **three thirds** and **machine slots**; the **Irrigation System** per third, then **Air Control**, **Light Rig**, **Climate Unit**, **Nutrient Doser**; **machine levels 1–4 and maintenance** (clock, MAINTAIN, MAINTAIN ROOM, overdue stop, offline catch-up of the clocks); **the Hydroponics room** (one full-screen set) behind the **glass dome**; **the Underground room** (one cavern kit plus nine accent sets) behind the **ammunition bunker**; **the Robot Bay and gro-bots I and II**; the **Vertical farm with levels 1–4** and Tub on the surface; Legendary's tech rule; mystery crops and the Growth Journal | the discovery game, and the indoor rooms arrive with the methods and machines that need them |
 | **C — the factions** | F1 – F3 on all nine planets (Distribution §5); the faction pod stores and loyalty ranks; the Collective's farm orders; the machine blueprints; Terraced, Orchard, Solo, Spatial, Hydrofarming, Truffle Hunting; crop models for all 36 (living and accreted); gems from mining; the farmable-cell layer on the other eight outpost maps | the reasons to build many farms, on many planets |
-| **D — processing** | Refinery, then Fabricator at Research Level 3; first ship parts; each faction's recipe line | the long game |
+| **D — processing** | Refinery and Distiller (§11.3), then Fabricator at Research Level 3; first ship parts; each faction's recipe line | the long game |
 
 What follows from the indoor rooms and the avatars:
 
@@ -1206,6 +1297,13 @@ What follows from the indoor rooms and the avatars:
 | D44 | The avatar's height on the surface | 0.45 of a battle cell (shown in the prototype) |
 | D45 | Farmhands: the faction's crew walking the surface farm as life, never changing a plot | yes, two or three per farmed planet |
 | D46 | Farming opens per planet at that planet's Rig Mk II, or everywhere at the first? | per planet; the first opens the FARM button |
+| D47 | Do the Distiller's products only sell, or do some have uses? | all sell; fuel is also a Fabricator input; tonic and medicine uses are D48 |
+| D48 | Can tonics and medicines be used, not just sold (a battle boost, crew healing on the ship)? | sell only for now; a use is a later design |
+| D49 | Is the Distiller a farm building on the surface or a grow-room machine? | a farm building, like the Refinery |
+| D50 | Can a run be tuned to favour one product (a still setting), or is the split fixed per crop? | fixed per crop for now |
+| D51 | A run missing a product's machine or ingredients: that share stays as crop, or is lost? | stays as crop, unused |
+| D52 | Where water and yeast come from: bought stock, or grown and gathered? | cheap stock at any outpost |
+| D53 | Where a Distiller upgrade's special parts come from | the Fabricator; level-2 parts also from faction contracts and the Pod Reward Chest |
 
 ## Dependencies
 
