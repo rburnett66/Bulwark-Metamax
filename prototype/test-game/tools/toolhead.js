@@ -41,6 +41,7 @@
     { id: 'gallery',     name: 'Gallery',       at: 'gallery.html',                    glyph: '🖼' },
     { id: 'comm',        name: 'Comms',         at: 'comm.html',                       glyph: '📡' },
     { id: 'portraits',   name: 'Portraits',     at: 'tools/portraits/index.html',      glyph: '🎭' },   // relationship portraits [MM-story_mwpni0v4_3m]
+    { id: 'story',       name: 'Story Map',     at: 'tools/story/index.html',          glyph: '🧭' },   // the story timeline [MM-epic_mwtlwawp_f]
   ];
 
   // Where is the site root, relative to THIS page?
