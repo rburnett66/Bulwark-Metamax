@@ -76,6 +76,7 @@
   .brand{position:fixed;top:18px;left:22px;display:flex;flex-direction:column;gap:4px;pointer-events:none}
   .brand b{font:600 19px/1 "Barlow Semi Condensed",sans-serif;letter-spacing:.01em}
   .brand small{font-size:13px;color:var(--muted)}
+  .brand .build{font:500 11.5px/1 Inter,system-ui,sans-serif;color:var(--muted);margin-left:8px;letter-spacing:0}
   .rig{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;max-width:540px;pointer-events:auto}
   .legs{display:flex;gap:2px;padding:3px;border-radius:10px;background:var(--panel);border:1px solid var(--line-soft)}
   .legs button{width:32px;height:28px;border:0;border-radius:7px;background:transparent;cursor:pointer;
@@ -285,7 +286,7 @@
 <canvas id="c" tabindex="0" aria-label="3D view of the walker"></canvas>
 
 <div class="brand">
-  <b>Walker viewer</b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · joints</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
