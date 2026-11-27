@@ -1,0 +1,2905 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%238fd3c8'/%3E%3C/svg%3E">
+<script>
+  // every error the page hits (scripts, failed loads, rejected promises) is kept and shown in the corner, so a
+  // reviewer on a phone can see and copy them without a console
+  window.__errs = [];
+  window.__err = (msg) => { msg = String(msg).slice(0, 400); if (window.__errs.includes(msg)) return; window.__errs.push(msg); window.__showErrs?.(); };
+  // A page shown inside another site's frame (Claude's file viewer, for one) only hears "Script error." with no detail,
+  // so every event handler, animation frame and timer is run inside a try/catch that records the real message and
+  // where it happened. Caught errors do not reach the generic handler below.
+  const note = (e, where) => {
+    const st = (e && e.stack ? String(e.stack) : '').split('\n').map(l => l.trim()).filter(l => l && !l.includes(String(e?.message || ''))).slice(0, 3)
+      .map(l => l.replace(/^at /, '').replace(/https?:[^ )]*\//g, '')).join(' ← ');
+    window.__err(`${e?.name && e.name !== 'Error' ? e.name + ': ' : ''}${e?.message || e}${where ? ` · during ${where}` : ''}${st ? ` · ${st}` : ''}`);
+  };
+  window.__note = note;
+  const wrap = (fn, where) => {
+    if (typeof fn !== 'function') return fn;
+    if (!fn.__wrapped) Object.defineProperty(fn, '__wrapped', { value: function (...a) { try { return fn.apply(this, a); } catch (e) { note(e, where); } } });
+    return fn.__wrapped;
+  };
+  const ael = EventTarget.prototype.addEventListener, rel = EventTarget.prototype.removeEventListener;
+  EventTarget.prototype.addEventListener = function (type, fn, opt) { return ael.call(this, type, this === window && type === 'error' ? fn : wrap(fn, type), opt); };
+  EventTarget.prototype.removeEventListener = function (type, fn, opt) { return rel.call(this, type, fn && fn.__wrapped || fn, opt); };
+  const raf = window.requestAnimationFrame.bind(window), sto = window.setTimeout.bind(window);
+  window.requestAnimationFrame = fn => raf(wrap(fn, 'animation frame'));
+  window.setTimeout = (fn, ...a) => sto(wrap(fn, 'timer'), ...a);
+  addEventListener('error', e => {
+    const t = e.target;
+    if (t && t !== window && (t.src || t.href)) window.__err(`Could not load ${t.src || t.href}`);
+    else if (e.error) note(e.error, e.filename ? `${e.filename.split('/').pop()}:${e.lineno}` : '');
+    else window.__err(e.message === 'Script error.' ? 'Script error (the page is in a frame that hides the details; the next error, if any, will have them)' : `${e.message || 'Error'}${e.filename ? ` (${e.filename.split('/').pop()}:${e.lineno})` : ''}`);
+  }, true);
+  addEventListener('unhandledrejection', e => window.__err(`Unhandled: ${e.reason?.message || e.reason}`));
+  { const ce = console.error.bind(console); console.error = (...a) => { window.__err(a.map(x => x?.message || String(x)).join(' ')); ce(...a); }; }
+</script>
+<title>Walker viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bay:#1c2430;
+    --bay-deep:#141a23;
+    --panel:rgba(34,44,58,.78);
+    --panel-solid:#222c3a;
+    --line:#3a4758;
+    --line-soft:rgba(255,255,255,.07);
+    --text:#e6ebf1;
+    --muted:#8e9bad;
+    --faint:#5e6b7d;
+    --body:#8fd3c8;
+    --weap:#f2a541;
+    --radius-key:10px;
+    --radius-panel:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;overflow:hidden}
+  body{
+    font-family:"Barlow",system-ui,sans-serif;
+    color:var(--text);
+    background:
+      radial-gradient(120% 90% at 50% 30%, #2a3646 0%, var(--bay) 45%, var(--bay-deep) 100%);
+    -webkit-font-smoothing:antialiased;
+  }
+  canvas{position:fixed;inset:0;display:block;width:100%;height:100%;outline:none}
+  button{font:inherit;color:inherit}
+  :focus-visible{outline:2px solid var(--body);outline-offset:2px}
+
+  /* top bar */
+  .brand{position:fixed;top:18px;left:22px;display:flex;flex-direction:column;gap:4px;pointer-events:none}
+  .brand b{font:600 19px/1 "Barlow Semi Condensed",sans-serif;letter-spacing:.01em}
+  .brand small{font-size:13px;color:var(--muted)}
+  .rig{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:8px;max-width:540px;pointer-events:auto}
+  .legs{display:flex;gap:2px;padding:3px;border-radius:10px;background:var(--panel);border:1px solid var(--line-soft)}
+  .legs button{width:32px;height:28px;border:0;border-radius:7px;background:transparent;cursor:pointer;
+    font:600 14px/1 "Barlow Semi Condensed",sans-serif;color:var(--muted);transition:background .15s,color .15s}
+  .slide{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:10px;background:var(--panel);border:1px solid var(--line-soft);font-size:13px;color:var(--muted)}
+  .slide input{width:120px;accent-color:var(--body)}
+  .slide output{min-width:44px;color:var(--text);font-weight:600;font-variant-numeric:tabular-nums}
+  .physics{display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:10px;background:var(--panel);border:1px solid var(--line-soft);font-size:13px;color:var(--text);cursor:pointer}
+  .physics input{width:34px;height:20px;appearance:none;-webkit-appearance:none;border-radius:10px;background:#3a4758;position:relative;cursor:pointer;margin:0;transition:background .15s}
+  .physics input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#dfe5ec;transition:transform .15s}
+  .physics input:checked{background:var(--body)}
+  .physics input:checked::after{transform:translateX(14px)}
+  .riglabel{display:block;margin-top:8px;font-size:12.5px;color:var(--muted)}
+  .legs button:hover{background:rgba(255,255,255,.05);color:var(--text)}
+  .legs button[aria-pressed="true"]{background:rgba(143,211,200,.16);color:#fff}
+  .now{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;pointer-events:none}
+  .num-in{height:34px;border-radius:8px;border:1px solid var(--line);background:rgba(0,0,0,.2);color:var(--text);padding:0 10px;font:500 14px "Barlow",sans-serif}
+  .events{margin-top:8px;display:flex;flex-direction:column;gap:3px;font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .events em{font-style:normal;color:var(--text);font-weight:500;margin-right:4px}
+  .chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:12px;
+    font-size:12.5px;font-weight:500;background:var(--panel);border:1px solid var(--line-soft)}
+  .chip::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--c,var(--body))}
+  .chip.w{--c:var(--weap)}
+  .chip.dead{--c:#e06a5a}
+  .errs{margin-top:8px;align-self:flex-start;height:26px;padding:0 10px;border-radius:13px;border:1px solid rgba(224,106,90,.5);background:rgba(224,106,90,.14);color:#f1a197;font-size:12.5px;font-weight:600;cursor:pointer;pointer-events:auto}
+  .errs[hidden]{display:none}
+  .errbox{position:fixed;left:12px;top:12px;z-index:30;width:min(440px,calc(100% - 24px));max-height:60vh;overflow:auto;padding:4px 14px 14px;
+    background:var(--panel-solid);border:1px solid var(--line);border-radius:var(--radius-panel);box-shadow:0 24px 60px -20px rgba(5,10,18,.9)}
+  .errbox[hidden]{display:none}
+  .errbox header{display:flex;justify-content:space-between;align-items:center;padding:8px 0}
+  .errbox ol{margin:0 0 12px;padding-left:20px;font-size:12.5px;line-height:1.5;color:var(--muted);word-break:break-word;user-select:text}
+
+  .views{position:fixed;top:16px;left:50%;transform:translateX(-50%);display:flex;gap:2px;padding:4px;
+    background:var(--panel);backdrop-filter:blur(16px) saturate(1.2);-webkit-backdrop-filter:blur(16px) saturate(1.2);
+    border:1px solid var(--line-soft);border-radius:12px}
+  .views button{width:64px;height:44px;border:0;border-radius:9px;background:transparent;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;transition:background .15s,color .15s;color:var(--muted)}
+  .views button b{font:600 16px/1 "Barlow Semi Condensed",sans-serif;color:var(--text)}
+  .views button span{font-size:11px;line-height:1}
+  .views button:hover{background:rgba(255,255,255,.05)}
+  .views button[aria-pressed="true"]{background:rgba(143,211,200,.14);color:var(--body)}
+  .views button[aria-pressed="true"] b{color:#fff}
+
+  .tools{position:fixed;top:16px;right:18px;display:flex;gap:8px}
+  .tool{height:44px;padding:0 14px;display:flex;align-items:center;gap:8px;border-radius:12px;cursor:pointer;
+    background:var(--panel);border:1px solid var(--line-soft);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+    font-size:13.5px;font-weight:500;transition:background .15s}
+  .tool:hover{background:rgba(46,58,75,.9)}
+  .tool svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .tool[aria-pressed="true"]{color:var(--weap)}
+
+  /* the deck */
+  .deck{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);display:flex;align-items:stretch;gap:18px;
+    padding:12px 14px 14px;background:var(--panel);backdrop-filter:blur(20px) saturate(1.25);-webkit-backdrop-filter:blur(20px) saturate(1.25);
+    border:1px solid var(--line-soft);border-radius:var(--radius-panel);
+    box-shadow:0 18px 50px -20px rgba(5,10,18,.8)}
+  .group{display:flex;flex-direction:column;gap:8px}
+  .group h2{margin:0 0 0 2px;font:600 13px/1 "Barlow Semi Condensed",sans-serif;color:var(--muted);display:flex;gap:8px;align-items:baseline}
+  .group h2 small{font:400 12px/1 "Barlow",sans-serif;color:var(--faint)}
+  .keys{display:flex;gap:6px}
+  .sep{width:1px;background:var(--line);opacity:.6;margin:4px 0}
+  .key{--accent:var(--body);position:relative;width:78px;height:68px;border-radius:var(--radius-key);cursor:pointer;
+    border:1px solid var(--line-soft);background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.02));
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;overflow:hidden;
+    transition:background .15s,border-color .15s,transform .08s}
+  .weap .key{--accent:var(--weap)}
+  .key[hidden]{display:none}
+  .key svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;color:#c7d0dc;transition:color .15s}
+  .key span{font-size:12px;font-weight:500;line-height:1;white-space:nowrap}
+  .key kbd{position:absolute;top:5px;right:7px;font:500 10.5px/1 "Barlow",sans-serif;color:var(--faint)}
+  .key::after{content:"";position:absolute;left:0;bottom:0;height:3px;width:calc(var(--p,0) * 100%);background:var(--accent)}
+  .key:hover{border-color:rgba(255,255,255,.16);background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.035))}
+  .key:active{transform:translateY(1px) scale(.985)}
+  .key.on{border-color:color-mix(in oklab,var(--accent) 65%,transparent);
+    background:linear-gradient(180deg,color-mix(in oklab,var(--accent) 22%,transparent),color-mix(in oklab,var(--accent) 8%,transparent))}
+  .key.on svg,.key.run svg{color:var(--accent)}
+  .key.run{border-color:color-mix(in oklab,var(--accent) 40%,transparent)}
+  .key:disabled{opacity:.32;cursor:default}
+
+  .hint{position:fixed;right:22px;top:70px;font-size:12.5px;color:var(--faint);pointer-events:none}
+
+  /* advanced drawer */
+  .drawer{position:fixed;top:72px;right:18px;bottom:18px;width:300px;padding:6px 0;overflow:auto;
+    background:var(--panel-solid);border:1px solid var(--line);border-radius:var(--radius-panel);
+    box-shadow:0 24px 60px -20px rgba(5,10,18,.9);transform:translateX(calc(100% + 30px));transition:transform .28s cubic-bezier(.2,.7,.2,1)}
+  .drawer.open{transform:none}
+  .drawer header{display:flex;justify-content:space-between;align-items:center;padding:10px 16px 6px}
+  .drawer header b{font:600 16px "Barlow Semi Condensed",sans-serif}
+  .done{height:30px;padding:0 12px;border:0;border-radius:8px;cursor:pointer;background:rgba(143,211,200,.16);color:var(--body);font-weight:600;font-size:13.5px}
+  .done:hover{background:rgba(143,211,200,.26)}
+  .legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12.5px;color:var(--muted)}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}
+  .sel{padding:10px 12px;border-radius:9px;background:rgba(0,0,0,.2);font-size:13px;line-height:1.55;font-variant-numeric:tabular-nums;color:var(--muted)}
+  .sel b{color:var(--text);font-weight:600}
+  .row2,.row3{display:flex;gap:8px}
+  .row2 .reset,.row3 .reset{flex:1}
+  .fit{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13.5px;padding:6px 0}
+  .fit button{height:28px;padding:0 10px;font-size:12.5px}
+  .deck.dim{opacity:.32;pointer-events:none}
+  .num{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;margin-right:10px;font-size:12px;font-weight:600;background:rgba(255,255,255,.07);color:var(--muted)}
+  details.step[open] .num{background:rgba(143,211,200,.2);color:var(--body)}
+  .primary{height:40px;border:0;border-radius:10px;cursor:pointer;background:var(--body);color:#0f1d1f;font-weight:600;font-size:14px}
+  .primary:hover{filter:brightness(1.08)}
+  .plist{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums}
+  .plist td{padding:5px 0;border-bottom:1px solid var(--line-soft);color:var(--muted)}
+  .plist td:first-child{color:var(--text)}
+  .plist td:last-child{text-align:right}
+  .x{width:30px;height:30px;border:0;border-radius:8px;background:transparent;cursor:pointer;color:var(--muted)}
+  .x:hover{background:rgba(255,255,255,.06);color:var(--text)}
+  details{border-top:1px solid var(--line-soft)}
+  summary{list-style:none;cursor:pointer;padding:13px 16px;font-weight:600;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:"";width:7px;height:7px;border-right:1.6px solid var(--muted);border-bottom:1.6px solid var(--muted);transform:rotate(45deg) translateY(-2px);transition:transform .2s}
+  details[open] summary::after{transform:rotate(225deg) translateY(-2px)}
+  .body-in{padding:0 16px 16px;display:flex;flex-direction:column;gap:14px}
+  .field{display:flex;flex-direction:column;gap:7px;font-size:13px;color:var(--muted)}
+  .field .top{display:flex;justify-content:space-between}
+  .field output{color:var(--text);font-variant-numeric:tabular-nums}
+  input[type=range]{width:100%;accent-color:var(--body)}
+  .seg{display:flex;background:rgba(0,0,0,.18);border-radius:9px;padding:3px;gap:2px}
+  .seg button{flex:1;height:30px;border:0;border-radius:7px;background:transparent;cursor:pointer;font-size:13px;color:var(--muted)}
+  .seg button[aria-pressed="true"]{background:rgba(242,165,65,.16);color:var(--weap)}
+  .tog{display:flex;justify-content:space-between;align-items:center;font-size:13.5px;color:var(--text)}
+  .tog input{width:34px;height:20px;appearance:none;-webkit-appearance:none;border-radius:10px;background:#3a4758;position:relative;cursor:pointer;transition:background .15s;margin:0}
+  .tog input::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#dfe5ec;transition:transform .15s}
+  .tog input:checked{background:var(--body)}
+  .tog input:checked::after{transform:translateX(14px)}
+  .reset{height:36px;border-radius:9px;border:1px solid var(--line);background:transparent;cursor:pointer;font-size:13.5px}
+  .reset:hover{background:rgba(255,255,255,.05)}
+  .note{font-size:12.5px;color:var(--faint);line-height:1.45}
+
+  @media (max-width:1330px){
+    .deck{flex-direction:column;gap:10px;width:calc(100% - 24px);max-width:620px}
+    .sep{display:none}
+    .keys{flex-wrap:wrap}
+    .key{width:calc((100% - 42px)/8);min-width:64px}
+    .weap .key{width:calc((100% - 36px)/7);min-width:58px}
+    .hint{display:none}
+  }
+  /* phones: title and tools on one line, views under them, the rig folded into one line that opens,
+     a compact deck whose rows scroll sideways, and the drawers as bottom sheets */
+  @media (max-width:640px){
+    .brand{top:calc(10px + env(safe-area-inset-top));left:12px;right:12px}
+    .brand b{height:40px;display:flex;align-items:center;font-size:17px}
+    .tools{top:calc(10px + env(safe-area-inset-top));right:12px;gap:6px}
+    .tool{height:40px;width:40px;padding:0;justify-content:center}
+    .tools .tool span{display:none}
+    .views{top:calc(58px + env(safe-area-inset-top));left:12px;right:12px;transform:none}
+    .views button{flex:1;width:auto;height:40px}
+    .riglabel{order:1;margin-top:56px;pointer-events:auto;cursor:pointer;align-self:flex-start;height:30px;display:flex;align-items:center;gap:6px;
+      padding:0 12px;border-radius:15px;background:var(--panel);border:1px solid var(--line-soft);color:var(--text);font-size:12.5px}
+    .riglabel::after{content:"";width:6px;height:6px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:rotate(45deg) translateY(-2px);transition:transform .2s}
+    .brand.open .riglabel::after{transform:rotate(225deg) translateY(-1px)}
+    .rig{order:2;display:none;flex-direction:column;align-items:stretch;max-width:none;margin-top:8px;padding:10px;border-radius:14px;
+      background:var(--panel-solid);border:1px solid var(--line);box-shadow:0 18px 40px -20px rgba(5,10,18,.9)}
+    .brand.open .rig{display:flex}
+    .rig .slide,.rig .physics{width:100%}
+    .rig .slide input{flex:1;width:auto}
+    .rig .legs{align-self:flex-start}
+    .now{order:3;margin-top:8px}
+    .errs{order:4}
+    .events,.hint{display:none}
+    .deck{left:8px;right:8px;width:auto;max-width:none;transform:none;bottom:calc(8px + env(safe-area-inset-bottom));padding:8px 8px 10px;gap:6px;border-radius:14px}
+    .group{gap:5px}
+    .group h2{font-size:12px}
+    .group h2 small{display:none}
+    .keys{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:1px}
+    .keys::-webkit-scrollbar{display:none}
+    .key,.weap .key{flex:0 0 auto;width:auto;min-width:62px;height:52px;padding:0 9px;gap:5px}
+    .key svg{width:18px;height:18px}
+    .key span{font-size:11.5px}
+    .key kbd{display:none}
+    .deck.dim{display:none}
+    .drawer{top:auto;left:8px;right:8px;width:auto;bottom:calc(8px + env(safe-area-inset-bottom));max-height:52vh;
+      transform:translateY(calc(100% + 30px))}
+    .drawer.open{transform:none}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none!important}
+  }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="c" tabindex="0" aria-label="3D view of the walker"></canvas>
+
+<div class="brand">
+  <b>Walker viewer</b>
+  <div class="rig">
+    <div class="legs" role="group" aria-label="Legs">
+      <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
+      <button data-legs="4" aria-pressed="true" title="Four legs, trot">4</button>
+      <button data-legs="6" aria-pressed="false" title="Six legs, tripod gait">6</button>
+    </div>
+    <label class="slide" title="Total weight in tons">
+      <span>Weight</span><input type="range" id="tonsTop" min="5" max="1000" step="5" value="40"><output id="tonsTopOut">40 t</output>
+    </label>
+    <label class="slide" title="Leg, joint and foot thickness">
+      <span>Limbs</span><input type="range" id="limbTop" min="0.6" max="2.6" step="0.05" value="1"><output id="limbTopOut">1.0×</output>
+    </label>
+    <label class="slide" title="Wide spider stance to pillar legs under the body. Auto follows weight.">
+      <span>Stance</span><input type="range" id="stanceTop" min="0" max="1" step="0.05" value="0"><output id="stanceTopOut">Auto</output>
+    </label>
+    <label class="physics" title="Simulate mass, gravity and leg strength. Off: plain animation.">
+      <input type="checkbox" id="simTop" checked><span>Physics</span>
+    </label>
+  </div>
+  <small id="rigLabel" class="riglabel">4 legs, trot</small>
+  <div class="now" id="now" aria-live="polite"></div>
+  <div class="events" id="events"></div>
+  <button class="errs" id="errs" hidden></button>
+</div>
+
+<nav class="views" aria-label="View">
+  <button data-view="x" title="Side view, looking along X (key X)"><b>X</b><span>Side</span></button>
+  <button data-view="y" title="Top view, looking along Y (key Y)"><b>Y</b><span>Top</span></button>
+  <button data-view="z" title="Front view, looking along Z (key Z)"><b>Z</b><span>Front</span></button>
+  <button data-view="iso" title="Isometric, drag to orbit (key I)"><b>ISO</b><span>Orbit</span></button>
+</nav>
+
+<div class="tools">
+  <button class="tool" id="pause" aria-pressed="false" title="Pause or play (Space)">
+    <svg viewBox="0 0 24 24"><path id="pauseIcon" d="M9 6v12M15 6v12"/></svg><span>Pause</span>
+  </button>
+  <button class="tool" id="tuneBtn" aria-pressed="false" title="Joints, sizing blocks and parts (T)">
+    <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.2"/><circle cx="12" cy="13" r="2.2"/><circle cx="18" cy="19" r="2.2"/><path d="M7.5 7.6l3 3.8M13.5 14.6l3 3"/></svg><span>Build rig</span>
+  </button>
+  <button class="tool" id="adv" aria-expanded="false" title="Speed, turret aim, overlays">
+    <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>Advanced</span>
+  </button>
+</div>
+
+<section class="deck" aria-label="Actions">
+  <div class="group body">
+    <h2>Body <small>one at a time</small></h2>
+    <div class="keys" id="bodyKeys"></div>
+  </div>
+  <div class="sep"></div>
+  <div class="group weap">
+    <h2>Weapons <small>play over any move</small></h2>
+    <div class="keys" id="weapKeys"></div>
+  </div>
+</section>
+
+<div class="hint" id="hint"></div>
+
+<aside class="drawer" id="tune" aria-label="Build the rig">
+  <header><b>Build the rig</b><button class="done" id="tuneDone">Done</button></header>
+  <details class="step" data-step="joints" open>
+    <summary><span><span class="num">1</span>Joints</span></summary>
+    <div class="body-in">
+      <p class="note" style="margin:0">Drag a joint in the X, Y or Z view. Dragging a knee sets that leg's segment lengths and which way it bends.</p>
+      <div class="legend"><span><i style="background:#8fd3c8"></i>Hip</span><span><i style="background:#f2a541"></i>Knee</span><span><i style="background:#e6ebf1"></i>Foot</span><span><i style="background:#b89cff"></i>Turret</span></div>
+      <div class="sel" id="tuneSel">Select a joint</div>
+      <label class="tog">Mirror left and right <input type="checkbox" id="tuneSym" checked></label>
+      <div class="field" id="kneeField">Knees bend
+        <div class="seg" id="kneeDir">
+          <button data-knee="back" aria-pressed="true">Backward</button>
+          <button data-knee="fwd" aria-pressed="false">Forward</button>
+        </div>
+      </div>
+      <div class="field">Leg look
+        <div class="seg" id="legLook">
+          <button data-look="spider" aria-pressed="true">Spider</button>
+          <button data-look="mech" aria-pressed="false">Armoured</button>
+        </div>
+      </div>
+      <div class="field">Reference image
+        <div class="row3"><button class="reset" id="refSide" title="A side drawing, shown behind the X view">Side</button><button class="reset" id="refFront" title="A front drawing, shown behind the Z view">Front</button><button class="reset" id="refTop" title="A top drawing, shown under the Y view">Top</button></div>
+      </div>
+      <input type="file" id="refFile" accept="image/*" hidden>
+      <div id="refFields" hidden>
+        <div class="sel" id="refSel"></div>
+        <label class="field"><div class="top" id="refHLabel">Drawing height <output id="refHOut"></output></div>
+          <input type="range" id="refH" min="2" max="80" step="0.5" value="12"></label>
+        <label class="field"><div class="top" id="refXLabel">Move sideways <output id="refXOut"></output></div>
+          <input type="range" id="refX" min="-0.6" max="0.6" step="0.005" value="0"></label>
+        <label class="field"><div class="top" id="refYLabel">Move up <output id="refYOut"></output></div>
+          <input type="range" id="refY" min="-0.3" max="0.3" step="0.005" value="0"></label>
+        <label class="field"><div class="top">Opacity <output id="refOOut"></output></div>
+          <input type="range" id="refO" min="0.1" max="1" step="0.05" value="0.55"></label>
+        <div class="row2"><button class="reset" id="refFlip">Flip</button><button class="reset" id="refClear">Remove</button></div>
+      </div>
+      <button class="reset" id="exTwin" title="Two forward knees, 90 t, thick pillar legs, heavy upper body, twin cannons, missile racks, knee rods, no jets">Set up the twin-cannon biped</button>
+    </div>
+  </details>
+  <details class="step" data-step="blocks">
+    <summary><span><span class="num">2</span>Blocks</span></summary>
+    <div class="body-in">
+      <p class="note" style="margin:0">Each segment between joints gets a block. Add your own blocks to shape the hull and upper body over the reference image: drag them in the X, Y or Z view, size them here.</p>
+      <div class="row2"><button class="reset" id="addBox">Add box</button><button class="reset" id="addCyl">Add cylinder</button></div>
+      <label class="tog">See-through blocks <input type="checkbox" id="blkSee"></label>
+      <div class="sel" id="blkSel">Select a block</div>
+      <div class="seg" id="blkShape"></div>
+      <div id="blkFields" class="body-in" style="padding:0"></div>
+      <div id="blkExtra" hidden>
+        <div class="field">Carried by
+          <div class="seg" id="blkOn">
+            <button data-on="body" aria-pressed="true">Hull</button>
+            <button data-on="turret" aria-pressed="false">Upper body</button>
+          </div>
+        </div>
+        <label class="tog">Mirror left and right <input type="checkbox" id="blkMirror"></label>
+        <div class="row2"><button class="reset" id="blkDup">Duplicate</button><button class="reset" id="blkDel">Delete</button></div>
+      </div>
+      <div class="field" id="blkScopeField">Apply to
+        <div class="seg" id="blkScope">
+          <button data-scope="one" aria-pressed="false">This leg</button>
+          <button data-scope="pair" aria-pressed="false">Pair</button>
+          <button data-scope="all" aria-pressed="true">All legs</button>
+        </div>
+      </div>
+      <button class="primary" id="makeParts">Make parts</button>
+    </div>
+  </details>
+  <details class="step" data-step="mounts">
+    <summary><span><span class="num">3</span>Mounts</span></summary>
+    <div class="body-in">
+      <p class="note" style="margin:0">Drag a weapon mount in the X, Y or Z view to where the drawing has it. Untick what this walker does not carry; its key leaves the weapon row.</p>
+      <div class="sel" id="mountSel">Select a mount</div>
+      <div id="fitList"></div>
+    </div>
+  </details>
+  <details class="step" data-step="parts">
+    <summary><span><span class="num">4</span>Parts</span></summary>
+    <div class="body-in">
+      <p class="note" style="margin:0" id="partsNote">Make parts from the blocks first.</p>
+      <div id="partsList"></div>
+      <label class="tog">Show sample art instead <input type="checkbox" id="showArt"></label>
+    </div>
+  </details>
+  <div class="body-in" style="border-top:1px solid var(--line-soft);padding-top:14px">
+    <div class="row2"><button class="reset" id="tuneUndo">Undo</button><button class="reset" id="tuneReset">Reset rig</button></div>
+    <div class="row2"><button class="reset" id="tuneExport">Export rig</button><button class="reset" id="tuneImport">Import rig</button></div>
+    <input type="file" id="tuneFile" accept=".json,application/json" hidden>
+  </div>
+</aside>
+
+<aside class="drawer" id="drawer" aria-label="Advanced settings">
+  <header><b>Advanced</b><button class="x" id="close" aria-label="Close">✕</button></header>
+  <details open>
+    <summary>Playback</summary>
+    <div class="body-in">
+      <label class="field"><div class="top">Speed <output id="speedOut">1.00×</output></div>
+        <input type="range" id="speed" min="0.1" max="2" step="0.05" value="1"></label>
+      <button class="reset" id="reset">Reset to idle</button>
+    </div>
+  </details>
+  <details>
+    <summary>Weight</summary>
+    <div class="body-in">
+      <label class="field"><div class="top">Tonnage <output id="weightOut">Medium · 40 t</output></div>
+        <input type="range" id="weight" min="5" max="1000" step="5" value="40"></label>
+      <label class="field"><div class="top">Exact tonnage</div>
+        <input type="number" id="tonsNum" min="5" max="1000" step="1" value="40" class="num-in"></label>
+      <label class="tog">Height follows weight <input type="checkbox" id="sizeFollows" checked></label>
+      <label class="field"><div class="top">Height in metres <output id="heightOut"></output></div>
+        <input type="number" id="heightNum" min="2" max="80" step="0.5" value="6" class="num-in" disabled></label>
+      <label class="field"><div class="top">Leg strength <output id="strOut">2.3× at 40 t</output></div>
+        <input type="range" id="strength" min="1.2" max="4" step="0.1" value="2.3"></label>
+      <p class="note" style="margin:0" id="strNote"></p>
+      <label class="field"><div class="top">Leg speed <output id="legSpeedOut">0.35 m/s at 40 t</output></div>
+        <input type="range" id="legSpeed" min="0.1" max="1.5" step="0.05" value="0.35"></label>
+      <p class="note" style="margin:0">Heavier walkers are bigger, step slower, shorter and lower, take longer to get going and to stop, stomp the ground (a shockwave from 80 t), barely hop, flinch less and turn their turret slower. Lighter ones are the reverse.</p>
+    </div>
+  </details>
+  <details>
+    <summary>Upper body and loadout</summary>
+    <div class="body-in">
+      <label class="field"><div class="top">Upper body mass <output id="upperOut">30% of the body</output></div>
+        <input type="range" id="upper" min="0.05" max="0.65" step="0.01" value="0.3"></label>
+      <p class="note" style="margin:0">The upper body (turret, cockpit, weapons) sits high and a little forward, so a heavier one raises the center of mass, tips the walker more, twists more slowly and takes longer to stop.</p>
+      <div class="field">Main cannon
+        <div class="seg" id="cannonKind">
+          <button data-cannon="single" aria-pressed="true">Single</button>
+          <button data-cannon="twin" aria-pressed="false">Twin, alternating</button>
+        </div>
+      </div>
+      <label class="field"><div class="top">Cannon recoil <output id="recoilOut">0.15 N·s per kg</output></div>
+        <input type="range" id="recoil" min="0" max="0.6" step="0.01" value="0.15"></label>
+      <p class="note" style="margin:0">Each shot pushes back along the barrel at the muzzle's height. A tank gun is about 0.55. Two feet in a line have only their length to resist it, so a biped rocks hard; deploy first to brace.</p>
+      <label class="tog">Hydraulic rods across the knees <input type="checkbox" id="rodsOn"></label>
+    </div>
+  </details>
+  <details>
+    <summary>Turret aim</summary>
+    <div class="body-in">
+      <div class="seg" id="aim">
+        <button data-aim="center" aria-pressed="true">Center</button>
+        <button data-aim="sweep" aria-pressed="false">Sweep</button>
+        <button data-aim="cursor" aria-pressed="false">Cursor</button>
+      </div>
+      <p class="note" style="margin:0">Cursor makes the turret follow the mouse over the ground while the body keeps moving.</p>
+    </div>
+  </details>
+  <details>
+    <summary>Movement</summary>
+    <div class="body-in">
+      <label class="field"><div class="top">Stride <output id="strideOut">100%</output></div>
+        <input type="range" id="stride" min="0.5" max="1.5" step="0.05" value="1"></label>
+      <label class="field"><div class="top">Step height <output id="liftOut">100%</output></div>
+        <input type="range" id="lift" min="0.3" max="1.8" step="0.05" value="1"></label>
+    </div>
+  </details>
+  <details>
+    <summary>Feet</summary>
+    <div class="body-in">
+      <label class="tog">Glue feet to the ground <input type="checkbox" id="ftGlue" checked></label>
+      <label class="tog">Leave footprints <input type="checkbox" id="ftPrints" checked></label>
+      <label class="tog">Animate toes <input type="checkbox" id="ftToes" checked></label>
+      <p class="note" style="margin:0">With glue off, feet follow the gait curve and slide when speed changes. Useful to compare.</p>
+    </div>
+  </details>
+  <details>
+    <summary>Jump jets</summary>
+    <div class="body-in">
+      <label class="tog">Jump jets <input type="checkbox" id="jetsOn" checked></label>
+      <label class="field"><div class="top">Thrust <output id="jetTWOut">1.8× its weight</output></div>
+        <input type="range" id="jetTW" min="1.05" max="3" step="0.05" value="1.8"></label>
+      <label class="field"><div class="top">Burn <output id="jetBurnOut">1.2 s at 40 t</output></div>
+        <input type="range" id="jetBurn" min="0.3" max="3" step="0.1" value="1.2"></label>
+      <label class="field"><div class="top">Forward speed <output id="jetFwdOut">6 m/s at 40 t</output></div>
+        <input type="range" id="jetFwd" min="0" max="15" step="0.5" value="6"></label>
+      <p class="note" style="margin:0">The legs push off, the jets burn, it coasts to the top, then a retro burn fires as late as it can and still land the walker slowly enough for its legs to absorb. Above 1× its weight, rockets can lift even a walker whose legs cannot jump.</p>
+    </div>
+  </details>
+  <details>
+    <summary>Effects</summary>
+    <div class="body-in">
+      <label class="tog">Exhaust smoke <input type="checkbox" id="fxSmoke" checked></label>
+      <label class="tog">Piston steam <input type="checkbox" id="fxSteam" checked></label>
+      <label class="tog">Footfall dust <input type="checkbox" id="fxDust" checked></label>
+      <p class="note" style="margin:0">Previews only. Export sends each effect as a timed event or a rate curve on a named emitter, and the game plays its own effect there.</p>
+    </div>
+  </details>
+  <details>
+    <summary>Overlays</summary>
+    <div class="body-in">
+      <label class="tog">Person for scale <input type="checkbox" id="ovPerson" checked></label>
+      <label class="tog">Reference images <input type="checkbox" id="ovRef" checked></label>
+      <label class="tog">Ground grid <input type="checkbox" id="ovGrid" checked></label>
+      <label class="tog">Shadows <input type="checkbox" id="ovShadow" checked></label>
+      <label class="tog">Planted feet <input type="checkbox" id="ovFeet"></label>
+      <label class="tog">Center of mass <input type="checkbox" id="ovCom"></label>
+      <label class="tog">Show events <input type="checkbox" id="ovEvents"></label>
+    </div>
+  </details>
+</aside>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+/* ---------- helpers ---------- */
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const smooth = t => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+const ease = t => { t = clamp(t, 0, 1); return t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
+const bump = u => Math.sin(Math.PI * clamp(u, 0, 1));
+const damp = (c, t, r, dt) => c + (t - c) * (1 - Math.exp(-r * dt));
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
+const Y_AXIS = V(0, 1, 0);
+
+/* ---------- renderer, scene ---------- */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.55;
+
+scene.add(new THREE.HemisphereLight(0xcdd9ff, 0x1a2029, 0.6));
+const sun = new THREE.DirectionalLight(0xfff3e0, 2.0);
+sun.position.set(5, 10, 6);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -7, right: 7, top: 7, bottom: -7, near: 1, far: 30 });
+sun.shadow.bias = -0.0004;
+sun.shadow.normalBias = 0.02;
+scene.add(sun);
+const rim = new THREE.DirectionalLight(0x9fc4ff, 0.7);
+rim.position.set(-6, 4, -7);
+scene.add(rim);
+
+/* ground: shadow catcher + scrolling grid (the robot stays put, the floor moves) */
+const shadowPlane = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.ShadowMaterial({ opacity: 0.34 }));
+shadowPlane.rotation.x = -Math.PI / 2;
+shadowPlane.receiveShadow = true;
+scene.add(shadowPlane);
+const grid = new THREE.GridHelper(60, 60, 0x4a5a6e, 0x2c3746);
+grid.material.transparent = true;
+grid.material.opacity = 0.6;
+grid.position.y = 0.001;
+scene.add(grid);
+const person = new THREE.Group();                                // a 1.8 m person, for scale
+{
+  const pm = new THREE.MeshStandardMaterial({ color: 0xd8c9a8, roughness: 0.7 });
+  const u = 1.8 / 2.7;                                            // 1.8 m in scene units
+  const legs = new THREE.Mesh(new THREE.CapsuleGeometry(u * 0.09, u * 0.36, 4, 10), pm); legs.position.y = u * 0.27;
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(u * 0.12, u * 0.22, 4, 10), pm); torso.position.y = u * 0.66;
+  const head = new THREE.Mesh(new THREE.SphereGeometry(u * 0.075, 14, 10), pm); head.position.y = u * 0.92;
+  [legs, torso, head].forEach(m => { m.castShadow = true; person.add(m); });
+  scene.add(person);
+}
+
+/* ---------- materials ---------- */
+const M = {
+  hull:  new THREE.MeshStandardMaterial({ color: 0x55606e, metalness: 0.55, roughness: 0.42 }),
+  plate: new THREE.MeshStandardMaterial({ color: 0xa8b2bd, metalness: 0.35, roughness: 0.38 }),
+  dark:  new THREE.MeshStandardMaterial({ color: 0x23292f, metalness: 0.6, roughness: 0.5 }),
+  joint: new THREE.MeshStandardMaterial({ color: 0x30363d, metalness: 0.85, roughness: 0.28 }),
+  sensor:new THREE.MeshStandardMaterial({ color: 0x07151a, emissive: 0x8fd3c8, emissiveIntensity: 2.2 }),
+  lens:  new THREE.MeshStandardMaterial({ color: 0x1a0805, emissive: 0xff5a40, emissiveIntensity: 0.3 }),
+  chrome:new THREE.MeshStandardMaterial({ color: 0xdfe6ee, metalness: 1, roughness: 0.18 }),
+  olive: new THREE.MeshStandardMaterial({ color: 0x67705a, metalness: 0.35, roughness: 0.6 }),   // armour plates on mech legs
+};
+const additive = (color, opacity = 1) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false });
+
+function mk(geo, mat, parent) {
+  const m = new THREE.Mesh(geo, mat);
+  m.castShadow = true; m.receiveShadow = true;
+  if (parent) parent.add(m);
+  return m;
+}
+function rbox(w, h, d, mat, parent, x = 0, y = 0, z = 0, r = 0.04) {
+  const m = mk(new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2, h / 2, d / 2)), mat, parent);
+  m.position.set(x, y, z);
+  return m;
+}
+function barrelGeo(r, len, seg = 20) {
+  const g = new THREE.CylinderGeometry(r, r, len, seg);
+  g.rotateX(Math.PI / 2); g.translate(0, 0, len / 2);
+  return g;
+}
+function holder(parent, x = 0, y = 0, z = 0) { const g = new THREE.Group(); g.position.set(x, y, z); parent.add(g); return g; }
+
+/* ---------- the rig ---------- */
+const root = new THREE.Group(); scene.add(root);           // moves for jumps
+const body = holder(root);                                  // hull, mounts
+rbox(1.5, 0.42, 1.9, M.hull, body, 0, 0, 0, 0.08);
+rbox(1.18, 0.12, 1.36, M.plate, body, 0, 0.26, -0.02, 0.05);
+rbox(1.1, 0.18, 1.5, M.dark, body, 0, -0.28, 0, 0.05);
+rbox(1.28, 0.3, 0.24, M.dark, body, 0, -0.02, 1.02, 0.06);
+rbox(0.9, 0.055, 0.03, M.sensor, body, 0, 0.07, 1.15, 0.01);
+rbox(1.3, 0.22, 0.2, M.dark, body, 0, 0.02, -1.02, 0.05);
+const HULL_ART = body.children.filter(c => c.isMesh);   // the sample hull; weapons and the stack stay as mounts
+const stack = holder(body, 0.44, 0.22, -0.8);                       // exhaust stack: an emitter node
+mk(new THREE.CylinderGeometry(0.075, 0.095, 0.42, 20), M.joint, stack).position.y = 0.21;
+mk(new THREE.CylinderGeometry(0.1, 0.1, 0.05, 20), M.dark, stack).position.y = 0.42;
+const stackMouth = holder(stack, 0, 0.46, 0);
+
+/* rigs: leg layout, hip and foot placement, knee direction and gait phase per leg */
+const RIGS = {
+  2: { get label() { return S.kneeFwd ? 'forward-knee biped' : 'reverse-knee biped'; }, gait: 'alternating', stride: 0.75,
+       legs: [{ n: 'L', sx: -1, sz: 0, off: 0, offH: 0 }, { n: 'R', sx: 1, sz: 0, off: 0.5, offH: 0.5 }], get heavyLabel() { return this.label; },
+       hip: L => V(0.7 * L.sx, -0.04, 0.05), rest: L => V(0.46 * L.sx, 0, 0.1), hint: L => V(L.sx * 0.35, 0.1, S.kneeFwd ? 1 : -1),
+       pHip: L => V(0.4 * L.sx, -0.2, 0.02), pRest: L => V(0.4 * L.sx, 0, 0.04), pHint: L => V(0, 0.1, S.kneeFwd ? 1 : -1) },
+  4: { label: '4 legs, trot', heavyLabel: '4 legs, one at a time', gait: 'trot', stride: 1,
+       legs: [{ n: 'FL', sx: -1, sz: 1, off: 0, offH: 0.5 }, { n: 'FR', sx: 1, sz: 1, off: 0.5, offH: 0 }, { n: 'RR', sx: 1, sz: -1, off: 0, offH: 0.25 }, { n: 'RL', sx: -1, sz: -1, off: 0.5, offH: 0.75 }],
+       hip: L => V(0.74 * L.sx, -0.08, 0.72 * L.sz), rest: L => V(1.28 * L.sx, 0, 1.08 * L.sz), hint: L => V(L.sx * 0.65, 1, L.sz * 0.15),
+       pHip: L => V(0.5 * L.sx, -0.22, 0.66 * L.sz), pRest: L => V(0.52 * L.sx, 0, 0.7 * L.sz), pHint: L => V(0.15 * L.sx, 0.15, L.sz > 0 ? 1 : -1) },
+  6: { label: '6 legs, tripod', heavyLabel: '6 legs, one at a time', gait: 'tripod', stride: 0.9,
+       legs: [{ n: 'FL', sx: -1, sz: 1, off: 0, offH: 3 / 6 }, { n: 'FR', sx: 1, sz: 1, off: 0.5, offH: 0 }, { n: 'MR', sx: 1, sz: 0, off: 0, offH: 1 / 6 },
+              { n: 'RR', sx: 1, sz: -1, off: 0.5, offH: 2 / 6 }, { n: 'RL', sx: -1, sz: -1, off: 0, offH: 5 / 6 }, { n: 'ML', sx: -1, sz: 0, off: 0.5, offH: 4 / 6 }],
+       hip: L => V(0.76 * L.sx, -0.08, 0.74 * L.sz), rest: L => V((L.sz ? 1.3 : 1.5) * L.sx, 0, 1.22 * L.sz), hint: L => V(L.sx * 0.65, 1, L.sz * 0.15),
+       pHip: L => V(0.52 * L.sx, -0.22, 0.74 * L.sz), pRest: L => V(0.56 * L.sx, 0, 0.78 * L.sz), pHint: L => V(L.sz ? 0.15 * L.sx : L.sx, 0.15, L.sz) },
+};
+let LEGS = [];
+const UPPER = 0.86 * 0.8, LOWER = 1.0;
+const PILLAR_RAISE = 0.5;                               // pillar stance stands this much taller on straighter legs              // upper leg shortened 20% (owner, 2026-11-26)
+const legRoot = holder(scene);
+function segGroup(r, armour) {
+  const g = new THREE.Group(); legRoot.add(g);
+  const cg = new THREE.CylinderGeometry(r * 0.85, r, 1, 18); cg.translate(0, 0.5, 0);
+  mk(cg, armour ? M.hull : M.plate, g);
+  if (armour) { const p = rbox(0.2, 0.62, 0.13, M.plate, g, 0, 0.48, 0, 0.04); }
+  return g;
+}
+// armoured mech legs (Leg look: Armoured): boxy segments built in the leg's own frame, local +Z toward the outside of
+// the knee bend (the front, for forward knees), with a broad armour plate there; hub discs at hip, knee and ankle
+const hubGeo = (r, t) => new THREE.CylinderGeometry(r, r, t, 28).rotateZ(Math.PI / 2);   // axis across the leg
+function mechSeg(w, d, plateW, plateD, y0, y1, upper) {
+  const g = new THREE.Group(); legRoot.add(g);
+  const core = new RoundedBoxGeometry(w, 1, d, 2, 0.02); core.translate(0, 0.5, 0);
+  mk(core, M.hull, g);
+  const pl = new RoundedBoxGeometry(plateW, 1, plateD, 2, 0.02); pl.scale(1, y1 - y0, 1); pl.translate(0, (y0 + y1) / 2, d / 2 + plateD / 2 - 0.02);
+  mk(pl, M.olive, g);
+  if (upper) {                                                     // a second, set-back plate on the thigh's flank
+    const side = new RoundedBoxGeometry(w + 0.04, 1, d * 0.7, 2, 0.02); side.scale(1, 0.42, 1); side.translate(0, 0.32, -0.02);
+    mk(side, M.olive, g);
+  }
+  return g;
+}
+function mechFoot(L) {
+  // a flat armoured foot: a sole, an ankle block with its hub, two front toe plates and a heel plate on curl joints
+  mk(new RoundedBoxGeometry(0.36, 0.08, 0.42, 2, 0.025).translate(0, 0.04, 0.02), M.dark, L.footG);
+  mk(new RoundedBoxGeometry(0.26, 0.1, 0.26, 2, 0.03).translate(0, 0.13, -0.02), M.olive, L.footG);
+  mk(hubGeo(0.075, 0.24), M.joint, L.footG).position.set(0, 0.17, -0.02);
+  for (const [x, z, heel] of [[-0.09, 0.22, false], [0.09, 0.22, false], [0, -0.2, true]]) {
+    const base = holder(L.footG, x, 0.03, z); base.rotation.y = heel ? Math.PI : 0;
+    const pivot = holder(base), len = heel ? 0.12 : 0.16;
+    mk(new RoundedBoxGeometry(heel ? 0.26 : 0.16, 0.07, len, 2, 0.02).translate(0, 0.005, len / 2), M.olive, pivot);
+    L.toes.push({ base, pivot, a: heel ? Math.PI : 0, heel, side: 0 });
+  }
+}
+const hipMeshes = [];
+function makeLeg(d, R) {
+  const L = { ...d };
+  L.hip = R.hip(L); L.rest = R.rest(L); L.hint = R.hint(L).normalize();
+  L.mech = S.legStyle === 'mech';
+  const hh = mk(L.mech ? hubGeo(0.13, 0.3) : new THREE.SphereGeometry(0.17, 20, 14), M.joint, body); hh.position.copy(L.hip); hipMeshes.push(hh);
+  L.hipMesh = hh; L.up = UPPER; L.lo = LOWER;
+  L.blk = JSON.parse(JSON.stringify(LEG_BLK_HOME)); L.bm = {};
+  L.upper = L.mech ? mechSeg(0.22, 0.24, 0.3, 0.1, 0.08, 0.86, true) : segGroup(0.085, true);
+  L.lower = L.mech ? mechSeg(0.19, 0.2, 0.26, 0.09, 0.14, 0.8, false) : segGroup(0.062, false);
+  L.knee = L.mech ? mk(hubGeo(0.11, 0.3), M.joint, legRoot) : mk(new THREE.SphereGeometry(0.11, 18, 12), M.joint, legRoot);
+  L.footG = holder(legRoot);
+  L.toes = [];
+  if (L.mech) mechFoot(L);
+  else {
+  // foot: a pad with three front toes and a heel spur, each on its own curl joint
+  mk(new THREE.CylinderGeometry(0.13, 0.16, 0.07, 24), M.dark, L.footG).position.y = 0.035;
+  for (const [a, heel] of [[-0.62, false], [0, false], [0.62, false], [Math.PI, true]]) {
+    const base = holder(L.footG, Math.sin(a) * 0.11, 0.03, Math.cos(a) * 0.11); base.rotation.y = a;
+    const pivot = holder(base);
+    const len = heel ? 0.1 : 0.17;
+    const tg = new THREE.BoxGeometry(0.06, 0.045, len); tg.translate(0, 0, len / 2);
+    mk(tg, M.joint, pivot);
+    const claw = new THREE.ConeGeometry(0.03, 0.07, 10); claw.rotateX(Math.PI / 2); claw.translate(0, -0.005, len + 0.03);
+    mk(claw, M.plate, pivot);
+    L.toes.push({ base, pivot, a, heel, side: Math.sign(Math.sin(a)) });
+  }
+  }
+  // hydraulic ram across the knee: a barrel on the thigh, a polished rod on the shin, sliding in and out as the knee bends
+  L.ramB = mk(new THREE.CylinderGeometry(1, 1, 1, 16).translate(0, 0.5, 0), M.dark, legRoot);
+  L.ramR = mk(new THREE.CylinderGeometry(1, 1, 1, 12).translate(0, 0.5, 0), M.chrome, legRoot);
+  L.ramEyes = [0, 1].map(() => mk(new THREE.SphereGeometry(1, 12, 8), M.dark, legRoot));
+  L.footPos = L.rest.clone();
+  L.planted = true; L.locked = false; L.landT = 1; L.maxY = 0;
+  L.liftX = L.rest.x; L.liftZ = L.rest.z; L.lockX = L.rest.x; L.lockZ = L.rest.z;
+  return L;
+}
+
+/* turret: yaw on body, mantlet pitches; cannon, twin guns and laser ride the mantlet */
+const turret = holder(body, 0, 0.33, -0.08);
+mk(new THREE.CylinderGeometry(0.5, 0.56, 0.12, 40), M.joint, turret).position.y = 0.06;
+rbox(0.96, 0.36, 1.0, M.hull, turret, 0, 0.3, 0, 0.07);
+rbox(0.68, 0.08, 0.56, M.plate, turret, 0, 0.51, -0.06, 0.03);
+const hatchPivot = holder(turret, 0, 0.56, -0.3);
+rbox(0.32, 0.05, 0.3, M.dark, hatchPivot, 0, 0.02, 0.15, 0.02);
+HULL_ART.push(...turret.children.filter(c => c.isMesh), hatchPivot);
+const mantlet = holder(turret, 0, 0.3, 0.5);
+rbox(0.52, 0.28, 0.2, M.dark, mantlet, 0, 0, 0.04, 0.05);
+const cannonSlide = holder(mantlet);
+mk(barrelGeo(0.085, 1.25), M.dark, cannonSlide).position.z = 0.1;
+rbox(0.22, 0.17, 0.2, M.joint, cannonSlide, 0, 0, 1.38, 0.03);
+const cannonMuzzle = holder(cannonSlide, 0, 0, 1.5);
+const guns = [-1, 1].map(s => {
+  const slide = holder(mantlet, 0.37 * s, 0.02, 0.02);
+  rbox(0.13, 0.13, 0.3, M.hull, slide, 0, 0, 0.05, 0.03);
+  mk(barrelGeo(0.034, 0.72), M.dark, slide).position.z = 0.15;
+  return { slide, muzzle: holder(slide, 0, 0, 0.9), rec: 0 };
+});
+const laser = holder(mantlet, 0, 0.27, -0.05);
+rbox(0.16, 0.12, 0.42, M.dark, laser, 0, 0, 0, 0.03);
+const lensM = mk(barrelGeo(0.045, 0.04), M.lens, laser); lensM.position.z = 0.21;
+const laserMuzzle = holder(laser, 0, 0, 0.26);
+const beamCore = new THREE.Mesh(barrelGeo(0.022, 30, 12), additive(0xff6a52));
+const beamGlow = new THREE.Mesh(barrelGeo(0.09, 30, 16), additive(0xff3a2a, 0.35));
+const chargeOrb = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), additive(0xff7a5a, 0.9));
+laserMuzzle.add(beamCore, beamGlow, chargeOrb);
+beamCore.visible = beamGlow.visible = chargeOrb.visible = false;
+
+/* hull machine gun, three spinning barrels */
+const mgMount = holder(body, 0.44, -0.07, 1.14);
+mk(new THREE.SphereGeometry(0.1, 16, 12), M.joint, mgMount);
+const mgSpin = holder(mgMount, 0, 0, 0.05);
+for (let i = 0; i < 3; i++) {
+  const a = i * Math.PI * 2 / 3;
+  mk(barrelGeo(0.018, 0.46, 10), M.dark, mgSpin).position.set(Math.cos(a) * 0.032, Math.sin(a) * 0.032, 0);
+}
+const mgMuzzle = holder(mgMount, 0, 0, 0.55);
+
+/* grenade pod on the left flank */
+const podPivot = holder(turret, -0.56, 0.3, -0.05);   // on the turret flank, clear of every leg layout
+rbox(0.3, 0.3, 0.62, M.hull, podPivot, -0.12, 0, 0, 0.05);
+for (let i = 0; i < 4; i++) {
+  const t = mk(barrelGeo(0.05, 0.05, 14), M.dark, podPivot);
+  t.position.set(-0.12 + (i % 2 ? 0.065 : -0.065), i < 2 ? 0.065 : -0.065, 0.3);
+}
+const podMuzzle = holder(podPivot, -0.12, 0.06, 0.36);
+
+/* twin chin cannons under the mantlet (Loadout: Twin), fired left, right, left, right */
+const twins = [-1, 1].map(s => {
+  const slide = holder(mantlet, 0.2 * s, -0.2, 0);
+  rbox(0.2, 0.18, 0.3, M.joint, slide, 0, 0, 0.05, 0.04);
+  mk(barrelGeo(0.06, 1.1), M.dark, slide).position.z = 0.12;
+  rbox(0.15, 0.13, 0.16, M.joint, slide, 0, 0, 1.18, 0.03);
+  const muzzle = holder(slide, 0, 0, 1.28);
+  slide.visible = false;
+  return { s, slide, muzzle, shotT: 9, flash: null };          // flash made with the other effects below
+});
+
+/* missile racks: eight tubes each, on the turret shoulders; they elevate, ripple-fire, settle */
+const racks = [-1, 1].map(s => {
+  const pivot = holder(turret, 0.36 * s, 0.56, -0.38);
+  rbox(0.26, 0.2, 0.52, M.hull, pivot, 0, 0.1, 0.26, 0.04);
+  const tubes = [];
+  for (let i = 0; i < 8; i++) {
+    const x = (-0.09 + 0.06 * (i % 4)) , y = i < 4 ? 0.15 : 0.05;
+    mk(barrelGeo(0.022, 0.02, 10), M.dark, pivot).position.set(x, y, 0.52);
+    tubes.push(holder(pivot, x, y, 0.53));
+  }
+  return { s, pivot, tubes };
+});
+
+/* jump jets: four nozzles under the hull, each firing straight down */
+const flameOuterMat = additive(0xff7a2a, 0.75), flameCoreMat = additive(0xfff1c2, 0.95);
+const flameGeo = new THREE.ConeGeometry(0.11, 1, 14, 1, true); flameGeo.translate(0, -0.5, 0);
+const coreGeo = new THREE.ConeGeometry(0.06, 1, 12, 1, true); coreGeo.translate(0, -0.5, 0);
+const jetNozzles = [[-0.5, 0.55], [0.5, 0.55], [-0.5, -0.6], [0.5, -0.6]].map(([x, z]) => {
+  const n = holder(body, x, -0.3, z);
+  mk(new THREE.CylinderGeometry(0.11, 0.15, 0.14, 18, 1, true), M.joint, n).position.y = -0.02;
+  const outer = new THREE.Mesh(flameGeo, flameOuterMat), core = new THREE.Mesh(coreGeo, flameCoreMat);
+  outer.position.y = core.position.y = -0.09; outer.visible = core.visible = false;
+  n.add(outer, core);
+  const light = new THREE.PointLight(0xff8a3a, 0, 8, 2); light.position.y = -0.4; n.add(light);
+  return { n, outer, core, light, mouth: holder(n, 0, -0.12, 0) };
+});
+
+/* ---------- mounts: where each weapon and the stack sit, and whether this walker carries them ---------- */
+// drag targets; racks are a mirrored pair. Positions are in the parent's coordinates (hull or upper body).
+const MOUNTS = {
+  guns:  { label: 'Gun mantlet', note: 'main cannon, turret guns and laser', node: mantlet },
+  racks: { label: 'Missile racks', note: 'a mirrored pair', node: racks[1].pivot, pair: racks.map(r => r.pivot) },
+  pod:   { label: 'Grenade pod', node: podPivot },
+  mg:    { label: 'Hull machine gun', node: mgMount },
+  stack: { label: 'Exhaust stack', node: stack },
+};
+const MOUNT_HOME = Object.fromEntries(Object.entries(MOUNTS).map(([k, m]) => [k, m.node.position.toArray()]));
+// what the walker carries; a weapon it does not carry leaves the deck and cannot fire
+const FIT_LABEL = { cannon: 'Main cannon', guns: 'Turret guns', laser: 'Laser', racks: 'Missile racks', pod: 'Grenade pod', mg: 'Hull machine gun', stack: 'Exhaust stack', jets: 'Jump jets' };
+const FIT_HOME = { cannon: true, guns: true, laser: true, racks: true, pod: true, mg: true, stack: true, jets: true };
+let FIT = { ...FIT_HOME };
+const WEAPON_NEEDS = { turret: ['guns'], reload: ['guns', 'cannon'], cannon: ['cannon'], mg: ['mg'], laser: ['laser'], grenade: ['pod'], salvo: ['racks'] };
+const fittedFor = id => !WEAPON_NEEDS[id] || WEAPON_NEEDS[id].some(k => FIT[k]);
+function applyFit() {
+  guns.forEach(g => g.slide.visible = FIT.guns);
+  laser.visible = FIT.laser;
+  racks.forEach(R => R.pivot.visible = FIT.racks);
+  podPivot.visible = FIT.pod; mgMount.visible = FIT.mg; stack.visible = FIT.stack;
+  jetNozzles.forEach(J => J.n.visible = FIT.jets);
+  // the cannon's own visibility (single or twin) is set each frame in pose()
+}
+function setMount(k, arr) {
+  const M_ = MOUNTS[k]; if (!M_ || !arr) return;
+  if (M_.pair) { const x = Math.abs(arr[0]); racks.forEach(R => R.pivot.position.set(R.s * x, arr[1], arr[2])); }
+  else M_.node.position.fromArray(arr);
+}
+
+/* ---------- sizing blocks and parts: a block per segment between joints, then real parts ---------- */
+const BLK_HOME = { body: { shape: 'box', w: 1.5, h: 0.5, l: 2.2 }, turret: { shape: 'box', w: 0.96, h: 0.4, l: 1.0 }, extra: [] };
+let BLK = JSON.parse(JSON.stringify(BLK_HOME));
+const LEG_BLK_HOME = { upper: { shape: 'box', w: 0.2, d: 0.17, ext: 0.07 }, lower: { shape: 'cyl', w: 0.13, d: 0.13, ext: 0.04 }, foot: { shape: 'box', w: 0.34, l: 0.4, h: 0.09 } };
+const blockMat = new THREE.MeshStandardMaterial({ color: 0x8b97a6, roughness: 0.82, metalness: 0.08 });
+const blockSelMat = new THREE.MeshStandardMaterial({ color: 0x9aa6b4, roughness: 0.8, metalness: 0.08, emissive: 0xf2a541, emissiveIntensity: 0.35 });
+const PART_MAT = { body: M.hull, turret: M.hull, upper: M.hull, lower: M.plate, foot: M.dark };
+let bodyBlk = null, turretBlk = null, blkSel = null;
+
+function blockGeo(spec, len, part, look) {
+  const rounded = look === 'parts';
+  let g;
+  if (part === 'foot') {
+    g = spec.shape === 'cyl' ? new THREE.CylinderGeometry(spec.w / 2, spec.w / 2, spec.h, 24).scale(1, 1, spec.l / spec.w)
+      : rounded ? new RoundedBoxGeometry(spec.w, spec.h, spec.l, 2, Math.min(0.03, spec.h / 2.2)) : new THREE.BoxGeometry(spec.w, spec.h, spec.l);
+    return g.translate(0, spec.h / 2, 0);
+  }
+  if (part === 'body' || part === 'turret') {
+    g = spec.shape === 'cyl' ? new THREE.CylinderGeometry(spec.w / 2, spec.w / 2 * (rounded ? 1.04 : 1), spec.h, 36).scale(1, 1, spec.l / spec.w)
+      : rounded ? new RoundedBoxGeometry(spec.w, spec.h, spec.l, 3, Math.min(0.07, spec.h / 2.5)) : new THREE.BoxGeometry(spec.w, spec.h, spec.l);
+    return g;
+  }
+  const L = len + 2 * spec.ext;                                   // a leg segment spans its joints plus an overhang each end
+  if (spec.shape === 'cyl') g = new THREE.CylinderGeometry(spec.w / 2 * (rounded ? 0.88 : 1), spec.w / 2, L, 20).scale(1, 1, spec.d / spec.w);
+  else if (spec.shape === 'capsule') g = new THREE.CapsuleGeometry(spec.w / 2, Math.max(0.001, L - spec.w), 6, 16).scale(1, 1, spec.d / spec.w);
+  else g = rounded ? new RoundedBoxGeometry(spec.w, L, spec.d, 2, Math.min(0.03, Math.min(spec.w, spec.d) / 2.2)) : new THREE.BoxGeometry(spec.w, L, spec.d);
+  return g.translate(0, len / 2, 0);
+}
+function ensureBlock(holderObj, key, parent, spec, len, part, sel) {
+  const look = S.look, k = `${JSON.stringify(spec)}|${len.toFixed(3)}|${look}`;
+  let m = holderObj[key];
+  if (!m) { m = mk(new THREE.BufferGeometry(), blockMat, parent); m.userData.block = true; holderObj[key] = m; }
+  if (m.userData.k !== k) { m.geometry.dispose(); m.geometry = blockGeo(spec, len, part, look); m.userData.k = k; }
+  m.userData.sel = sel;
+  m.material = look === 'parts' ? PART_MAT[part] : (blkSel && blkSel.kind === sel.kind && blkSel.part === sel.part && blkSel.leg === sel.leg) ? blockSelMat : blockMat;
+  m.visible = look !== 'art';
+  return m;
+}
+const bX = V(), bY = V(), bZ = V(), bN = V(), bM4 = new THREE.Matrix4();
+function orientSeg(m, A, B, n) {
+  bY.subVectors(B, A).normalize();
+  bX.copy(n).addScaledVector(bY, -n.dot(bY));
+  if (bX.lengthSq() < 1e-8) bX.set(1, 0, 0).addScaledVector(bY, -bY.x);
+  bX.normalize(); bZ.crossVectors(bX, bY);
+  m.quaternion.setFromRotationMatrix(bM4.makeBasis(bX, bY, bZ));
+  m.position.copy(A);
+}
+function placeLegBlocks(L, H, K, F, sc) {
+  bN.crossVectors(bX.subVectors(K, H), bY.subVectors(F, K)).normalize();   // across the leg's own plane
+  if (bN.lengthSq() < 1e-8) bN.set(1, 0, 0);
+  const n = bN.clone();
+  const u = ensureBlock(L.bm, 'upper', legRoot, L.blk.upper, L.up, 'upper', { kind: 'seg', part: 'upper', leg: L.n });
+  orientSeg(u, H, K, n); u.scale.set(sc * S.limb, sc, sc * S.limb);
+  const lo = ensureBlock(L.bm, 'lower', legRoot, L.blk.lower, L.lo, 'lower', { kind: 'seg', part: 'lower', leg: L.n });
+  orientSeg(lo, K, F, n); lo.scale.set(sc * S.limb, sc, sc * S.limb);
+  const f = ensureBlock(L.bm, 'foot', legRoot, L.blk.foot, 0, 'foot', { kind: 'foot', part: 'foot', leg: L.n });
+  f.position.copy(F); f.quaternion.copy(L.footG.quaternion); f.scale.set(sc * (0.55 + 0.45 * S.limb), sc, sc * (0.55 + 0.45 * S.limb));
+}
+function placeHullBlocks() {
+  const hb = { b: bodyBlk, t: turretBlk };
+  bodyBlk = ensureBlock(hb, 'b', body, BLK.body, 0, 'body', { kind: 'body', part: 'body', leg: null });
+  turretBlk = ensureBlock(hb, 't', turret, BLK.turret, 0, 'turret', { kind: 'turret', part: 'turret', leg: null });
+  turretBlk.position.set(0, BLK.turret.h / 2 + 0.03, 0);
+  placeExtras();
+}
+/* free blocks: the designer's own boxes and cylinders on the hull or the upper body, to shape the vehicle over a
+   reference image. Each is {id, on: 'body'|'turret', shape, x, y, z, w, h, l, ry, rx (degrees), mirror}. */
+const EXM = new Map();                                            // id → { a, b } meshes (b is the mirrored copy)
+const DEG = Math.PI / 180;
+function placeExtras() {
+  const list = BLK.extra || [], seen = new Set();
+  for (const e of list) {
+    seen.add(e.id);
+    let rec = EXM.get(e.id);
+    if (!rec) { rec = {}; EXM.set(e.id, rec); }
+    const parent = e.on === 'turret' ? turret : body;
+    for (const side of ['a', 'b']) {
+      const want = side === 'a' || e.mirror;
+      if (!want) { if (rec.b) { rec.b.parent?.remove(rec.b); rec.b.geometry.dispose(); rec.b = null; } continue; }
+      const holderObj = rec;
+      let m = holderObj[side];
+      if (m && m.parent !== parent) { m.parent.remove(m); parent.add(m); }
+      m = ensureBlock(holderObj, side, parent, { shape: e.shape, w: e.w, h: e.h, l: e.l }, 0, 'body', { kind: 'extra', part: 'extra', leg: e.id, side });
+      const s = side === 'b' ? -1 : 1;
+      m.position.set(s * e.x, e.y, e.z);
+      m.rotation.set(e.rx * DEG, s * e.ry * DEG, 0, 'YXZ');
+      if (S.look === 'parts') m.material = PART_MAT[e.on === 'turret' ? 'turret' : 'body'];
+    }
+  }
+  for (const [id, rec] of EXM) if (!seen.has(id)) {
+    for (const m of [rec.a, rec.b]) if (m) { m.parent?.remove(m); m.geometry.dispose(); }
+    EXM.delete(id);
+  }
+}
+const extraMeshes = () => [...EXM.values()].flatMap(r => [r.a, r.b]).filter(Boolean);
+function applyLook() {
+  const art = S.look === 'art';
+  HULL_ART.forEach(m => m.visible = art);
+  hipMeshes.forEach(m => m.visible = art);
+  LEGS.forEach(L => { L.upper.visible = L.lower.visible = L.knee.visible = L.footG.visible = art; for (const k in L.bm) L.bm[k].visible = !art; });
+  if (bodyBlk) bodyBlk.visible = !art;
+  if (turretBlk) turretBlk.visible = !art;
+  extraMeshes().forEach(m => m.visible = !art);
+}
+function segVolume(spec, len) {
+  const L = len + 2 * spec.ext, a = spec.shape === 'box' ? 1 : Math.PI / 4;
+  return a * spec.w * spec.d * L;
+}
+const DENSITY = { body: 0.35, turret: 0.5, upper: 1, lower: 1, foot: 1 };    // a hull is mostly hollow
+function partList() {
+  const rows = [];
+  const add = (name, part, vol, worldPos) => rows.push({ name, part, mass: vol * DENSITY[part], pos: worldPos });
+  const bw = BLK.body, tw = BLK.turret;
+  add('Hull', 'body', bw.w * bw.h * bw.l * (bw.shape === 'cyl' ? Math.PI / 4 : 1), body.getWorldPosition(V()));
+  add('Turret', 'turret', tw.w * tw.h * tw.l * (tw.shape === 'cyl' ? Math.PI / 4 : 1), turret.localToWorld(V(0, tw.h / 2, 0)));
+  (BLK.extra || []).forEach((e, i) => {                          // the designer's own blocks count toward the hull or upper body
+    const part = e.on === 'turret' ? 'turret' : 'body', vol = e.w * e.h * e.l * (e.shape === 'cyl' ? Math.PI / 4 : 1), par = e.on === 'turret' ? turret : body;
+    add(`Block ${i + 1}`, part, vol, par.localToWorld(V(e.x, e.y, e.z)));
+    if (e.mirror) add(`Block ${i + 1} (mirror)`, part, vol, par.localToWorld(V(-e.x, e.y, e.z)));
+  });
+  LEGS.forEach(L => {
+    const H = V().copy(L.hip).applyMatrix4(body.matrixWorld), K = L.knee.position, F = L.footG.position;
+    add(`${L.n} upper leg`, 'upper', segVolume(L.blk.upper, L.up), H.clone().add(K).multiplyScalar(0.5));
+    add(`${L.n} lower leg`, 'lower', segVolume(L.blk.lower, L.lo), K.clone().add(F).multiplyScalar(0.5));
+    add(`${L.n} foot`, 'foot', L.blk.foot.w * L.blk.foot.l * L.blk.foot.h, F.clone());
+  });
+  const total = rows.reduce((a, r) => a + r.mass, 0) || 1;
+  rows.forEach(r => r.share = r.mass / total);
+  return rows;
+}
+
+/* ---------- effects ---------- */
+const flashes = [];
+const flashMat = additive(0xffd08f, 0.95);
+function makeFlash(parent, size, power) {
+  const g = holder(parent);
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(size * 0.45, size * 1.7, 10, 1, true), flashMat);
+  cone.rotation.x = -Math.PI / 2; cone.position.z = size * 0.85; g.add(cone);
+  g.add(new THREE.Mesh(new THREE.SphereGeometry(size * 0.36, 12, 8), flashMat));
+  g.visible = false;
+  const light = new THREE.PointLight(0xffa860, 0, 6, 2); parent.add(light);
+  const f = { g, light, t: 0, dur: 0.06, power };
+  flashes.push(f); return f;
+}
+const fire = (f, dur = 0.06) => { f.t = f.dur = dur; };
+guns.forEach(g => g.flash = makeFlash(g.muzzle, 0.16, 6));
+const cannonFlash = makeFlash(cannonMuzzle, 0.42, 30);
+const mgFlash = makeFlash(mgMuzzle, 0.12, 4);
+const podFlash = makeFlash(podMuzzle, 0.18, 8);
+twins.forEach(t => t.flash = makeFlash(t.muzzle, 0.32, 22));
+const laserLight = new THREE.PointLight(0xff5a40, 0, 5, 2); laserMuzzle.add(laserLight);
+const boomLight = new THREE.PointLight(0xffa040, 0, 10, 2); scene.add(boomLight);
+
+const fx = [];
+const tracerGeo = new THREE.BoxGeometry(0.035, 0.035, 0.8); tracerGeo.translate(0, 0, -0.4);
+const tracerMats = {};
+const tmat = c => tracerMats[c] ||= additive(c);
+const fwd = new THREE.Vector3(), wq = new THREE.Quaternion();
+function spawnTracer(muz, color, speed, spread = 0) {
+  const m = new THREE.Mesh(tracerGeo, tmat(color));
+  muz.getWorldPosition(m.position); muz.getWorldQuaternion(m.quaternion);
+  if (spread) { m.rotateX((Math.random() - .5) * spread); m.rotateY((Math.random() - .5) * spread); }
+  const v = V(0, 0, 1).applyQuaternion(m.quaternion).multiplyScalar(speed);
+  scene.add(m);
+  let life = 0.7;
+  fx.push(dt => { m.position.addScaledVector(v, dt); life -= dt; if (life <= 0 || m.position.y < 0) { scene.remove(m); return false; } return true; });
+}
+const puffGeo = new THREE.SphereGeometry(1, 14, 10);
+function spawnSmoke(muz, n) {
+  muz.getWorldPosition(fwd); muz.getWorldQuaternion(wq);
+  const dir = V(0, 0, 1).applyQuaternion(wq);
+  for (let i = 0; i < n; i++)
+    puff(tmp.copy(fwd).addScaledVector(dir, 0.1 + i * 0.14),
+      dir.clone().multiplyScalar(1.4 + Math.random()).add(V((Math.random() - .5) * .4, 0.35 + Math.random() * .3, (Math.random() - .5) * .4)),
+      { color: 0xa3abb5, r0: 0.08, r1: 0.5, life: 1.2 + Math.random() * 0.5, opacity: 0.35, rise: 0.2 });
+}
+function spawnGrenade() {
+  const m = mk(new THREE.SphereGeometry(0.075, 14, 10), M.dark);
+  podMuzzle.getWorldPosition(m.position); podMuzzle.getWorldQuaternion(wq);
+  const v = V(0, 0, 1).applyQuaternion(wq).multiplyScalar(8.5);
+  scene.add(m);
+  fx.push(dt => {
+    v.y -= 9.8 * dt; m.position.addScaledVector(v, dt);
+    if (m.position.y <= 0.07) { scene.remove(m); explode(m.position.x, m.position.z); return false; }
+    return true;
+  });
+}
+function explode(x, z, sz = 1) {
+  const mat = additive(0xffa448, 0.95), ringMat = additive(0xffc27a, 0.8);
+  const ball = new THREE.Mesh(puffGeo, mat); ball.position.set(x, 0.3 * sz, z);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 48), ringMat); ring.rotation.x = -Math.PI / 2; ring.position.set(x, 0.02, z);
+  scene.add(ball, ring);
+  boomLight.position.set(x, 0.8, z);
+  let t = 0; const dur = 0.6;
+  S.shake = Math.max(S.shake, 0.18 * Math.min(1, sz));
+  fx.push(dt => {
+    t += dt; const k = t / dur;
+    ball.position.z -= S.groundV * dt; ring.position.z -= S.groundV * dt; boomLight.position.z -= S.groundV * dt;
+    ball.scale.setScalar(sz * (0.25 + 1.2 * smooth(k))); mat.opacity = 0.95 * (1 - k);
+    ring.scale.setScalar(sz * (0.3 + 2.4 * k)); ringMat.opacity = 0.8 * (1 - k);
+    boomLight.intensity = 40 * Math.max(0, 1 - k * 1.6);
+    if (k >= 1) { scene.remove(ball, ring); mat.dispose(); ringMat.dispose(); boomLight.intensity = 0; return false; }
+    return true;
+  });
+}
+
+/* missiles: boost off the rail, arc over, come down on a spread of points ahead and burst */
+const missileGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.16, 8).rotateX(Math.PI / 2);
+const missileFlameGeo = new THREE.ConeGeometry(0.025, 0.14, 8, 1, true).rotateX(-Math.PI / 2).translate(0, 0, -0.15);
+const missileFlameMat = additive(0xffb35a, 0.9);
+function spawnMissile(tube, i) {
+  const sc = S.sc, m = mk(missileGeo, M.plate);
+  m.add(new THREE.Mesh(missileFlameGeo, missileFlameMat));
+  tube.getWorldPosition(m.position); tube.getWorldQuaternion(wq);
+  m.scale.setScalar(sc); scene.add(m);
+  const p0 = m.position.clone(), dir = V(0, 0, 1).applyQuaternion(wq);
+  const aim = V(0, 0, 1).applyAxisAngle(Y_AXIS, turret.rotation.y);           // where the upper body faces
+  const range = (16 + 8 * Math.random()) * Math.sqrt(sc);
+  const p2 = V(p0.x + aim.x * range + rnd(2.2 * sc), 0.05, p0.z + aim.z * range + rnd(2.2 * sc));
+  const p1 = p0.clone().addScaledVector(dir, 3.5 * sc); p1.y += 3 * sc;
+  const T = (1.2 + 0.35 * Math.random()) * Math.sqrt(sc), prev = V(), q = V();
+  let t = 0, trail = 0;
+  fx.push(dt => {
+    t += dt; const k = Math.min(1, t / T), u = 1 - k;
+    p2.z -= S.groundV * dt;                                                     // the target point rides the floor
+    prev.copy(m.position);
+    m.position.set(u * u * p0.x + 2 * u * k * p1.x + k * k * p2.x, u * u * p0.y + 2 * u * k * p1.y + k * k * p2.y, u * u * p0.z + 2 * u * k * p1.z + k * k * p2.z);
+    if (m.position.distanceToSquared(prev) > 1e-8) m.lookAt(q.copy(m.position).sub(prev).add(m.position));
+    trail += dt;
+    if (trail > 0.035 && OV.smoke) { trail = 0; puff(prev, V(rnd(0.1), 0.1, rnd(0.1)), { color: 0xb9bec5, r0: 0.03 * sc, r1: 0.22 * sc, life: 1.1, opacity: 0.3, rise: 0.1 }); }
+    if (k >= 1) { scene.remove(m); explode(m.position.x, m.position.z, 0.45 * sc); if (i === 15) logEvent('salvo · impacts'); return false; }
+    return true;
+  });
+}
+
+/* ---------- movement effects: one puff type, three emitters ---------- */
+const softTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(255,255,255,.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+function puff(pos, vel, { color = 0xa3abb5, r0 = 0.06, r1 = 0.35, life = 1.5, opacity = 0.4, rise = 0, drift = 1 } = {}) {
+  const mat = new THREE.SpriteMaterial({ map: softTex, color, transparent: true, opacity, depthWrite: false, rotation: Math.random() * 6.28 });
+  const m = new THREE.Sprite(mat); m.position.copy(pos); scene.add(m);
+  const v = vel.clone(); let t = 0;
+  fx.push(dt => {
+    t += dt; const k = t / life;
+    v.multiplyScalar(Math.exp(-2.4 * dt)); v.y += rise * dt;
+    m.position.addScaledVector(v, dt);
+    m.position.z -= S.groundV * drift * dt;            // the air streams past a moving walker, so effects trail behind
+    m.scale.setScalar(2 * (r0 + (r1 - r0) * smooth(Math.sqrt(k))));
+    mat.opacity = opacity * (1 - k) * Math.min(1, t * 12);
+    if (k >= 1) { scene.remove(m); mat.dispose(); return false; }
+    return true;
+  });
+}
+const rnd = (a = 1) => (Math.random() - 0.5) * 2 * a;
+const ePos = V();
+function steamVent(at, dir, k = 1, n = 3) {                    // piston steam: short, fast, white
+  for (let i = 0; i < n; i++)
+    puff(at, V(dir.x + rnd(0.25), dir.y + 0.2 + rnd(0.15), dir.z + rnd(0.25)).multiplyScalar(1.7 * k),
+      { color: 0xe9eef3, r0: 0.03 * k, r1: 0.2 * k, life: 0.5 + Math.random() * 0.25, opacity: 0.55, rise: 0.6 });
+}
+function dustKick(x, z, k = 1, n = 4) {                        // footfall dust: low, tan, spreads
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * 6.28;
+    puff(ePos.set(x, 0.05, z), V(Math.cos(a) * 0.7, 0.18 + Math.random() * 0.2, Math.sin(a) * 0.7).multiplyScalar(k),
+      { color: 0x8c7d68, r0: 0.04 * k, r1: 0.28 * k, life: 0.8 + Math.random() * 0.4, opacity: 0.4 });
+  }
+}
+function stompRing(x, z, k) {                               // a heavy footfall rolls a faint shockwave across the ground
+  const mat = new THREE.MeshBasicMaterial({ color: 0xb7a88f, transparent: true, opacity: 0.35, depthWrite: false });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48), mat);
+  ring.rotation.x = -Math.PI / 2; ring.position.set(x, 0.008, z); scene.add(ring);
+  let t = 0; const dur = 0.55;
+  fx.push(dt => {
+    t += dt; const q = t / dur;
+    ring.position.z -= S.groundV * dt;
+    ring.scale.setScalar(k * (0.25 + 1.1 * smooth(q))); mat.opacity = 0.35 * (1 - q);
+    if (q >= 1) { scene.remove(ring); ring.geometry.dispose(); mat.dispose(); return false; }
+    return true;
+  });
+}
+let smokeAcc = 0;
+function chimney(dt, power, load, dead, sc) {                 // stack smoke: rate and darkness follow load
+  const rate = dead ? 7 : power * (1.2 + 7 * load);
+  smokeAcc += rate * dt;
+  while (smokeAcc >= 1) {
+    smokeAcc -= 1;
+    stackMouth.getWorldPosition(ePos);
+    const dark = dead ? 0x2a2d31 : load > 0.6 ? 0x5d636b : 0x8f969f;
+    puff(ePos, V(rnd(0.08), 0.75 + Math.random() * 0.3, rnd(0.08)).multiplyScalar(sc),
+      { color: dark, r0: 0.05 * sc, r1: (0.32 + 0.25 * load) * sc, life: 2.2 + Math.random() * 0.6, opacity: dead ? 0.55 : 0.32 + 0.15 * load, rise: 0.15 });
+  }
+}
+
+/* ---------- events: what fires when (shown when Show events is on, exported in the move list) ---------- */
+const events = [];
+function logEvent(text) { if (!OV.events) return; events.push({ text, t: S.time }); if (events.length > 7) events.shift(); }
+
+/* ---------- footprints: stamped at touchdown, carried by the floor, faded out ---------- */
+const printTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.translate(64, 56);
+  g.beginPath(); g.arc(0, 0, 25, 0, 7); g.fill();
+  for (const a of [-0.62, 0, 0.62]) { g.save(); g.rotate(-a); g.beginPath(); g.ellipse(0, 42, 6, 15, 0, 0, 7); g.fill(); g.restore(); }
+  g.beginPath(); g.ellipse(0, -33, 5, 9, 0, 0, 7); g.fill();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+const printGeo = new THREE.PlaneGeometry(0.5, 0.5); printGeo.rotateX(-Math.PI / 2);
+const prints = [];
+const PRINT_LIFE = 6, PRINT_FADE = 2;
+function addPrint(x, z, yaw, k = 1, w = 1) {
+  const op = 0.32 + 0.33 * Math.min(1, w / 2);
+  const mat = new THREE.MeshBasicMaterial({ map: printTex, color: 0x070a0f, transparent: true, opacity: op, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
+  const m = new THREE.Mesh(printGeo, mat);
+  m.rotation.y = yaw; m.position.set(x, 0.003, z); m.scale.setScalar(k);
+  scene.add(m);
+  prints.push({ m, mat, op, zf: z + S.scrollW, age: 0 });
+  if (prints.length > 90) dropPrint(0);
+}
+function dropPrint(i) { const p = prints[i]; scene.remove(p.m); p.mat.dispose(); prints.splice(i, 1); }
+function updPrints(dt) {
+  for (let i = prints.length - 1; i >= 0; i--) {
+    const p = prints[i]; p.age += dt;
+    p.m.position.z = p.zf - S.scrollW;
+    p.mat.opacity = p.op * (1 - smooth((p.age - PRINT_LIFE) / PRINT_FADE));
+    if (p.age > PRINT_LIFE + PRINT_FADE || p.m.position.z < -30) dropPrint(i);
+  }
+}
+
+/* ---------- overlays ---------- */
+const ovColor = 0x8fd3c8;
+const contactRings = [];
+const ringGeo = new THREE.RingGeometry(0.2, 0.26, 40), ringMat = new THREE.MeshBasicMaterial({ color: ovColor, transparent: true, opacity: 0.85, depthWrite: false });
+function makeRing() {
+  const r = new THREE.Mesh(ringGeo, ringMat);
+  r.rotation.x = -Math.PI / 2; r.position.y = 0.006; r.visible = false; scene.add(r); return r;
+}
+const polyGeo = new THREE.BufferGeometry().setFromPoints(Array.from({ length: 7 }, () => V()));
+const poly = new THREE.Line(polyGeo, new THREE.LineBasicMaterial({ color: ovColor, transparent: true, opacity: 0.6 }));
+poly.visible = false; scene.add(poly);
+const comDot = new THREE.Mesh(new THREE.SphereGeometry(0.07, 16, 12), new THREE.MeshBasicMaterial({ color: 0xf2a541, depthTest: false }));
+comDot.renderOrder = 10;
+const comLineGeo = new THREE.BufferGeometry().setFromPoints([V(), V()]);
+const comLine = new THREE.Line(comLineGeo, new THREE.LineBasicMaterial({ color: 0xf2a541, depthTest: false, transparent: true, opacity: 0.8 }));
+comLine.renderOrder = 10;
+const comFoot = new THREE.Mesh(new THREE.RingGeometry(0.07, 0.11, 32), new THREE.MeshBasicMaterial({ color: 0xf2a541, depthTest: false }));
+comFoot.rotation.x = -Math.PI / 2; comFoot.renderOrder = 10;
+scene.add(comDot, comLine, comFoot);
+[comDot, comLine, comFoot].forEach(o => o.visible = false);
+
+/* ---------- state ---------- */
+const LOOP = {
+  idle: { stride: 0,    lift: 0,    freq: 0.9,  duty: 0.62, height: 1.11, pitch: 0 },
+  walk: { stride: 0.85, lift: 0.22, freq: 1.05, duty: 0.62, height: 1.09, pitch: 0.025 },
+  run:  { stride: 1.5,  lift: 0.38, freq: 1.75, duty: 0.46, height: 1.01, pitch: 0.09 },
+};
+const BODY_ONESHOT = { warmup: 2.4, jump: 1.3, die: 2.2, deploy: 1.9, undeploy: 1.3 };
+const WEAPON = { turret: 1.0, reload: 1.7, cannon: 1.4, mg: 1.25, laser: 1.5, grenade: 1.5, salvo: 2.7 };
+const weaponDur = k => k === 'cannon' && S.twin ? 1.75 : WEAPON[k];
+// recoil per shot is S.recoil N·s per kg of walker: a shell sized with the walker keeps this constant across sizes.
+// A 60 t tank firing a 120 mm gun is about 0.55; the default 0.15 is a lighter, faster-firing gun for a legged hull.
+const RECOIL_STROKE = 0.12;         // seconds the recoil mechanism spreads that impulse over
+
+const S = {
+  loop: 'idle', body: { name: 'warmup', t: 0, dur: BODY_ONESHOT.warmup }, hit: null, dead: false,
+  phase: 0, scroll: 0, groundV: 0, time: 0,
+  p: { ...LOOP.idle },
+  weap: {}, speed: 1, paused: false,
+  aim: 'center', yaw: 0, pitch: 0, cursorYaw: 0,
+  strideScale: 1, liftScale: 1, shake: 0,
+  weight: 1, sizeFollows: true, sc: 1, scrollW: 0, thud: 0, braced: false, tuning: false, rate: 1, strength: 2.3, gw: 0, sim: true, overloaded: false, amble: false, oneAtATime: false, limb: 1, legSpeed: 0.35, jets: true, jetTW: 1.8, jetBurn: 1.2, jetForward: 6, jet: 0, stance: 0, stanceAuto: true, geomAvg: 1, look: 'art', converted: false,
+  kneeFwd: false, legStyle: 'spider', upper: 0.3, twin: false, rods: false, heightM: 6, yawV: 0, recoil: 0.15,
+};
+
+const TONS = 40;
+const M_PER_UNIT = 2.7;                                          // scene units to metres: a 40 t walker stands about 6 m tall                                                  // Medium is 40 t; weight w is tons / 40
+const WEIGHT_PRESETS = { light: 0.5, medium: 1, heavy: 2, assault: 3.75 };
+// standing height in rig units at idle: body height, plus the turret pivot and the upper body above it
+// longer legs stand the body taller by the same ratio, so the knees keep the bend the gaits were tuned for
+const legK = () => LEGS.length ? LEGS.reduce((a, L) => a + L.up + L.lo, 0) / LEGS.length / (UPPER + LOWER) : 1;
+const standUnits = () => (LOOP.idle.height + PILLAR_RAISE * S.stance) * legK() + turret.position.y + Math.max(0.55, (BLK?.turret?.h ?? 0.4) + 0.03);
+const sizeFor = w => S.sizeFollows ? Math.pow(w, 0.38) : S.heightM / (standUnits() * M_PER_UNIT);   // or the height set in metres
+const heightM = () => standUnits() * sizeFor(S.weight) * M_PER_UNIT;   // 1000 t stands about 20 m, a five-storey building   // size follows weight, a little more than a solid would, so heavies read big
+const weightName = w => w * TONS < 30 ? 'Light' : w * TONS < 60 ? 'Medium' : w * TONS < 110 ? 'Heavy' : w * TONS < 400 ? 'Assault' : 'Colossal';
+const heavyOf = w => clamp((w - 1) / 2.75, 0, 1);              // 0 at 40 t, 1 from 150 t (used for stride and cosmetic scaling)
+// gait from physics: a trot (or tripod) leaves half the legs down, so each must lift 2x its share; with less margin
+// than that (plus 10%) the walker must move one leg at a time. S.gw eases between the two over half a second.
+function designGeom() {                                          // leg leverage at normal standing height: a property of the design
+  if (!LEGS.length) return 1;
+  const Hs = (LOOP.idle.height + PILLAR_RAISE * S.stance) * legK();
+  let sum = 0;
+  for (const L of LEGS) {
+    const Lm = (L.up + L.lo) / 2, dx = L.rest.x - L.hip.x, dz = L.rest.z - L.hip.z, dy = Hs + L.hip.y;
+    const dd = Math.hypot(dx, dy, dz), hz = Math.hypot(dx, dz), e = clamp(dd / (2 * Lm), 0, 0.999);
+    sum += clamp(0.8 * Lm / Math.max(Lm * Math.sqrt(1 - e * e), hz, 0.18 * Lm), 0.4, 3);
+  }
+  return sum / LEGS.length;
+}
+const gaitFor = () => {
+  if (LEGS.length === 2) return 0;
+  if (!S.sim) return heavyOf(S.weight) > 0.5 ? 1 : 0;
+  const m = S.strength * designGeom() / sizeFor(S.weight);
+  if (m < 2.1) S.oneAtATime = true; else if (m > 2.3) S.oneAtATime = false;   // a dead band, so it never dithers between gaits
+  return S.oneAtATime ? 1 : 0;
+};
+const bodyDur = name => BODY_ONESHOT[name] * clamp(Math.pow(S.weight, 0.2), 0.85, 1.5);   // heavies take their time
+
+const TUNED = {};                                   // tuned joints per leg count, kept while the page is open
+const TURRET_HOME = turret.position.clone();
+const stanceAutoFor = w => clamp((w * TONS - 30) / 120, 0, 1);   // ~0 at 40 t, 1 from 150 t
+function applyStance() {
+  if (TUNED[S.rig] || !LEGS.length) return;                      // joints tuned by hand win
+  const R = RIGS[S.rig], st = S.stance;
+  for (const L of LEGS) {
+    L.hip.lerpVectors(R.hip(L), R.pHip(L), st); L.hipMesh.position.copy(L.hip);
+    L.rest.lerpVectors(R.rest(L), R.pRest(L), st);
+    L.hint.lerpVectors(R.hint(L).normalize(), R.pHint(L).normalize(), st).normalize();
+  }
+}
+function buildLegs(n) {
+  const R = RIGS[n]; if (!R) return;
+  hipMeshes.forEach(m => body.remove(m)); hipMeshes.length = 0;
+  for (const c of [...legRoot.children]) legRoot.remove(c);
+  contactRings.forEach(r => scene.remove(r)); contactRings.length = 0;
+  while (prints.length) dropPrint(0);
+  LEGS = R.legs.map(d => makeLeg(d, R));
+  LEGS.forEach(() => contactRings.push(makeRing()));
+  turret.position.copy(TURRET_HOME);
+  S.rig = n;
+  if (TUNED[n]) applySnap(TUNED[n]); else applyStance();
+  applyLook();
+}
+function snapshot() {
+  return { legs: LEGS.map(L => ({ n: L.n, hip: L.hip.toArray(), rest: L.rest.toArray(), up: L.up, lo: L.lo, hint: L.hint.toArray(), blk: JSON.parse(JSON.stringify(L.blk)) })),
+           turret: turret.position.toArray(), blk: JSON.parse(JSON.stringify(BLK)),
+           mounts: Object.fromEntries(Object.entries(MOUNTS).map(([k, m]) => [k, m.node.position.toArray()])), fit: { ...FIT } };
+}
+function applySnap(sn) {
+  sn.legs.forEach(d => {
+    const L = LEGS.find(l => l.n === d.n); if (!L) return;
+    L.hip.fromArray(d.hip); L.rest.fromArray(d.rest); L.up = d.up; L.lo = d.lo; L.hint.fromArray(d.hint); L.hipMesh.position.copy(L.hip);
+    if (d.blk) L.blk = JSON.parse(JSON.stringify(d.blk));
+  });
+  if (sn.turret) turret.position.fromArray(sn.turret);
+  if (sn.blk) BLK = JSON.parse(JSON.stringify(sn.blk));
+  if (!BLK.extra) BLK.extra = [];
+  if (sn.mounts) for (const k in sn.mounts) setMount(k, sn.mounts[k]);
+  if (sn.fit) { FIT = { ...FIT_HOME, ...sn.fit }; applyFit(); }
+}
+buildLegs(4);
+
+const bracing = () => S.braced || S.body?.name === 'deploy' || S.body?.name === 'undeploy';
+function packUp() { if (S.body?.name !== 'undeploy') { S.body = { name: 'undeploy', t: 0, dur: bodyDur('undeploy') }; logEvent('undeploy · unlock'); } }
+function act(name) {
+  if (S.tuning) return;
+  if (name === 'deploy') {
+    if (isDown()) return;
+    if (S.braced || S.body?.name === 'deploy') { packUp(); return; }
+    S.loop = 'idle'; S.body = { name: 'deploy', t: 0, dur: bodyDur('deploy') }; logEvent('deploy · stop and brace'); return;
+  }
+  if (name in LOOP) {
+    if (S.dead || S.body?.name === 'die') revive();
+    else if (bracing()) packUp();
+    S.loop = name; return;
+  }
+  if ((name === 'jump' || name === 'warmup') && bracing()) { packUp(); return; }
+  if (name === 'hit') { if (!isDown()) S.hit = { t: 0, dur: 0.9, sign: Math.random() < .5 ? -1 : 1 }; return; }
+  if (name in BODY_ONESHOT) {
+    if (S.dead || S.body?.name === 'die') { if (name === 'die') return; revive(); if (name === 'warmup') return; }
+    if (name === 'die') { S.weap = {}; S.hit = null; }
+    if (name === 'jump') { const j = planJump(); S.body = { name, t: 0, dur: j.dur, j }; logEvent(j.can ? `jump · ${j.hM.toFixed(1)} m${j.jets ? ' on jets' : ''}` : 'jump · too heavy, crouch only'); return; }
+    S.body = { name, t: 0, dur: bodyDur(name) }; return;
+  }
+  if (name in WEAPON) { if (isDown() || !fittedFor(name)) return; S.weap[name] = { t: 0, dur: weaponDur(name), shots: 0 }; logEvent(`fire · ${LABEL[name]}`); }
+}
+function planJump() {
+  // all from real numbers: leg travel s (crouched knee to straight leg), push acceleration from the strength reserve,
+  // v² = 2·a·s, flight 2v/g, landing absorbs v over the same full travel, recovery at hydraulic speed
+  const mpu = M_PER_UNIT * S.sc, Lleg = LEGS.reduce((a, L) => a + L.up + L.lo, 0) / LEGS.length;
+  const hipOff = LEGS.reduce((a, L) => a + L.hip.y, 0) / LEGS.length;
+  const yExt = 0.97 * Lleg - hipOff, yLow = Math.max(0.45 * Lleg - hipOff, 0.42), s = (yExt - yLow) * mpu;
+  const r = S.sim ? S.strength * designGeom() / S.sc : 2.6, a = Math.max(0, r - 1) * G;
+  const vLeg = S.legSpeed * Math.sqrt(S.sc), h0 = S.p.height;
+  const tc = Math.max(0.25, Math.abs(h0 - yLow) * mpu / (vLeg * 2.5));    // loading crouch
+  const jets = S.jets && FIT.jets && S.jetTW > 1.0;
+  const legsCan = a >= 0.15 * G;
+  if (!legsCan && !jets) { const dip = h0 - 0.12 * Lleg; return { can: false, yLow: dip, yExt, yLow2: dip, tc, tp: 0, tf: 0, ta: 0, tr: tc * 1.2, aU: 0, vU: 0, gU: 1, dU: 1, hM: 0, dur: tc * 2.2 }; }
+  // take-off speed from the legs: the strength reserve over the leg travel, capped by the accumulator burst (10x leg speed)
+  const v0 = legsCan ? Math.min(Math.sqrt(2 * a * s), 10 * vLeg) : 0.6 * vLeg;
+  const aEff = Math.max(0.05, v0 * v0 / (2 * s)), tp = legsCan ? v0 / aEff : Math.max(0.4, s / Math.max(0.1, v0));
+  // the fastest touchdown the legs can absorb over their full travel
+  const vSafe = Math.max(1.0, Math.sqrt(2 * Math.max(0.3, r - 1) * G * s));
+  // flight, integrated at 240 Hz: thrust T = TW·m·g for the burn, then coast; on the way down the retro burn fires
+  // as late as it can and still bring the descent to vSafe by the ground
+  const dt = 1 / 240, burn = S.jetBurn * Math.sqrt(S.sc), aJet = (S.jetTW - 1) * G;
+  const alt = [], thr = [];
+  let y = 0, vy = v0, t = 0, retro = false, fuelRetro = burn * 1.2;
+  while (t < 30) {
+    let T = 0;
+    if (jets && t < burn) T = 1;
+    else if (jets && vy < 0 && fuelRetro > 0) {
+      if (!retro && (vy * vy - vSafe * vSafe) / (2 * aJet) >= y) retro = true;
+      if (retro && -vy > vSafe * 0.9) { T = 1; fuelRetro -= dt; }
+    }
+    vy += (T ? aJet : -G) * dt;                                           // under thrust the net is (TW − 1)·g upward
+    y += vy * dt; t += dt;
+    alt.push(Math.max(0, y)); thr.push(T ? (t < burn ? 1 : -1) : 0);    // 1 main burn, −1 retro
+    if (y <= 0 && vy < 0) break;
+  }
+  const vLand = Math.max(0.5, -vy), tf = alt.length * dt;
+  const ta = 2 * s / vLand;
+  const tr = Math.max(0.3, Math.abs(h0 - yLow) * mpu / (vLeg * 2.5));
+  return { can: true, jets, yLow, yExt, yLow2: yLow, tc, tp, tf, ta, tr, aU: aEff / mpu, vU: v0 / mpu, gU: G / mpu,
+           vLU: vLand / mpu, dU: vLand * vLand / (2 * s) / mpu, alt, thr, fdt: dt, vLand, vSafe,
+           vF: jets ? S.jetForward * Math.sqrt(S.sc) : 0, hM: Math.max(0, ...alt), dur: tc + tp + tf + ta + tr, last: 0 };
+}
+const isDown = () => S.dead || S.body?.name === 'die';
+function revive() { S.dead = false; S.braced = false; S.body = { name: 'warmup', t: 0, dur: bodyDur('warmup'), revive: true }; }
+
+/* ---------- weapons: timing and shots ---------- */
+const lerpHit = { kick: 0 };
+function updWeapons(dt) {
+  for (const [k, a] of Object.entries(S.weap)) {
+    a.t += dt;
+    if (k === 'turret') {
+      while (a.shots < 6 && a.t >= a.shots * 0.14) {
+        const g = guns[a.shots % 2]; g.rec = 1; fire(g.flash, 0.05);
+        spawnTracer(g.muzzle, 0xffc46b, 42, 0.02); a.shots++;
+      }
+    } else if (k === 'cannon' && S.twin) {
+      while (a.shots < 4 && a.t >= 0.12 + a.shots * 0.38) {               // left, right, left, right
+        const tw = twins[a.shots % 2]; tw.shotT = 0; a.shotAt = a.t; fire(tw.flash, 0.08);
+        spawnTracer(tw.muzzle, 0xffe2a8, 55); spawnSmoke(tw.muzzle, 5); recoilKick(tw.muzzle);
+        S.shake = Math.max(S.shake, Math.min(0.4, 0.22 * Math.sqrt(S.sc)));
+        logEvent(`fire · cannon ${tw.s < 0 ? 'L' : 'R'} · recoil`); a.shots++;
+      }
+    } else if (k === 'cannon') {
+      if (!a.shots && a.t >= 0.12) {
+        a.shots = 1; a.shotAt = a.t; fire(cannonFlash, 0.09); recoilKick(cannonMuzzle);
+        spawnTracer(cannonMuzzle, 0xffe2a8, 55); spawnSmoke(cannonMuzzle, 6); S.shake = Math.min(0.45, 0.28 * Math.sqrt(S.sc));
+      }
+    } else if (k === 'salvo') {
+      // racks elevate (0 to 0.35 s), then 16 missiles ripple out, alternating racks, every 0.09 s
+      while (a.shots < 16 && a.t >= 0.42 + a.shots * 0.09) {
+        const R = racks[a.shots % 2], tube = R.tubes[(a.shots >> 1) % 8];
+        spawnMissile(tube, a.shots);
+        if (OV.smoke) puff(tube.getWorldPosition(ePos), V(rnd(0.3), 0.4, -1.2).multiplyScalar(S.sc), { color: 0xc9ced4, r0: 0.04 * S.sc, r1: 0.3 * S.sc, life: 0.9, opacity: 0.4, rise: 0.3 });
+        if (a.shots === 0) logEvent('salvo · first away');
+        if (a.shots === 15) logEvent('salvo · 16 away');
+        a.shots++;
+      }
+    } else if (k === 'mg') {
+      while (a.t >= 0.05 + a.shots * 0.065 && a.t < 1.1) {
+        fire(mgFlash, 0.035); spawnTracer(mgMuzzle, 0xffd27f, 48, 0.06); a.shots++;
+      }
+    } else if (k === 'grenade') {
+      if (!a.shots && a.t >= 0.32) { a.shots = 1; fire(podFlash, 0.07); spawnGrenade(); spawnSmoke(podMuzzle, 2); }
+    }
+    if (a.t >= a.dur) delete S.weap[k];
+  }
+}
+
+/* ---------- IK ---------- */
+const tA = V(), tB = V(), tN = V();
+function solveLeg(H, F, outKnee, outFoot, hint, k = 1, up = UPPER, lo = LOWER) {
+  const UP = up * k, LO = lo * k;
+  tA.subVectors(F, H);
+  let L = tA.length();
+  const maxL = (UP + LO) * 0.985, minL = Math.abs(UP - LO) + 0.05 * k;
+  const dir = tA.normalize();
+  L = clamp(L, minL, maxL);
+  const cosA = clamp((UP * UP + L * L - LO * LO) / (2 * UP * L), -1, 1);
+  const sinA = Math.sqrt(1 - cosA * cosA);
+  tN.copy(hint).addScaledVector(dir, -hint.dot(dir)).normalize();
+  outKnee.copy(H).addScaledVector(dir, UP * cosA).addScaledVector(tN, UP * sinA);
+  outFoot.copy(H).addScaledVector(dir, L);
+}
+function place(g, A, B, k = 1) {
+  tB.subVectors(B, A); const len = tB.length();
+  g.position.copy(A); g.scale.set(k, len, k);
+  g.quaternion.setFromUnitVectors(Y_AXIS, tB.divideScalar(len));
+}
+
+/* ---------- pose ---------- */
+const hipW = V(), kneeW = V(), footW = V(), target = V(), tmp = V();
+let sensorLevel = 0;
+
+/* ---------- body dynamics: real mass, gravity and force-limited legs, integrated at 480 Hz ----------
+   Units: metres, kilograms, seconds. The body is a rigid box (hull dimensions) carried by the planted legs.
+   Each leg is a servo actuator: a stiff spring-damper toward its hip height plus its share of the weight,
+   clamped to the force it can make. Actuator force grows with size², weight with size³, so the strength
+   margin r = 2.4 / scale falls as walkers grow (square-cube law). A balance controller moves the body over
+   the feet that will stay down; its acceleration is limited by the same margin. A light walker shifts in time;
+   a heavy one cannot, so when a leg lifts the body falls toward the gap until the foot lands and catches it. */
+const G = 9.81;
+function solve3(A, b) {                                               // 3×3 linear solve (Cramer's rule)
+  const d = M3 => M3[0][0] * (M3[1][1] * M3[2][2] - M3[1][2] * M3[2][1]) - M3[0][1] * (M3[1][0] * M3[2][2] - M3[1][2] * M3[2][0]) + M3[0][2] * (M3[1][0] * M3[2][1] - M3[1][1] * M3[2][0]);
+  const D = d(A); if (Math.abs(D) < 1e-12) return [b[0] / Math.max(1, A[0][0]), 0, 0];
+  return [0, 1, 2].map(k => d(A.map((row, i) => row.map((v, j) => j === k ? b[i] : v))) / D);
+}
+const PH = { y: 0, vy: 0, roll: 0, wr: 0, pitch: 0, wp: 0, sx: 0, vsx: 0, sz: 0, vsz: 0, margin: 0, force: [], kicks: [] };
+// a gun's recoil: its impulse, spread over the recoil stroke, pushes back along the barrel at the muzzle's height.
+// The feet hold the walker by friction at the ground, so the couple that tips it is that force times the muzzle height.
+function recoilKick(muz) {
+  if (!S.sim) return;
+  muz.getWorldPosition(tmp);
+  const m = S.weight * TONS * 1000, F = S.recoil * m / RECOIL_STROKE, yaw = turret.rotation.y;
+  PH.kicks.push({ fx: -F * Math.sin(yaw), fz: -F * Math.cos(yaw), h: tmp.y * M_PER_UNIT, t: RECOIL_STROKE });
+}
+// where the upper body's mass sits, in hull coordinates: on the turret pivot, half its height up, a little forward
+// (the guns), turning with the turret, so a torso twist carries its centre of mass round with it
+const UPPER_FWD = 0.2;
+let Z_FOLLOW = 0.8;                 // how far a biped moves its hull fore and aft toward the feet that stay down
+let HULL_TRAVEL = 1.15;            // how far past the support the hull may shift, as a share of the feet's reach
+let TILT_FB = 0;                    // share of the tip (H·tilt) the balance controller corrects for
+let CATCH_TILT = 0.12;           // radians of tilt past which a walker takes a catch step
+function upperPoint(out) {
+  const uh = S.look === 'art' ? 0.42 : BLK.turret.h, y = S.yaw;
+  return out.set(turret.position.x + Math.sin(y) * UPPER_FWD, turret.position.y + uh / 2, turret.position.z + Math.cos(y) * UPPER_FWD);
+}
+const comL = V();
+function physics(dt, sc, wt, heightUnits) {
+  if (!S.sim) { Object.assign(PH, { y: 0, vy: 0, roll: 0, wr: 0, pitch: 0, wp: 0, sx: 0, vsx: 0, sz: 0, vsz: 0, margin: 0 }); PH.kicks.length = 0; PH.r = 9; return { bx: 0, bz: 0, dy: 0, roll: 0, pitch: 0 }; }
+  const mpu = M_PER_UNIT * sc, m = wt * TONS * 1000, N = LEGS.length;
+  // centre of mass of the carried body: hull at its centre, upper body at upperPoint, in proportion to S.upper
+  upperPoint(comL).multiplyScalar(S.upper);
+  const cxo = comL.x * mpu, czo = comL.z * mpu, uy = (comL.y / Math.max(0.01, S.upper)) * mpu;
+  const r = S.strength / sc;                                            // strength margin: max leg force over its share of the weight (square-cube law)
+  const fMax = r * m * G / N;
+  const wn = 2 * Math.PI * 2.2 / Math.sqrt(sc), zeta = 0.45;            // leg servo: natural frequency falls with size (Froude), lightly damped
+  const K = m * wn * wn / N, C = 2 * zeta * m * wn / N;
+  const bw = BLK.body.w * mpu, bh = BLK.body.h * mpu, bl = BLK.body.l * mpu;
+  const H = heightUnits * mpu + comL.y * mpu;                          // centre of mass above the ground: a heavy upper body raises it
+  PH.H = H;
+  const Hh = heightUnits * mpu;                                        // the hull centre above the ground
+  const Iu = m * S.upper * (1 - S.upper) * uy * uy;                     // the upper body's mass, high on the hull, adds to the tipping inertia
+  const Ir = m * (bw * bw + bh * bh) / 12 + m * 0.15 * H * H + Iu, Ip = m * (bl * bl + bh * bh) / 12 + m * 0.15 * H * H + Iu;
+  const aMax = G * clamp(r - 1, 0.05, 2) * 0.55;                       // how hard the balance controller can push the body sideways
+  // where the body should be: over the feet that will still be down a moment from now
+  const look = (N === 2 ? 0.55 : 0.35) * S.p.freq * S.rate;
+  let tx = 0, tz = 0, n = 0;
+  const planted = LEGS.filter(L => L.planted);
+  for (const L of LEGS) {
+    const ph = (S.phase + legOff(L, S.gw)) % 1;
+    if (L.planted && ph + look < S.p.duty) { tx += L.footPos.x; tz += L.footPos.z; n++; }
+  }
+  if (!n) for (const L of planted) { tx += L.footPos.x; tz += L.footPos.z; n++; }
+  tx = n ? tx / n * mpu : 0; tz = n ? (tz / n - 0) * mpu : 0;
+  const reachX = Math.max(...LEGS.map(L => Math.abs(L.rest.x))) * mpu * 0.9, reachZ = Math.max(0.3, ...LEGS.map(L => Math.abs(L.rest.z))) * mpu * 0.9;
+  S.geomAvg = LEGS.reduce((a, L) => a + (L.geom || 1), 0) / Math.max(1, LEGS.length);
+  PH.r = r * S.geomAvg;
+  PH.mpu = mpu; PH.cxo = cxo; PH.czo = czo;
+  const hipFloor = Math.max(...LEGS.map(L => Math.abs(L.up - L.lo) + 0.12 - L.hip.y)) * mpu;   // body height at which the shortest-folding leg is fully folded
+  const vLeg = S.legSpeed * Math.sqrt(sc);                              // m/s; big legs are only a little faster (Froude)
+  const spanX = Math.max(0.5, ...LEGS.map(L => Math.abs(L.rest.x))) * mpu, spanZ = Math.max(0.5, ...LEGS.map(L => Math.abs(L.rest.z))) * mpu;
+  const steps = Math.max(1, Math.ceil(dt * 480)), h = dt / steps;
+  for (let k = 0; k < steps; k++) {
+    // balance controller: critically damped toward the support, acceleration-limited by the strength margin
+    // capture the fall: steer the body over the feet, plus however far it is already tipping
+    // the hull moves so the centre of mass, not the hull, ends up over the support: a forward-heavy upper body pulls the hips back
+    // It steers where the centre of mass is over the ground, which includes how far the body has tipped (H·tilt),
+    // scaled by TILT_FB: a tall, top-heavy body that has started to tip is moved back before it goes further.
+    const cx = clamp(tx - cxo, -reachX, reachX), cz = clamp(tz * (N === 2 ? Z_FOLLOW : 0.5) - czo, -reachZ, reachZ);
+    // A crumbled (overloaded) walker has its legs folded to the stops, so it holds where it is rather than shuffle the hull.
+    const hold = S.overloaded ? 0 : 1;
+    const ex = hold * (cx - (PH.sx - TILT_FB * H * PH.roll)), evx = PH.vsx - hold * TILT_FB * H * PH.wr;
+    const ez = hold * (cz - (PH.sz + TILT_FB * H * PH.pitch)), evz = PH.vsz + hold * TILT_FB * H * PH.wp;
+    const ax = clamp(36 * ex - 12 * evx, -aMax, aMax);
+    const az = clamp(36 * ez - 12 * evz, -aMax, aMax);
+    PH.vsx += ax * h; PH.sx += PH.vsx * h; PH.vsz += az * h; PH.sz += PH.vsz * h;
+    // the hull cannot travel past its feet: beyond that the legs could not reach their planted spots
+    if (Math.abs(PH.sx) > reachX * HULL_TRAVEL) { PH.sx = Math.sign(PH.sx) * reachX * HULL_TRAVEL; PH.vsx = 0; }
+    if (Math.abs(PH.sz) > reachZ * HULL_TRAVEL) { PH.sz = Math.sign(PH.sz) * reachZ * HULL_TRAVEL; PH.vsz = 0; }
+    let Fy = -m * G, Tr = 0, Tp = 0, used = 0;
+    PH.force.length = 0;
+    // load sharing: the leg forces that hold the weight with no net twist (F = a + b·x + c·z, least squares).
+    // If the centre of mass is outside the feet some of these come out negative, a leg cannot pull, and the body tips.
+    let s1 = 0, sx = 0, sz = 0, sxx = 0, sxz = 0, szz = 0;
+    // feet relative to where the centre of mass is over the ground, which moves as the body tips
+    const rel = planted.map(L => [L.footPos.x * mpu - PH.sx - cxo + H * PH.roll, L.footPos.z * mpu - PH.sz - czo - H * PH.pitch]);
+    for (const [x, z] of rel) { s1++; sx += x; sz += z; sxx += x * x; sxz += x * z; szz += z * z; }
+    const eps = 1e-4 * (1 + sxx + szz);
+    const [a0, b0, c0] = solve3([[s1, sx, sz], [sx, sxx + eps, sxz], [sz, sxz, szz + eps]], [m * G, 0, 0]);
+    for (let i = 0; i < planted.length; i++) {
+      const L = planted[i], xi = L.footPos.x * mpu - PH.sx, zi = L.footPos.z * mpu - PH.sz, [xr, zr] = rel[i];
+      const dh = PH.y + PH.roll * xi - PH.pitch * zi;                       // how far this hip sits above where it should
+      const vh = PH.vy + PH.wr * xi - PH.wp * zi;
+      let F = Math.max(0, a0 + b0 * xr + c0 * zr) - K * dh - C * vh;
+      const fCap = fMax * (L.geom || 1);                                   // straighter legs carry more
+      F = clamp(F, 0, fCap);
+      used = Math.max(used, F / fCap);
+      PH.force.push(F);
+      Fy += F; Tr += F * xr; Tp -= F * zr;
+      // each foot can resist a little twist, up to where its edge would lift
+      const fs = 0.55 + 0.45 * S.limb, hw_ = 0.5 * L.blk.foot.w * mpu * fs, hl = 0.5 * L.blk.foot.l * mpu * fs;   // foot half width resists roll, half length resists pitch
+      Tr += clamp(-K * hw_ * hw_ * 4 * PH.roll - 2 * C * hw_ * hw_ * 4 * PH.wr, -F * hw_, F * hw_);
+      Tp += clamp(-K * hl * hl * 4 * PH.pitch - 2 * C * hl * hl * 4 * PH.wp, -F * hl, F * hl);
+    }
+    for (const kk of PH.kicks) if (kk.t > 0) {                              // gun recoil: force at the muzzle, couple about the feet
+      Tr -= kk.fx * kk.h; Tp += kk.fz * kk.h;
+      PH.vsx += 0.5 * kk.fx / m * h; PH.vsz += 0.5 * kk.fz / m * h;
+      kk.t -= h;
+    }
+    // in the air on a jump the flight is planned, so the body is kinematic; otherwise a walker with no foot down
+    // (tipped so far its feet cannot reach) simply drops under gravity until a foot touches and takes the load
+    // (a run's flight phase is planned the same way). Only a walker tipped past a catch step with no foot down drops.
+    if (!planted.length && (S.body?.name === 'jump' || (Math.abs(PH.pitch) < CATCH_TILT && Math.abs(PH.roll) < CATCH_TILT))) { PH.y = 0; PH.vy = 0; break; }
+    PH.vy += Fy / m * h; PH.y += PH.vy * h;
+    PH.wr += Tr / Ir * h; PH.roll += PH.wr * h;
+    PH.wp += Tp / Ip * h; PH.pitch += PH.wp * h;
+    // hydraulic flow limit: no leg extends or yields faster than vLeg, so the body cannot drop, rise or tip faster than that
+    PH.vy = clamp(PH.vy, -vLeg, vLeg);
+    PH.wr = clamp(PH.wr, -vLeg / spanX, vLeg / spanX);
+    PH.wp = clamp(PH.wp, -vLeg / spanZ, vLeg / spanZ);
+    // lowest the body can go: the hull's underside on the ground, or the hips at their legs' fully folded length
+    PH.y = clamp(PH.y, -Math.min(Hh - 0.5 * bh - 0.15 * mpu, Hh - hipFloor), 0.2 * Hh);   // the hull, not the centre of mass
+    PH.roll = clamp(PH.roll, -0.35, 0.35); PH.pitch = clamp(PH.pitch, -0.3, 0.3);
+    PH.margin = used;
+  }
+  if (PH.kicks.length) PH.kicks = PH.kicks.filter(kk => kk.t > 0);
+  return { bx: PH.sx / mpu, bz: PH.sz / mpu, dy: PH.y / mpu, roll: PH.roll, pitch: PH.pitch };
+}
+const legOff = (L, hw) => L.off + (L.offH - L.off) * hw;
+// mech legs: each segment gets a frame with X across the leg, Y along it and Z toward the outside of the knee
+const mA = V(), mN = V(), mO = V(), mD = V(), mZ = V(), mX = V(), mM4 = new THREE.Matrix4();
+function segFrame(g, A, B, n, o, k) {
+  mD.subVectors(B, A); const len = mD.length(); mD.divideScalar(len || 1);
+  mX.copy(n).addScaledVector(mD, -n.dot(mD)); if (mX.lengthSq() < 1e-8) mX.set(1, 0, 0); mX.normalize();
+  mZ.crossVectors(mX, mD); if (mZ.dot(o) < 0) { mX.negate(); mZ.negate(); }
+  g.quaternion.setFromRotationMatrix(mM4.makeBasis(mX, mD, mZ)); g.position.copy(A); g.scale.set(k, len, k);
+}
+function placeMech(L, H, K, F, sc, lk) {
+  mA.copy(F); mA.y += 0.17 * sc;                                              // the ankle hub sits on the foot
+  mN.crossVectors(mD.subVectors(K, H), mZ.subVectors(mA, K));
+  if (mN.lengthSq() < 1e-10) mN.set(1, 0, 0); mN.normalize();
+  mD.subVectors(mA, H).normalize();
+  mO.subVectors(K, H).addScaledVector(mD, -mO.dot(mD)); if (mO.lengthSq() < 1e-8) mO.copy(L.hint); mO.normalize();
+  segFrame(L.upper, H, K, mN, mO, lk);
+  L.knee.quaternion.copy(L.upper.quaternion);
+  segFrame(L.lower, K, mA, mN, mO, lk);
+}
+// knee ram: anchored on the thigh and the shin, on the outside of the knee's bend, offset by the limb's thickness.
+// The barrel and rod each cover 62% of the anchors' widest spread, so they always overlap and slide, never part.
+const rA = V(), rB = V(), rO = V(), rD = V();
+function placeRam(L, H, K, F, sc) {
+  const on = S.rods && S.look !== 'blocks';
+  L.ramB.visible = L.ramR.visible = on; L.ramEyes.forEach(e => e.visible = on);
+  if (!on) return;
+  rD.subVectors(F, H).normalize();
+  rO.subVectors(K, H).addScaledVector(rD, -rO.dot(rD));                      // outward from the hip–foot line, through the knee
+  if (rO.lengthSq() < 1e-8) rO.copy(L.hint);
+  rO.normalize();
+  const off = (0.085 * S.limb + 0.07) * sc;                                  // clear of the thigh armour
+  let maxD;
+  if (L.mech) {                                                    // mech legs: the ram runs down the back of the shin, from a pivot behind the knee to the ankle
+    rA.lerpVectors(K, H, 0.14).addScaledVector(rO, -1.6 * off);
+    rB.lerpVectors(K, F, 0.86).addScaledVector(rO, -off); rB.y += 0.1 * sc;
+    maxD = (0.14 * L.up + 0.86 * L.lo + 0.25) * sc;
+  } else {
+    rA.lerpVectors(K, H, 0.55).addScaledVector(rO, off);
+    rB.lerpVectors(K, F, 0.42).addScaledVector(rO, off);
+    maxD = (0.55 * L.up + 0.42 * L.lo) * sc;
+  }
+  const d = rA.distanceTo(rB), span = 0.62 * maxD;
+  const thin = L.mech ? 0.75 : 1, rb = 0.06 * thin * sc * (0.6 + 0.4 * S.limb), rr = 0.032 * thin * sc * (0.6 + 0.4 * S.limb);
+  rD.subVectors(rB, rA).normalize();
+  place(L.ramB, rA, tmp.copy(rA).addScaledVector(rD, Math.min(span, d)), 1); L.ramB.scale.x = L.ramB.scale.z = rb;
+  place(L.ramR, rB, tmp.copy(rB).addScaledVector(rD, -Math.min(span, d)), 1); L.ramR.scale.x = L.ramR.scale.z = rr;
+  L.ramEyes[0].position.copy(rA); L.ramEyes[1].position.copy(rB);
+  L.ramEyes.forEach(e => e.scale.setScalar(rb * 1.25));
+}
+function swingY(s, hw) {                                          // light: a smooth arc; heavy: a slow heave up, then a fall that slams
+  const light = Math.sin(Math.PI * s);
+  const heavy = s < 0.55 ? Math.pow(smooth(s / 0.55), 1.7) : 1 - Math.pow((s - 0.55) / 0.45, 2);
+  return light + (heavy - light) * hw;
+}
+function pose(dt) {
+  const strideBase = S.p.stride * S.strideScale * (RIGS[S.rig]?.stride ?? 1);
+  const sr = clamp(S.p.stride / 0.6, 0, 1);
+  const wt = S.weight, sc = S.sc, give = Math.pow(wt, -0.8);   // heavier: less give in every reaction
+  const hw = heavyOf(wt);
+  let height = S.p.height, pitch = S.p.pitch, roll = 0, bx = 0, rootY = 0;
+  let strideMul = 1, spread = 0, air = 0, buckle = 0, droop = 0, sensor = 1, yawAdd = 0;
+
+
+  // die (and the dead pose), possibly fading out during a revive
+  let dieE = 0;
+  const b = S.body;
+  // brace: 0 walking, 1 deployed; steps out wide, drops, noses down to aim, toes dig in
+  let braceE = S.braced ? 1 : 0;
+  if (b?.name === 'deploy') {
+    const u = b.t / b.dur; braceE = ease(u);
+    if (u > 0.7 && !b.vented) { b.vented = true; logEvent('lock · all hips · steam'); if (OV.steam) LEGS.forEach(L => steamVent(tmp.copy(L.hip).applyMatrix4(body.matrixWorld), V(L.sx, 0.15, 0), S.sc, 5)); S.shake = Math.max(S.shake, 0.06 * wt); }
+  }
+  if (b?.name === 'undeploy') {
+    const u = b.t / b.dur; braceE = 1 - ease(u);
+    if (!b.vented) { b.vented = true; if (OV.steam) LEGS.forEach(L => steamVent(tmp.copy(L.hip).applyMatrix4(body.matrixWorld), V(L.sx, 0.4, 0), S.sc, 3)); }
+  }
+  height -= 0.36 * braceE; spread += 0.42 * braceE; pitch += 0.035 * braceE;
+  const steady = 1 - 0.6 * braceE;    // braced: recoil and hits move the body far less
+  if (S.dead) dieE = 1;
+  if (b?.name === 'die') dieE = ease(Math.min(1, (b.t / b.dur) * 1.15));
+  if (b?.name === 'warmup' && b.revive) dieE = 1 - smooth((b.t / b.dur) / 0.4);
+
+  if (b?.name === 'warmup') {
+    const u = b.t / b.dur, e = ease(u);
+    const crouch = b.revive ? smooth((u - 0.25) / 0.75) : e;
+    height -= 0.62 * (1 - crouch); spread += 0.26 * (1 - crouch);
+    sensor = smooth((u - 0.15) / 0.4);
+    if (u > 0.45 && !b.vented) {
+      b.vented = true; logEvent('vent · all hips');
+      if (OV.steam) LEGS.forEach(L => steamVent(tmp.copy(L.hip).applyMatrix4(body.matrixWorld), V(L.sx, 0.3, 0), S.sc, 4));
+    }
+    if (u > 0.55) { const k = (u - 0.55) / 0.45; yawAdd = 0.55 * Math.sin(2 * Math.PI * k) * bump(k); }
+  }
+  if (b?.name !== 'jump') S.jet = 0;
+  if (b?.name === 'jump' && b.j) {
+    // load, push to full extension, ballistic flight under g, absorb through the full leg travel, rise back
+    const J = b.j, t = b.t, h0 = S.p.height;
+    let hy = h0;
+    const t1 = J.tc, t2 = t1 + J.tp, t3 = t2 + J.tf, t4 = t3 + J.ta;
+    if (t < t1) hy = h0 + (J.yLow - h0) * ease(t / t1);
+    else if (t < t2) { const u = t - t1; hy = J.yLow + 0.5 * J.aU * u * u; }
+    else if (t < t3) {
+      const i = Math.min(J.alt.length - 1, Math.floor((t - t2) / J.fdt));
+      hy = J.yExt; rootY = J.alt[i] / (M_PER_UNIT * S.sc); air = 1;
+      const th = J.thr[i];
+      if (th !== J.last) {
+        logEvent(th === 1 ? 'jets · ignite' : th === -1 ? 'jets · retro burn' : 'jets · cut');
+        if (th === 1 && OV.dust) addScorch(0, 0, S.sc);
+        J.last = th;
+      }
+      S.jet = Math.abs(th);
+      pitch += 0.05 * Math.min(1, J.vF / 6) * (th === -1 ? -1 : 1) * S.jet;   // leans into the thrust: forward on the burn, back on the retro
+    }
+    else if (t < t4) {
+      if (J.last !== 2) { logEvent(`touchdown · ${J.vLand.toFixed(1)} m/s`); J.last = 2; S.jet = 0; }
+      const u = t - t3; hy = J.yExt - (J.vLU * u - 0.5 * J.dU * u * u);
+    }
+    else hy = J.yLow2 + (h0 - J.yLow2) * ease((t - t4) / J.tr);
+    if (!J.can) hy = Math.max(hy, Math.min(h0, J.yLow));            // too weak to leave the ground: it only crouches
+    height += hy - h0;
+  }
+  pitch += 0.5 * dieE; height -= 0.8 * dieE; roll += 0.1 * dieE;
+  buckle = dieE; droop = dieE; strideMul *= 1 - dieE; sensor *= 1 - dieE;
+
+  if (S.hit) {
+    const t = S.hit.t, k = Math.exp(-6 * t) * Math.sin(18 * t) * give * steady;
+    roll += 0.2 * k * S.hit.sign; bx += 0.14 * k * S.hit.sign; pitch -= 0.06 * k;
+    M.hull.emissive.setRGB(1, 0.18, 0.1); M.hull.emissiveIntensity = 1.4 * Math.pow(Math.max(0, 1 - t / 0.35), 2);
+  } else M.hull.emissiveIntensity = 0;
+
+  const cannon = S.weap.cannon;
+  if (cannon?.shotAt != null && !S.sim) {                // with physics on, recoil is a real force (recoilKick)
+    const x = cannon.t - cannon.shotAt;
+    pitch -= 0.075 * give * steady * Math.exp(-5 * x) * Math.cos(11 * x);
+  }
+
+  // body: kinematic pose (moves, reactions) plus the simulated sag, tilt and balance shift
+  const P = physics(dt, sc, wt, height);
+  bx += P.bx; height += P.dy; roll += P.roll; pitch += P.pitch;
+  // body
+  root.scale.setScalar(sc);
+  person.visible = OV.person; person.position.set(-(1.75 * sc + 0.7), 0, 0.6);
+  root.position.y = rootY * sc;
+  body.position.set(bx, height, P.bz);
+  body.rotation.set(pitch, 0, roll);
+  if (S.look !== 'art') placeHullBlocks();
+  sensorLevel = damp(sensorLevel, sensor, 10, dt);
+  M.sensor.emissiveIntensity = 2.4 * sensorLevel;
+
+  // floor travel: a planted foot moves back at exactly the floor's speed, so feet never skate
+  const stride = strideBase * strideMul;
+  const jf = S.body?.name === 'jump' && S.body.j?.jets && air > 0 ? S.body.j.vF / (M_PER_UNIT * sc) : 0;
+  const vLocal = jf || (S.p.duty > 0 && !S.overloaded ? stride * S.p.freq * S.rate / S.p.duty : 0);
+  S.scroll += vLocal * dt;                 // rig units: feet lock against this
+  S.groundV = vLocal * sc;                 // world units: grid, prints, explosions ride this
+  S.scrollW += S.groundV * dt;
+  grid.position.z = -(S.scrollW % 1);
+
+  // legs
+  body.updateMatrixWorld(true);
+  const lift = S.p.lift * S.liftScale * sr * strideMul;
+  const planted = [];
+  // catch step: tipped past what the feet can hold (a big recoil, a hard hit), the next foot goes down under the
+  // centre of mass instead of at its rest spot, the way a person steps back when shoved
+  let capX = 0, capZ = 0;
+  if (S.sim && !S.tuning) {
+    const Hu = height + comL.y, dz = Math.abs(PH.pitch) - CATCH_TILT, dx = Math.abs(PH.roll) - CATCH_TILT;
+    if (dz > 0) capZ = clamp(1.25 * Hu * PH.pitch + PH.vsz / (M_PER_UNIT * sc) * 0.3, -1, 1);    // under the centre of mass, a little past it
+    if (dx > 0) capX = clamp(-1.25 * Hu * PH.roll, -1, 1);
+  }
+  LEGS.forEach((L, i) => {
+    const ph = (S.phase + legOff(L, S.gw)) % 1, d = S.p.duty;
+    const stance = ph < d, s = stance ? ph / d : (ph - d) / (1 - d);
+    const endX = L.rest.x * (1 + spread) + capX, endZ = L.rest.z + stride * 0.5 + capZ;
+    let h = 0;
+    if (air > 0.01) L.locked = false;                        // airborne feet hold nothing; they grip afresh where they land
+    if (OV.glue && !S.tuning && air <= 0.01) {
+      // glued: a foot is locked to the floor point where it touched down and rides back with the floor
+      if (stance) {
+        if (!L.locked) { L.locked = true; L.lockX = L.footPos.x; L.lockZ = L.footPos.z + S.scroll; }
+        target.set(L.lockX, 0, L.lockZ - S.scroll);
+      } else {
+        if (L.locked) { L.locked = false; L.liftX = L.footPos.x; L.liftZ = L.footPos.z; L.maxY = 0; }
+        const e = smooth(s), dist = Math.hypot(endX - L.liftX, endZ - L.liftZ);
+        h = dist > 0.015 ? Math.max(lift, Math.min(0.14, dist * 0.6)) : 0;
+        const eh = smooth(s) * (1 - hw) + ease(Math.pow(s, 1.25)) * hw;
+        target.set(L.liftX + (endX - L.liftX) * eh, h * swingY(s, hw), L.liftZ + (endZ - L.liftZ) * eh);
+      }
+    } else {
+      L.locked = false;
+      target.copy(L.rest); target.x = endX;
+      if (stance) target.z += stride * (0.5 - s);
+      else { h = lift; target.z += stride * (-0.5 + smooth(s)); target.y = h * swingY(s, hw); if (s < 0.05) L.maxY = 0; }
+    }
+    // toes: curl under at lift-off, reach forward before touchdown, flat on the ground
+    let curl = 0;
+    if (!stance && h > 0.01) {
+      const k = clamp(h / 0.12, 0, 1);
+      curl = (s < 0.3 ? 0.7 * smooth(s / 0.3) : s < 0.8 ? 0.7 - 1.1 * smooth((s - 0.3) / 0.5) : -0.4 * (1 - smooth((s - 0.8) / 0.2))) * k;
+    }
+    curl *= 1 - 0.7 * hw;                                       // a cement shoe does not flex
+    curl = Math.max(curl, 0.55 * air);
+    if (L.sz > 0) { target.z += 0.45 * buckle; target.x *= 1 + 0.25 * buckle; }
+    else { target.x *= 1 + 0.15 * buckle; target.z -= 0.1 * buckle; }
+    if (air > 0) target.set(L.rest.x, rootY + 0.01, L.rest.z);        // in the air the legs hang fully extended under the hips
+    hipW.copy(L.hip).applyMatrix4(body.matrixWorld);
+    tmp.copy(target).multiplyScalar(sc);
+    solveLeg(hipW, tmp, kneeW, footW, L.hint, sc, L.up, L.lo);
+    {
+      // how much of the load the leg carries through its structure: a bent knee or a foot set out from the hip
+      // must be held by joint torque (arm = the larger of the two lever arms); a straight column passes it down
+      const Lm = (L.up + L.lo) / 2, dd = hipW.distanceTo(footW) / sc, hz = Math.hypot(hipW.x - footW.x, hipW.z - footW.z) / sc;
+      const e = clamp(dd / (2 * Lm), 0, 0.999), arm = Math.max(Lm * Math.sqrt(1 - e * e), hz, 0.18 * Lm);
+      L.geom = clamp(0.8 * Lm / arm, 0.4, 3);                       // calibrated: the default wide stance, walking, is about 1
+    }
+    const lk = sc * S.limb, fk = sc * (0.55 + 0.45 * S.limb);            // thicker limbs, proportionally broader feet
+    if (L.mech) placeMech(L, hipW, kneeW, footW, sc, lk);
+    else { place(L.upper, hipW, kneeW, lk); place(L.lower, kneeW, footW, lk); }
+    L.knee.position.copy(kneeW); L.knee.scale.setScalar(sc * (0.45 + 0.55 * S.limb));
+    L.footG.position.copy(footW); L.footG.scale.set(fk, sc, fk);
+    L.hipMesh.scale.setScalar(0.45 + 0.55 * S.limb);
+    placeRam(L, hipW, kneeW, footW, sc);
+    if (!OV.toes) curl = 0;
+    L.footG.rotation.set(curl * 0.4, L.sx * (L.mech ? 0.05 : 0.22), 0, 'YXZ');
+    L.landT += dt;
+    const splay = OV.toes ? Math.exp(-L.landT * 9) : 0;
+    for (const t of L.toes) {
+      t.pivot.rotation.x = (t.heel ? curl * 0.5 : curl) + (L.planted && OV.toes ? 0.38 * braceE : 0);   // dig in when braced
+      t.base.rotation.y = t.a + t.side * 0.16 * splay;
+    }
+    if (S.look !== 'art') placeLegBlocks(L, hipW, kneeW, footW, sc);
+    L.maxY = Math.max(L.maxY, footW.y / sc);
+    const was = L.planted;
+    L.planted = footW.y < 0.02 * sc && air < 0.05;
+    if (L.planted && !was) {
+      L.landT = 0;
+      if (L.maxY > 0.03) {
+        if (OV.prints) addPrint(footW.x, footW.z, L.sx * 0.22, sc * (0.55 + 0.45 * S.limb), wt);
+        const impact = Math.abs(PH.vy) + Math.abs(PH.wr) * 2 + Math.abs(PH.wp) * 2;          // body speed when the foot catches it, m/s
+        S.shake = Math.max(S.shake, Math.min(0.3, impact * 0.08 * Math.sqrt(sc)));
+        if (wt >= 2 && sr > 0.2) stompRing(footW.x, footW.z, sc * Math.sqrt(wt / 2));
+        const hard = S.body?.name === 'jump';
+        if (OV.dust) dustKick(footW.x, footW.z, sc * (0.5 + 0.35 * Math.sqrt(Math.min(wt, 6))) * (hard ? 1.6 : 1), hard ? 8 : wt >= 2 ? 6 : 4);
+        if (hard && OV.steam) steamVent(hipW, V(L.sx, 0.1, 0), sc, 4);
+        logEvent(hard ? `land · ${L.n}` : `plant · ${L.n}`);
+      }
+    }
+    if (!L.planted && was && air < 0.05 && sr > 0.2) {
+      if (OV.steam) steamVent(kneeW, V(L.sx * 0.9, 0.2, -0.3), sc * Math.sqrt(Math.min(wt, 2)), 3);
+      logEvent(`liftoff · ${L.n} · steam`);
+    }
+    L.footPos.copy(footW).divideScalar(sc);
+    const ring = contactRings[i];
+    ring.visible = OV.feet && L.planted;
+    ring.position.x = footW.x; ring.position.z = footW.z; ring.scale.setScalar(sc);
+    if (L.planted) planted.push(footW.clone());
+  });
+
+  // support polygon of planted feet, ordered around their centre (a line for a biped)
+  if (OV.feet && planted.length >= 2) {
+    const cx = planted.reduce((a, p) => a + p.x, 0) / planted.length, cz = planted.reduce((a, p) => a + p.z, 0) / planted.length;
+    planted.sort((a, b) => Math.atan2(a.z - cz, a.x - cx) - Math.atan2(b.z - cz, b.x - cx));
+    const pts = [...planted, planted[0]];
+    while (pts.length < 7) pts.push(planted[0]);
+    pts.forEach((p, k) => polyGeo.attributes.position.setXYZ(k, p.x, 0.01, p.z));
+    polyGeo.attributes.position.needsUpdate = true; poly.visible = true;
+  } else poly.visible = false;
+
+  // turret aim
+  let yawT = 0, pitchT = 0;
+  if (S.aim === 'sweep') yawT = 0.6 * Math.sin(S.time * 0.6);
+  if (S.aim === 'cursor') yawT = S.cursorYaw;
+  const rl = S.weap.reload; let rb = 0;
+  if (rl) { rb = bump(rl.t / rl.dur); yawT *= 1 - smooth(rl.t / (rl.dur * 0.35)); pitchT += 0.3 * rb; }
+  yawT = yawT * (1 - droop) + 0.35 * droop + yawAdd; pitchT = pitchT * (1 - droop) - 0.28 * droop;
+  if (S.sim && dt > 0) {
+    // torso twist from torque and inertia: the slew drive's torque grows with size⁴ (force ∝ size², arm ∝ size) and the
+    // upper body's inertia with size⁵ times its share of the mass, so acceleration falls as 1/size and with a heavier upper
+    // body. It speeds up, coasts at its rate limit and brakes to stop on the aim point.
+    const aMax = 1.6 / sc / (0.4 + 2 * S.upper), vMax = 1.1 / Math.sqrt(sc) / (0.7 + S.upper);
+    const err = yawT - S.yaw, vT = Math.sign(err) * Math.min(vMax, Math.sqrt(2 * aMax * Math.abs(err)) * 0.95);
+    S.yawV += clamp(vT - S.yawV, -aMax * dt, aMax * dt); S.yaw += S.yawV * dt;
+  } else { S.yaw = damp(S.yaw, yawT, 5 / Math.sqrt(wt), dt); S.yawV = 0; }
+  S.pitch = damp(S.pitch, pitchT, 6, dt);
+  turret.rotation.y = S.yaw;
+  mantlet.rotation.x = -S.pitch;
+  hatchPivot.rotation.x = -1.1 * rb;
+
+  // recoil
+  guns.forEach(g => { g.rec *= Math.exp(-16 * dt); g.slide.position.z = 0.02 - 0.12 * g.rec - 0.18 * rb; });
+  let cs = -0.14 * rb;
+  if (cannon?.shotAt != null) { const x = cannon.t - cannon.shotAt; cs -= 0.34 * (x < 0.04 ? x / 0.04 : Math.exp(-(x - 0.04) * 3.2)); }
+  cannonSlide.position.z = cs;
+  cannonSlide.visible = !S.twin && FIT.cannon;
+  for (const tw of twins) {
+    tw.slide.visible = S.twin && FIT.cannon; tw.shotT += dt;
+    const x = tw.shotT;
+    tw.slide.position.z = -0.14 * rb - 0.3 * (x < 0.04 ? x / 0.04 : Math.exp(-(x - 0.04) * 3.2));
+  }
+  // missile racks elevate, hold through the ripple, settle
+  const sv = S.weap.salvo; let rk = 0;
+  if (sv) { const u = sv.t / sv.dur; rk = smooth(u / 0.13) * (1 - smooth((u - 0.8) / 0.2)); }
+  racks.forEach(R => R.pivot.rotation.x = -0.55 * rk);
+
+  // machine gun
+  mgMount.rotation.y = clamp(S.yaw * 0.4, -0.4, 0.4);
+  if (S.weap.mg) mgSpin.rotation.z += dt * 32;
+
+  // laser: charge, beam, fade
+  const lz = S.weap.laser;
+  let charge = 0, beam = 0;
+  if (lz) {
+    const u = lz.t / lz.dur;
+    charge = smooth(u / 0.3) * (1 - smooth((u - 0.82) / 0.18));
+    beam = u > 0.3 ? (u < 0.8 ? 1 : 1 - smooth((u - 0.8) / 0.2)) : 0;
+  }
+  M.lens.emissiveIntensity = 0.3 + 7 * charge;
+  chargeOrb.visible = charge > 0.02; chargeOrb.scale.setScalar(0.03 + 0.07 * charge * (0.9 + 0.2 * Math.random()));
+  beamCore.visible = beamGlow.visible = beam > 0.01;
+  const flick = 0.85 + 0.3 * Math.random();
+  beamCore.material.opacity = beam; beamGlow.material.opacity = 0.35 * beam * flick;
+  beamGlow.scale.set(flick, flick, 1);
+  laserLight.intensity = 6 * charge + 14 * beam;
+
+  // grenade pod raises, holds, settles
+  const gr = S.weap.grenade; let podE = 0;
+  if (gr) { const u = gr.t / gr.dur; podE = smooth(u / 0.22) * (1 - smooth((u - 0.62) / 0.38)); }
+  podPivot.rotation.x = -0.7 * podE;
+
+  // exhaust: powered up it idles; speed, weight and firing add load; a wreck smokes black
+  if (OV.smoke && FIT.stack) {
+    const load = clamp(S.groundV / (2.2 * sc) + 0.25 * (wt - 1) + (cannon ? 0.5 : 0), 0, 1);
+    chimney(dt, sensorLevel, load, S.dead, sc);
+  }
+
+  // center of mass from part masses
+  if (OV.com) {
+    const c = V(); let m = 0;
+    if (S.look === 'parts') {
+      for (const r of partList()) { c.addScaledVector(r.pos, r.mass); m += r.mass; }     // mass from each part's volume
+    } else {
+      // the same split the physics uses: hull at its centre, the upper body at upperPoint
+      const W = 9.4;
+      body.getWorldPosition(tmp); c.addScaledVector(tmp, W * (1 - S.upper)); m += W * (1 - S.upper);
+      body.localToWorld(upperPoint(tmp)); c.addScaledVector(tmp, W * S.upper); m += W * S.upper;
+      LEGS.forEach(L => { c.addScaledVector(L.knee.position, 0.45); m += 0.45; c.addScaledVector(tmp.copy(L.footPos).multiplyScalar(sc), 0.3); m += 0.3; });
+    }
+    c.divideScalar(m);
+    comDot.position.copy(c); comFoot.position.set(c.x, 0.012, c.z);
+    comLineGeo.attributes.position.setXYZ(0, c.x, c.y, c.z); comLineGeo.attributes.position.setXYZ(1, c.x, 0, c.z);
+    comLineGeo.attributes.position.needsUpdate = true;
+  }
+}
+
+const scorchTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 4, 64, 64, 62);
+  gr.addColorStop(0, 'rgba(255,255,255,.95)'); gr.addColorStop(0.6, 'rgba(255,255,255,.5)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+})();
+function addScorch(x, z, k) {
+  const mat = new THREE.MeshBasicMaterial({ map: scorchTex, color: 0x05070a, transparent: true, opacity: 0.7, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3 });
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(2.6 * k, 2.6 * k).rotateX(-Math.PI / 2), mat);
+  m.position.set(x, 0.004, z); scene.add(m);
+  prints.push({ m, mat, op: 0.7, zf: z + S.scrollW, age: 0 });
+}
+let jetAcc = 0;
+function jetFx(dt) {
+  const k = S.jet || 0, sc = S.sc;
+  for (const J of jetNozzles) {
+    const on = k > 0.01;
+    J.outer.visible = J.core.visible = on;
+    if (on) {
+      const f = 0.85 + 0.3 * Math.random();
+      J.outer.scale.set(f, 1.3 * f * k + 0.2, f); J.core.scale.set(1, 0.8 * f * k + 0.1, 1);
+    }
+    J.light.intensity = on ? 14 * k * (0.8 + 0.4 * Math.random()) : 0;
+  }
+  if (k < 0.01) return;
+  S.shake = Math.max(S.shake, 0.06 * k * Math.sqrt(sc));
+  jetAcc += 22 * k * dt;
+  const alt = root.position.y * M_PER_UNIT;                       // metres above the ground (rig scale applied by the parent)
+  while (jetAcc >= 1) {
+    jetAcc -= 1;
+    const J = jetNozzles[(Math.random() * 4) | 0];
+    J.mouth.getWorldPosition(ePos);
+    if (OV.smoke) puff(ePos, V(rnd(0.3), -3.2 - Math.random() * 1.5, rnd(0.3)).multiplyScalar(sc),
+      { color: 0x9a9ea6, r0: 0.08 * sc, r1: 0.6 * sc, life: 1.4 + Math.random() * 0.6, opacity: 0.32, rise: 1.2 });
+    if (OV.dust && alt < 8 * sc) {                                // the blast hits the ground and rolls outward
+      const a = Math.random() * 6.28, near = 1 - alt / (8 * sc);
+      puff(ePos.set(ePos.x, 0.08, ePos.z), V(Math.cos(a) * 3.5, 0.25, Math.sin(a) * 3.5).multiplyScalar(sc * near),
+        { color: 0x8c7d68, r0: 0.08 * sc, r1: 0.55 * sc, life: 1 + Math.random() * 0.5, opacity: 0.4 * near });
+    }
+  }
+}
+function updFx(dt) {
+  jetFx(dt);
+  for (const f of flashes) {
+    f.t -= dt; const on = f.t > 0;
+    f.g.visible = on;
+    if (on) { f.g.scale.setScalar(0.75 + Math.random() * 0.5); f.g.rotation.z = Math.random() * 6.28; }
+    f.light.intensity = on ? f.power * (f.t / f.dur) : 0;
+  }
+  for (let i = fx.length - 1; i >= 0; i--) if (!fx[i](dt)) fx.splice(i, 1);
+  updPrints(dt);
+  S.shake *= Math.exp(-9 * dt);
+}
+
+function step(dt) {
+  S.time += dt;
+  const w = S.weight, hw = heavyOf(w);
+  S.sc = damp(S.sc, sizeFor(w), 4, dt);
+  S.gw = damp(S.gw, gaitFor(), 6, dt);
+  const running = S.loop === 'run' && !isDown() && !bracing();
+  // a run needs moments with fewer feet down (or none: a flight phase). A walker whose legs cannot carry that
+  // ambles instead, like an elephant: a faster walk that never has fewer feet down than walking
+  S.amble = running && S.sim && (S.oneAtATime || (LEGS.length === 2 && S.strength * designGeom() / S.sc < 2.4));
+  const tgt = LOOP[isDown() || bracing() ? 'idle' : S.amble ? 'walk' : S.loop];
+  const heavyDuty = LEGS.length === 2 ? 0.7 : running && !S.amble ? 0.68 : LEGS.length === 6 ? 0.86 : 0.8;
+  const g = {
+    ...tgt,
+    freq: tgt.freq / Math.sqrt(S.sc) * (S.amble ? 1.35 : 1),   // Froude scaling: a pendulum twice as long swings √2 slower
+    stride: tgt.stride * (1 - 0.2 * hw) * (S.amble ? 1.15 : 1),
+    lift: tgt.lift * Math.pow(w, -0.35),                      // heavies barely clear the ground
+    duty: clamp(tgt.duty + 0.06 * (w - 1), 0.4, 0.78) * (1 - S.gw) + heavyDuty * S.gw,   // one leg at a time keeps the rest down
+    height: (tgt.height - 0.04 * clamp(w - 1, -0.5, 3) + PILLAR_RAISE * S.stance) * legK(),
+  };
+  for (const k in g) S.p[k] = damp(S.p[k], g[k], 3 / Math.sqrt(w), dt);   // momentum: heavies take longer to get going and to stop
+  // a controller does not start the next step until the body is back up and level (the relift)
+  const off = Math.abs(PH.roll) / 0.09 + Math.abs(PH.pitch) / 0.09 + Math.abs(PH.wr) / 0.25 + Math.abs(PH.wp) / 0.25 + Math.max(0, -PH.y) / (0.1 * M_PER_UNIT * S.sc);
+  // only the next lift-off waits; a foot already in the air always finishes its step
+  const swinging = LEGS.some(L => (S.phase + legOff(L, S.gw)) % 1 >= S.p.duty);
+  // hold the next lift-off until the body is back up and level; if the legs cannot stand at all, do not hold forever
+  const canStand = !S.sim || (PH.r ?? 2) >= 1;
+  // overloaded: if the body has sunk more than a quarter of its height it stops stepping and keeps every foot down,
+  // so it never drags its hull along; it settles at the hydraulic limit, and walks on if the legs win it back
+  const Hm = S.p.height * M_PER_UNIT * S.sc;
+  if (S.sim && -PH.y > 0.25 * Hm) S.overloaded = true;
+  if (S.overloaded && (!S.sim || -PH.y < 0.12 * Hm)) S.overloaded = false;
+  const tipping = S.sim && (Math.abs(PH.pitch) > CATCH_TILT || Math.abs(PH.roll) > CATCH_TILT);   // falling: step now, do not wait
+  S.rate = S.overloaded && !swinging ? 0 : swinging || (tipping && canStand) ? 1 : !canStand ? 0 : off > 1.6 ? 0 : clamp(1.6 - off, 0, 1);
+  if (tipping && !S.tipLogged) { logEvent('off balance · catch step'); S.tipLogged = true; } else if (!tipping) S.tipLogged = false;
+  S.phase = (S.phase + S.p.freq * S.rate * dt) % 1;
+  if (S.body) {
+    S.body.t += dt;
+    if (S.body.t >= S.body.dur) {
+      const n = S.body.name;
+      if (n === 'die') S.dead = true;
+      if (n === 'deploy') { S.braced = true; logEvent('deployed · braced'); }
+      if (n === 'undeploy') S.braced = false;
+      S.body = null;
+    }
+  }
+  if (S.hit) { S.hit.t += dt; if (S.hit.t >= S.hit.dur) S.hit = null; }
+  updWeapons(dt);
+  pose(dt);
+  updFx(dt);
+}
+
+/* ---------- camera and views ---------- */
+const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 120);
+const TARGET = V(0, 0.95, 0);
+const VIEWS = {
+  x:   { pos: V(-14, 0.95, 0),  up: V(0, 1, 0), rotate: false, half: 2.7, hint: 'Scroll to zoom · drag to pan' },
+  y:   { pos: V(0, 16, 0.0001), up: V(0, 0, 1), rotate: false, half: 2.9, hint: 'Scroll to zoom · drag to pan' },
+  z:   { pos: V(0, 0.95, 14),   up: V(0, 1, 0), rotate: false, half: 2.7, hint: 'Scroll to zoom · drag to pan' },
+  iso: { pos: V(9, 8.2, 9),     up: V(0, 1, 0), rotate: true,  half: 3.1, hint: 'Drag to orbit · scroll to zoom · right-drag to pan' },
+};
+let view = 'iso', half = VIEWS.iso.half, tween = null;
+cam.position.copy(VIEWS.iso.pos); cam.up.copy(VIEWS.iso.up); cam.lookAt(TARGET);
+const controls = new OrbitControls(cam, canvas);
+controls.target.copy(TARGET);
+controls.enableDamping = true; controls.dampingFactor = 0.08;
+controls.minZoom = 0.35; controls.maxZoom = 5;
+controls.update();
+
+function setView(name) {
+  const v = VIEWS[name]; if (!v) return;
+  view = name;
+  document.querySelectorAll('.views button').forEach(b => b.setAttribute('aria-pressed', b.dataset.view === name));
+  document.getElementById('hint').textContent = S.tuning ? (v.rotate ? 'Click a joint to select it · switch to X, Y or Z to drag' : 'Drag a joint · scroll to zoom · Ctrl+Z to undo') : v.hint;
+  controls.enableRotate = v.rotate;
+  controls.mouseButtons.LEFT = v.rotate ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+  const from = new THREE.Spherical().setFromVector3(tmp.subVectors(cam.position, controls.target));
+  const to = new THREE.Spherical().setFromVector3(V().subVectors(v.pos, TARGET));
+  let dTheta = to.theta - from.theta;
+  dTheta = Math.atan2(Math.sin(dTheta), Math.cos(dTheta));
+  tween = { t: 0, dur: reduceMotion ? 0.001 : 0.5, from, to, dTheta,
+    up0: cam.up.clone(), up1: v.up.clone(), tg0: controls.target.clone(), z0: cam.zoom, h0: half, h1: v.half };
+  controls.enabled = false;
+  onView.forEach(f => f());
+}
+const onView = [];
+function tweenCam(dt) {
+  if (!tween) { controls.update(); return; }
+  tween.t += dt; const e = ease(tween.t / tween.dur);
+  const s = new THREE.Spherical(
+    tween.from.radius + (tween.to.radius - tween.from.radius) * e,
+    tween.from.phi + (tween.to.phi - tween.from.phi) * e,
+    tween.from.theta + tween.dTheta * e);
+  controls.target.lerpVectors(tween.tg0, TARGET, e);
+  cam.position.setFromSpherical(s).add(controls.target);
+  cam.up.lerpVectors(tween.up0, tween.up1, e).normalize();
+  cam.zoom = tween.z0 + (1 - tween.z0) * e;
+  half = tween.h0 + (tween.h1 - tween.h0) * e;
+  cam.lookAt(controls.target);
+  if (tween.t >= tween.dur) { tween = null; controls.enabled = true; controls.update(); }
+}
+
+const deck = document.querySelector('.deck');
+const viewsEl = document.querySelector('.views');
+let camAir = 0;
+function followHeight(dt) {
+  camAir = damp(camAir, root.position.y, 4, dt);
+  if (tween) return;
+  const ty = 0.95 * S.sc * (S.p.height / LOOP.idle.height) * 0.85 + camAir * 0.6;   // follows the real body height, long legs included
+  const dy = (ty - controls.target.y) * (1 - Math.exp(-6 * dt));
+  controls.target.y += dy; cam.position.y += dy;
+}
+function frameCamera() {
+  const w = innerWidth, h = innerHeight;
+  // centre the rig between the controls at the top and the deck at the bottom
+  // on a phone an open drawer is a bottom sheet, so the rig is framed in the space above it instead of above the deck
+  const sheet = w <= 640 && [tuneEl, drawer].find(d => d.classList.contains('open'));
+  const topUI = Math.max(viewsEl.getBoundingClientRect().bottom, w <= 640 ? document.getElementById('rigLabel').getBoundingClientRect().bottom + 40 : 0) + 6;   // phones stack the rig line and the move chips under the views
+  const deckH = sheet ? h - sheet.getBoundingClientRect().top + 8 : deck.classList.contains('dim') && w <= 640 ? 0 : deck.getBoundingClientRect().height + 18;
+  const lift = Math.max(0, deckH - topUI);
+  const fullH = h + lift;
+  const base = half * Math.max(1, 0.3 + 0.75 * S.sc) * (1 + 0.25 * S.stance) + camAir * 0.55;   // pull back while airborne; zoom out less than the walker grows
+  // a tall, narrow (phone) screen widens the view until the walker's footprint fits across it
+  const avail = Math.max(120, h - topUI - deckH);                     // the band the rig is framed in
+  const top = Math.max(base * fullH / h, base * 0.8 * fullH / w, w <= 640 ? base * 0.75 * fullH / avail : 0);
+  cam.left = -top * w / fullH; cam.right = top * w / fullH; cam.top = top; cam.bottom = -top;
+  const jx = (Math.random() - .5) * S.shake * 40, jy = (Math.random() - .5) * S.shake * 40;
+  cam.setViewOffset(w, fullH, jx, lift + jy, w, h);
+  cam.updateProjectionMatrix();
+}
+function resize() { renderer.setSize(innerWidth, innerHeight, false); }
+addEventListener('resize', resize); resize();
+
+/* cursor aim: turret yaw toward the point under the mouse on the ground */
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), groundPlane = new THREE.Plane(V(0, 1, 0), 0), hitP = V();
+canvas.addEventListener('pointermove', e => {
+  if (S.aim !== 'cursor') return;
+  ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, cam);
+  if (ray.ray.intersectPlane(groundPlane, hitP)) {
+    turret.getWorldPosition(tmp);
+    S.cursorYaw = clamp(Math.atan2(hitP.x - tmp.x, hitP.z - tmp.z), -2.6, 2.6);
+  }
+});
+
+/* ---------- UI ---------- */
+const ICON = {
+  idle:   '<rect x="5" y="6" width="14" height="7" rx="2"/><path d="M7 13v6M17 13v6M5 19h4M15 19h4"/>',
+  warmup: '<path d="M12 3v8"/><path d="M6.6 7.4a7.5 7.5 0 1 0 10.8 0"/>',
+  walk:   '<path d="M9 6l6 6-6 6"/>',
+  run:    '<path d="M5 6l6 6-6 6M12 6l6 6-6 6"/>',
+  jump:   '<path d="M4 19c3-8 13-8 16 0"/><path d="M12 3v8M9 6l3-3 3 3"/>',
+  hit:    '<path d="M12 3l1.9 5.1L19 7l-3.1 4.3L19 15.5l-5.2-.9L12 20l-1.8-5.4-5.2.9 3.1-4.2L5 7l5.1 1.1z"/>',
+  die:    '<path d="M6 5l11 11"/><path d="M17 8v8H9"/><path d="M4 20h16"/>',
+  deploy: '<path d="M12 4v6"/><path d="M9 7l3 3 3-3"/><path d="M4 20l8-8 8 8"/><path d="M2.5 20h4M17.5 20h4"/>',
+  turret: '<circle cx="12" cy="12" r="6.5"/><path d="M12 2.5v5M12 16.5v5M2.5 12h5M16.5 12h5"/>',
+  reload: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4v5h-5"/>',
+  cannon: '<circle cx="7.5" cy="15.5" r="3.8"/><path d="M10 13l9-5.5 1.6 2.6-9 5.4"/>',
+  mg:     '<path d="M3 8h11M3 12h13M3 16h11"/><path d="M18 7l3 5-3 5"/>',
+  laser:  '<circle cx="5.5" cy="12" r="2.5"/><path d="M8.5 12H21M14 7.5l1.8-1.8M14 16.5l1.8 1.8"/>',
+  grenade:'<path d="M3.5 19C6 9.5 13.5 6 19 7.5"/><circle cx="19" cy="7.5" r="2.2"/>',
+  salvo:  '<path d="M4 20L13 11M8 20l9-9M12 20l8-8"/><path d="M13 7l2-2 2 2M17 7l2-2 2 2"/>',
+};
+const BODY_KEYS = [
+  ['idle', 'Idle', '1', 'Stand and breathe'], ['warmup', 'Warm up', '2', 'Power up from a crouch'],
+  ['walk', 'Walk', '3', 'Walk loop'], ['run', 'Run', '4', 'Run loop'], ['jump', 'Jump', '5', 'Crouch, jump, land'],
+  ['hit', 'Take hit', '6', 'Hit reaction, plays over the current move'], ['die', 'Die', '7', 'Die forward'],
+  ['deploy', 'Deploy', '8', 'Stop and brace for attack; press again or pick a move to pack up'],
+];
+const WEAP_KEYS = [
+  ['turret', 'Turret fire', 'Q', 'Twin turret guns'], ['reload', 'Reload', 'R', 'Reload and recover, turret recenters'],
+  ['cannon', 'Cannon', 'C', 'Main cannon'], ['mg', 'Machine gun', 'M', 'Hull machine gun'],
+  ['laser', 'Laser', 'L', 'Charge and fire the laser'], ['grenade', 'Grenade', 'G', 'Grenade launcher'],
+  ['salvo', 'Missiles', 'S', 'Missile salvo: 16 tubes rippled from both racks'],
+];
+const keyEls = {};
+function buildKeys(list, host) {
+  for (const [id, label, key, tip] of list) {
+    const b = document.createElement('button');
+    b.className = 'key'; b.title = `${tip} (${key})`;
+    b.innerHTML = `<kbd>${key}</kbd><svg viewBox="0 0 24 24">${ICON[id]}</svg><span>${label}</span>`;
+    b.addEventListener('click', () => act(id));
+    host.appendChild(b); keyEls[id] = b;
+  }
+}
+buildKeys(BODY_KEYS, document.getElementById('bodyKeys'));
+buildKeys(WEAP_KEYS, document.getElementById('weapKeys'));
+const KEYMAP = {};
+[...BODY_KEYS, ...WEAP_KEYS].forEach(([id, , k]) => KEYMAP[k.toLowerCase()] = id);
+
+addEventListener('keydown', e => {
+  if (S.tuning && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); tuneUndo(); return; }
+  if (e.metaKey || e.ctrlKey || e.altKey || e.target.matches('input')) return;
+  const k = e.key.toLowerCase();
+  if (k === 't') { setTuning(!S.tuning); return; }
+  if (k === 'escape' && S.tuning) { setTuning(false); return; }
+  if (S.tuning && KEYMAP[k]) return;
+  if (k === ' ') { e.preventDefault(); togglePause(); return; }
+  if (k === 'escape') { openDrawer(false); return; }
+  if (k === 'x' || k === 'y' || k === 'z') { setView(k); return; }
+  if (k === 'i') { setView('iso'); return; }
+  if (KEYMAP[k]) { act(KEYMAP[k]); keyEls[KEYMAP[k]].animate?.([{ transform: 'scale(.97)' }, { transform: 'none' }], 120); }
+});
+document.querySelectorAll('.views button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+
+const refreshRigLabel = () => { document.getElementById('rigLabel').textContent = `${gaitFor() ? RIGS[S.rig].heavyLabel : RIGS[S.rig].label} · ${weightName(S.weight).toLowerCase()} · about ${Math.round(heightM())} m tall`; };
+function setLegs(n) {
+  if (!RIGS[n]) return;
+  buildLegs(n);
+  if (S.tuning) buildMarkers();
+  document.querySelectorAll('[data-legs]').forEach(b => b.setAttribute('aria-pressed', +b.dataset.legs === n));
+  showKneeField();
+  refreshRigLabel();
+  if (typeof strengthNote === 'function') strengthNote();
+}
+document.querySelectorAll('[data-legs]').forEach(b => b.addEventListener('click', () => setLegs(+b.dataset.legs)));
+
+const weightEl = document.getElementById('weight'), weightOut = document.getElementById('weightOut');
+const tonsNum = document.getElementById('tonsNum');
+function setWeight(w, instant = false) {
+  S.weight = clamp(w, 5 / TONS, 1000 / TONS);
+  if (instant) { S.sc = sizeFor(S.weight); S.gw = gaitFor(); }
+  const t = Math.round(S.weight * TONS);
+  weightEl.value = t; if (document.activeElement !== tonsNum) tonsNum.value = t;
+  weightOut.textContent = `${weightName(S.weight)} · ${t} t`;
+  tonsTop.value = t; tonsTopOut.textContent = `${t} t`;
+  if (S.stanceAuto && typeof setStance === 'function') setStance(stanceAutoFor(S.weight), true);
+  refreshRigLabel();
+  strengthNote();
+  afterStance.forEach(f => f());
+}
+const tonsTop = document.getElementById('tonsTop'), tonsTopOut = document.getElementById('tonsTopOut');
+tonsTop.addEventListener('input', () => setWeight(+tonsTop.value / TONS));
+const limbTop = document.getElementById('limbTop'), limbTopOut = document.getElementById('limbTopOut');
+function setLimb(v) { S.limb = clamp(v, 0.6, 2.6); limbTop.value = S.limb; limbTopOut.textContent = `${S.limb.toFixed(1)}×`; }
+limbTop.addEventListener('input', () => setLimb(+limbTop.value));
+const stanceTop = document.getElementById('stanceTop'), stanceTopOut = document.getElementById('stanceTopOut');
+const stanceWord = v => v < 0.2 ? 'wide' : v < 0.7 ? 'mixed' : 'pillar';
+function setStance(v, auto = false) {
+  S.stanceAuto = auto; S.stance = clamp(v, 0, 1); stanceTop.value = S.stance;
+  stanceTopOut.textContent = auto ? `Auto · ${stanceWord(S.stance)}` : stanceWord(S.stance);
+  applyStance();
+  refreshRigLabel(); afterStance.forEach(f => f());
+}
+const afterStance = [];
+stanceTop.addEventListener('input', () => setStance(+stanceTop.value, false));
+stanceTop.addEventListener('dblclick', () => setStance(stanceAutoFor(S.weight), true));
+setStance(stanceAutoFor(S.weight), true);
+document.getElementById('simTop').addEventListener('change', e => { S.sim = e.target.checked; strengthNote(); refreshRigLabel(); });
+weightEl.addEventListener('input', () => setWeight(+weightEl.value / TONS));
+const strEl = document.getElementById('strength');
+function strengthNote() {
+  const r = S.strength * designGeom() / sizeFor(S.weight), n = LEGS.length, minLegs = n === 2 ? 1 : n - 1;
+  const need = n / minLegs;                                          // share each remaining leg must carry with one leg lifted
+  const el = document.getElementById('strNote');
+  if (!S.sim) { el.textContent = 'Physics is off: plain animation, with no weight, sag or balance.'; document.getElementById('strOut').textContent = `${S.strength.toFixed(1)}× at 40 t`; return; }
+  el.textContent = r < 1 ? `Too weak to stand: at ${Math.round(S.weight * TONS)} t each leg can lift ${r.toFixed(2)}× its share. Raise leg strength or lower tonnage.`
+    : r < need ? `Legs give way on every step: each can lift ${r.toFixed(2)}× its share, and ${need.toFixed(2)}× is needed with a leg in the air. It sinks and lurches until each foot lands.`
+    : `Each leg can lift ${r.toFixed(2)}× its share at ${Math.round(S.weight * TONS)} t.`;
+  document.getElementById('strOut').textContent = `${S.strength.toFixed(1)}× at 40 t`;
+}
+strEl.addEventListener('input', () => { S.strength = +strEl.value; strengthNote(); refreshRigLabel(); });
+document.getElementById('legSpeed').addEventListener('input', e => { S.legSpeed = +e.target.value; document.getElementById('legSpeedOut').textContent = `${S.legSpeed.toFixed(2)} m/s at 40 t`; });
+setTimeout(strengthNote);
+tonsNum.addEventListener('change', () => { if (+tonsNum.value > 0) setWeight(+tonsNum.value / TONS); });
+const heightNum = document.getElementById('heightNum'), heightOut = document.getElementById('heightOut');
+function showHeight() {
+  const h = heightM();
+  heightOut.textContent = S.sizeFollows ? `${h.toFixed(1)} m, from weight` : `${S.heightM.toFixed(1)} m`;
+  if (S.sizeFollows && document.activeElement !== heightNum) heightNum.value = h.toFixed(1);
+}
+function setHeight(m) {                                            // a fixed height: size no longer follows weight
+  S.heightM = clamp(m, 2, 80); S.sizeFollows = false;
+  document.getElementById('sizeFollows').checked = false; heightNum.disabled = false; heightNum.value = S.heightM;
+  showHeight(); refreshRigLabel(); strengthNote();
+}
+document.getElementById('rigLabel').addEventListener('click', () => document.querySelector('.brand').classList.toggle('open'));   // phones fold the rig controls into this line
+document.getElementById('sizeFollows').addEventListener('change', e => {
+  if (e.target.checked) { S.sizeFollows = true; heightNum.disabled = true; showHeight(); refreshRigLabel(); strengthNote(); }
+  else setHeight(+heightM().toFixed(1));
+});
+heightNum.addEventListener('change', () => { if (+heightNum.value > 0) setHeight(+heightNum.value); });
+afterStance.push(showHeight);
+setTimeout(showHeight);
+setLegs(4);
+
+const pauseBtn = document.getElementById('pause');
+function togglePause() {
+  S.paused = !S.paused;
+  pauseBtn.setAttribute('aria-pressed', S.paused);
+  pauseBtn.querySelector('span').textContent = S.paused ? 'Play' : 'Pause';
+  document.getElementById('pauseIcon').setAttribute('d', S.paused ? 'M8 5l11 7-11 7z' : 'M9 6v12M15 6v12');
+}
+pauseBtn.addEventListener('click', togglePause);
+
+const drawer = document.getElementById('drawer'), advBtn = document.getElementById('adv');
+function openDrawer(open = !drawer.classList.contains('open')) {
+  if (open && S.tuning) setTuning(false); drawer.classList.toggle('open', open); advBtn.setAttribute('aria-expanded', open); }
+advBtn.addEventListener('click', () => openDrawer());
+document.getElementById('close').addEventListener('click', () => openDrawer(false));
+
+const bindRange = (id, outId, fmt, set) => {
+  const el = document.getElementById(id), out = document.getElementById(outId);
+  el.addEventListener('input', () => { set(+el.value); out.textContent = fmt(+el.value); });
+};
+bindRange('speed', 'speedOut', v => v.toFixed(2) + '×', v => S.speed = v);
+bindRange('stride', 'strideOut', v => Math.round(v * 100) + '%', v => S.strideScale = v);
+bindRange('lift', 'liftOut', v => Math.round(v * 100) + '%', v => S.liftScale = v);
+document.querySelectorAll('#aim button').forEach(b => b.addEventListener('click', () => {
+  S.aim = b.dataset.aim;
+  document.querySelectorAll('#aim button').forEach(x => x.setAttribute('aria-pressed', x === b));
+}));
+const OV = { person: true, grid: true, shadow: true, feet: false, com: false, glue: true, prints: true, toes: true, smoke: true, steam: true, dust: true, events: false };
+const bindTog = (id, key, apply) => document.getElementById(id).addEventListener('change', e => { OV[key] = e.target.checked; apply?.(e.target.checked); });
+bindTog('ovGrid', 'grid', v => grid.visible = v);
+bindTog('ovPerson', 'person');
+bindTog('ovShadow', 'shadow', v => { sun.castShadow = v; shadowPlane.visible = v; });
+bindTog('ovFeet', 'feet');
+bindTog('ovCom', 'com', v => [comDot, comLine, comFoot].forEach(o => o.visible = v));
+bindTog('ftGlue', 'glue');
+bindTog('ftPrints', 'prints', v => { if (!v) while (prints.length) dropPrint(0); });
+bindTog('ftToes', 'toes');
+document.getElementById('jetsOn').addEventListener('change', e => { S.jets = e.target.checked; });
+const bindJet = (id, key, out, fmt) => document.getElementById(id).addEventListener('input', e => { S[key] = +e.target.value; document.getElementById(out).textContent = fmt(S[key]); });
+bindJet('jetTW', 'jetTW', 'jetTWOut', v => `${v.toFixed(2)}× its weight`);
+bindJet('jetBurn', 'jetBurn', 'jetBurnOut', v => `${v.toFixed(1)} s at 40 t`);
+bindJet('jetFwd', 'jetForward', 'jetFwdOut', v => `${v} m/s at 40 t`);
+bindTog('fxSmoke', 'smoke'); bindTog('fxSteam', 'steam'); bindTog('fxDust', 'dust');
+bindTog('ovEvents', 'events', v => { if (!v) { events.length = 0; evEl.innerHTML = ''; } });
+document.getElementById('reset').addEventListener('click', () => {
+  S.weap = {}; S.hit = null; S.dead = false; S.body = null; S.loop = 'idle';
+});
+
+const LABEL = Object.fromEntries([...BODY_KEYS, ...WEAP_KEYS].map(([id, l]) => [id, l]));
+LABEL.undeploy = 'Pack up';
+const nowEl = document.getElementById('now'), evEl = document.getElementById('events');
+let lastNow = '';
+function updateUI() {
+  const down = isDown();
+  for (const id of Object.keys(LOOP)) {
+    const on = !down && !bracing() && S.loop === id;
+    keyEls[id].classList.toggle('on', on); keyEls[id].setAttribute('aria-pressed', on);
+  }
+  {
+    const a = S.body?.name === 'deploy' || S.body?.name === 'undeploy' ? S.body : null;
+    keyEls.deploy.classList.toggle('on', S.braced && !a && !down);
+    keyEls.deploy.classList.toggle('run', !!a);
+    keyEls.deploy.style.setProperty('--p', a ? (a.name === 'deploy' ? a.t / a.dur : 1 - a.t / a.dur) : 0);
+    keyEls.deploy.disabled = down;
+  }
+  for (const id of ['warmup', 'jump', 'die']) {
+    const a = S.body?.name === id ? S.body : null;
+    keyEls[id].classList.toggle('run', !!a || (id === 'die' && S.dead));
+    keyEls[id].style.setProperty('--p', a ? a.t / a.dur : (id === 'die' && S.dead ? 1 : 0));
+  }
+  keyEls.hit.classList.toggle('run', !!S.hit);
+  keyEls.hit.style.setProperty('--p', S.hit ? S.hit.t / S.hit.dur : 0);
+  keyEls.hit.disabled = down;
+  for (const [id] of WEAP_KEYS) {
+    const a = S.weap[id];
+    keyEls[id].classList.toggle('run', !!a);
+    keyEls[id].style.setProperty('--p', a ? a.t / a.dur : 0);
+    keyEls[id].disabled = down;
+    const fit = fittedFor(id); if (keyEls[id].hidden === fit) keyEls[id].hidden = !fit;   // only what this walker carries
+  }
+  let html = S.dead ? '<span class="chip dead">Down</span>' : S.braced && !S.body ? '<span class="chip w">Deployed</span>' : `<span class="chip">${S.amble ? 'Run · amble, too heavy to run' : LABEL[S.loop]}</span>`;
+  if (S.body && !S.dead) html += `<span class="chip">${LABEL[S.body.name]}</span>`;
+  if (S.overloaded) html += '<span class="chip dead">Overloaded</span>';
+  if (S.hit) html += '<span class="chip">Take hit</span>';
+  for (const id of Object.keys(S.weap)) html += `<span class="chip w">${LABEL[id]}</span>`;
+  if (S.paused) html += '<span class="chip w">Paused</span>';
+  if (html !== lastNow) { nowEl.innerHTML = html; lastNow = html; }
+  if (OV.events) evEl.innerHTML = events.filter(e => S.time - e.t < 2.5)
+    .map(e => `<span style="opacity:${(1 - (S.time - e.t) / 2.5).toFixed(2)}"><em>${e.t.toFixed(2)}s</em>${e.text}</span>`).join('');
+}
+
+/* ---------- loop ---------- */
+/* ---------- joint tuning: drag hips, knees, feet and the turret pivot in X, Y or Z ---------- */
+const TUNE_COLORS = { hip: 0x8fd3c8, knee: 0xf2a541, foot: 0xe6ebf1, turret: 0xb89cff, mount: 0xff8f6b };
+const markerGeo = new THREE.SphereGeometry(0.075, 16, 12);
+const markers = [];
+let drag = null, selected = null;
+const undoStack = [];
+const tuneEl = document.getElementById('tune'), tuneBtn = document.getElementById('tuneBtn'), tuneSel = document.getElementById('tuneSel');
+const VIEW_NORMAL = { x: V(1, 0, 0), y: V(0, 1, 0), z: V(0, 0, 1) };
+
+function buildMarkers() {
+  markers.forEach(m => { scene.remove(m.mesh); m.mesh.material.dispose(); }); markers.length = 0; selected = null;
+  const add = (kind, leg, key) => {
+    const mesh = new THREE.Mesh(markerGeo, new THREE.MeshBasicMaterial({ color: TUNE_COLORS[kind], depthTest: false, transparent: true }));
+    mesh.renderOrder = 20; scene.add(mesh); markers.push({ mesh, kind, leg, key });
+  };
+  if (tuneStep === 'joints') { LEGS.forEach(L => { add('hip', L); add('knee', L); add('foot', L); }); add('turret', null); }
+  if (tuneStep === 'mounts') for (const k in MOUNTS) if (k === 'guns' ? FIT.cannon || FIT.guns || FIT.laser : FIT[k]) add('mount', null, k);
+  showSel();
+}
+function placeMarkers() {
+  for (const m of markers) {
+    if (m.kind === 'hip') m.mesh.position.copy(m.leg.hip).applyMatrix4(body.matrixWorld);
+    else if (m.kind === 'knee') m.mesh.position.copy(m.leg.knee.position);
+    else if (m.kind === 'foot') m.mesh.position.copy(m.leg.footG.position);
+    else if (m.kind === 'mount') MOUNTS[m.key].node.getWorldPosition(m.mesh.position);
+    else turret.getWorldPosition(m.mesh.position);
+    const sel = selected === m;
+    m.mesh.scale.setScalar((sel ? 1.55 : 1) * S.sc);
+    m.mesh.material.opacity = sel ? 1 : 0.8;
+  }
+}
+const f2 = v => (v >= 0 ? ' ' : '') + v.toFixed(2);
+function showSel() {
+  const mountSel = document.getElementById('mountSel');
+  if (!selected) { tuneSel.innerHTML = 'Select a joint'; mountSel.innerHTML = 'Select a mount'; return; }
+  const m = selected, L = m.leg;
+  if (m.kind === 'mount') {
+    const M_ = MOUNTS[m.key], p = M_.node.position, M_P = M_.node.parent === turret ? 'upper body' : 'hull';
+    mountSel.innerHTML = `<b>${M_.label}</b>${M_.note ? ` · ${M_.note}` : ''}<br>on the ${M_P} · x ${f2(p.x)} · y ${f2(p.y)} · z ${f2(p.z)}`; return;
+  }
+  if (m.kind === 'hip') tuneSel.innerHTML = `<b>${L.n} hip</b><br>x ${f2(L.hip.x)} · y ${f2(L.hip.y)} · z ${f2(L.hip.z)}`;
+  if (m.kind === 'knee') tuneSel.innerHTML = `<b>${L.n} knee</b><br>upper leg ${L.up.toFixed(2)} · lower leg ${L.lo.toFixed(2)}`;
+  if (m.kind === 'foot') tuneSel.innerHTML = `<b>${L.n} foot</b><br>x ${f2(L.rest.x)} · z ${f2(L.rest.z)}`;
+  if (m.kind === 'turret') { const t = turret.position; tuneSel.innerHTML = `<b>Turret pivot</b><br>x ${f2(t.x)} · y ${f2(t.y)} · z ${f2(t.z)}`; }
+}
+const mirrorOf = L => LEGS.find(o => o !== L && o.sz === L.sz && o.sx === -L.sx);
+const kH = V(), kF = V(), kA = V(), kD = V();
+function moveJoint(m, p) {
+  const sc = S.sc, sym = document.getElementById('tuneSym').checked, L = m.leg, o = L && sym ? mirrorOf(L) : null;
+  if (m.kind === 'mount') {
+    const node = MOUNTS[m.key].node, q = node.parent.worldToLocal(p.clone());
+    setMount(m.key, [MOUNTS[m.key].pair ? Math.abs(q.x) : q.x, q.y, q.z]);
+  } else if (m.kind === 'turret') {
+    const q = body.worldToLocal(p.clone());
+    turret.position.set(sym ? 0 : q.x, clamp(q.y, 0.15, 0.6), clamp(q.z, -0.7, 0.6));
+  } else if (m.kind === 'hip') {
+    const q = body.worldToLocal(p.clone());
+    L.hip.copy(q); L.hipMesh.position.copy(q);
+    if (o) { o.hip.set(-q.x, q.y, q.z); o.hipMesh.position.copy(o.hip); }
+  } else if (m.kind === 'foot') {
+    L.rest.set(p.x / sc, 0, p.z / sc);
+    if (o) o.rest.set(-L.rest.x, 0, L.rest.z);
+  } else if (m.kind === 'knee') {
+    kH.copy(L.hip).applyMatrix4(body.matrixWorld); kF.copy(L.footG.position);
+    L.up = Math.max(0.25, kA.subVectors(p, kH).length() / sc);
+    L.lo = Math.max(0.25, kD.subVectors(kF, p).length() / sc);
+    const dir = kD.subVectors(kF, kH).normalize();
+    kA.subVectors(p, kH).addScaledVector(dir, -kA.dot(dir));
+    if (kA.length() > 1e-4) L.hint.copy(kA.normalize());
+    if (o) { o.up = L.up; o.lo = L.lo; o.hint.set(-L.hint.x, L.hint.y, L.hint.z); }
+  }
+}
+const setNdc = e => ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+canvas.addEventListener('pointerdown', e => {
+  if (!S.tuning) return;
+  setNdc(e); ray.setFromCamera(ndc, cam);
+  const hit = ray.intersectObjects(markers.map(m => m.mesh))[0];
+  if (!hit) {
+    if (tuneStep === 'blocks') {
+      // your own blocks win over the hull and leg blocks they overlap, and the selected one wins over the rest
+      const hits = ray.intersectObjects(allBlocks()), same = h => blkSel && h.object.userData.sel?.kind === blkSel.kind && h.object.userData.sel?.leg === blkSel.leg && h.object.userData.sel?.part === blkSel.part;
+      const bh = hits.find(same) || hits.find(h => h.object.userData.sel?.kind === 'extra') || hits[0];
+      if (bh) {
+        blkSel = bh.object.userData.sel; showBlockSel();
+        const e_ = blkSel.kind === 'extra' && (BLK.extra || []).find(x => x.id === blkSel.leg);
+        if (e_ && view !== 'iso') {                                   // drag a free block in the plane of the view
+          e.stopImmediatePropagation(); e.preventDefault();
+          undoStack.push(snapshot()); if (undoStack.length > 60) undoStack.shift();
+          const wp = bh.object.getWorldPosition(V());
+          const off = wp.clone().sub(bh.point), nrm = VIEW_NORMAL[view]; off.addScaledVector(nrm, -off.dot(nrm));   // grab offset within the view's plane
+          drag = { extra: e_, side: blkSel.side, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(nrm, wp), off };
+          try { canvas.setPointerCapture(e.pointerId); } catch {} controls.enabled = false;
+        }
+      }
+    }
+    return;
+  }
+  selected = markers.find(m => m.mesh === hit.object); showSel();
+  if (view === 'iso') return;                                  // ISO selects; X, Y and Z drag
+  e.stopImmediatePropagation(); e.preventDefault();
+  undoStack.push(snapshot()); if (undoStack.length > 60) undoStack.shift();
+  drag = { m: selected, plane: new THREE.Plane().setFromNormalAndCoplanarPoint(VIEW_NORMAL[view], selected.mesh.position) };
+  try { canvas.setPointerCapture(e.pointerId); } catch {} controls.enabled = false;
+}, { capture: true });
+canvas.addEventListener('pointermove', e => {
+  if (!drag) return;
+  setNdc(e); ray.setFromCamera(ndc, cam);
+  if (!ray.ray.intersectPlane(drag.plane, hitP)) return;
+  if (drag.extra) {
+    const ex = drag.extra, par = ex.on === 'turret' ? turret : body, q = par.worldToLocal(hitP.add(drag.off));
+    ex.x = drag.side === 'b' ? -q.x : q.x; ex.y = q.y; ex.z = q.z;
+    showExtraPos(ex);
+  } else { moveJoint(drag.m, hitP); showSel(); }
+});
+const endDrag = () => { if (!drag) return; drag = null; controls.enabled = !tween; TUNED[S.rig] = snapshot(); };
+canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
+
+function tuneUndo() { const sn = undoStack.pop(); if (sn) { applySnap(sn); TUNED[S.rig] = snapshot(); showSel(); showBlockSel(); } }
+
+let tuneStep = 'joints', lookBeforeBlocks = 'art';
+const allBlocks = () => [bodyBlk, turretBlk, ...extraMeshes(), ...LEGS.flatMap(L => Object.values(L.bm))].filter(Boolean);
+function setLook(look) { S.look = look; applyLook(); }
+const steps = [...document.querySelectorAll('details.step')];
+steps.forEach(d => d.addEventListener('toggle', () => { if (d.open) openStep(d.dataset.step); }));
+function openStep(name) {
+  tuneStep = name;
+  steps.forEach(d => { if (d.dataset.step !== name && d.open) d.open = false; });
+  // blocks and mounts are traced over the drawing, so both show the blocks (or the parts, once made)
+  if (name === 'blocks' || name === 'mounts') { const want = name === 'mounts' && S.converted ? 'parts' : 'blocks'; if (S.look !== want) { lookBeforeBlocks = S.look; setLook(want); } if (name === 'blocks') showBlockSel(); }
+  else if (S.look === 'blocks') setLook(S.converted ? 'parts' : 'art');
+  if (name === 'parts') showParts();
+  if (name === 'mounts') showFit();
+  if (S.tuning) buildMarkers();
+}
+const SHAPES = { seg: ['box', 'cyl', 'capsule'], foot: ['box', 'cyl'], body: ['box', 'cyl'], turret: ['box', 'cyl'], extra: ['box', 'cyl'] };
+const SHAPE_NAME = { box: 'Box', cyl: 'Cylinder', capsule: 'Capsule' };
+const FIELDS = {
+  seg:    [['w', 'Width', 0.04, 0.6], ['d', 'Depth', 0.04, 0.6], ['ext', 'Overhang past joints', 0, 0.3]],
+  foot:   [['w', 'Width', 0.1, 0.8], ['l', 'Length', 0.1, 0.9], ['h', 'Height', 0.03, 0.4]],
+  body:   [['w', 'Width', 0.2, 3.2], ['h', 'Height', 0.1, 1.6], ['l', 'Length', 0.3, 3.6]],
+  turret: [['w', 'Width', 0.1, 2.2], ['h', 'Height', 0.05, 1.4], ['l', 'Length', 0.1, 2.4]],
+  extra:  [['w', 'Width', 0.02, 3], ['h', 'Height', 0.02, 3], ['l', 'Length', 0.02, 4], ['ry', 'Turn (°)', -180, 180, 1], ['rx', 'Tilt (°)', -90, 90, 1]],
+};
+const PART_LABEL = { upper: 'upper leg', lower: 'lower leg', foot: 'foot' };
+let blkScope = 'all';
+document.querySelectorAll('#blkScope button').forEach(b => b.addEventListener('click', () => {
+  blkScope = b.dataset.scope; document.querySelectorAll('#blkScope button').forEach(x => x.setAttribute('aria-pressed', x === b));
+}));
+function specsFor(sel) {
+  if (sel.kind === 'extra') { const e = (BLK.extra || []).find(x => x.id === sel.leg); return e ? [e] : []; }
+  if (sel.kind === 'body') return [BLK.body];
+  if (sel.kind === 'turret') return [BLK.turret];
+  const L = LEGS.find(l => l.n === sel.leg); if (!L) return [];
+  if (blkScope === 'all') return LEGS.map(l => l.blk[sel.part]);
+  if (blkScope === 'pair') { const o = mirrorOf(L); return o ? [L.blk[sel.part], o.blk[sel.part]] : [L.blk[sel.part]]; }
+  return [L.blk[sel.part]];
+}
+function showBlockSel() {
+  const selEl = document.getElementById('blkSel'), shapeEl = document.getElementById('blkShape'), fieldsEl = document.getElementById('blkFields');
+  const exEl = document.getElementById('blkExtra'), scopeEl = document.getElementById('blkScopeField');
+  const spec = blkSel && specsFor(blkSel)[0];
+  if (!blkSel || !spec) { blkSel = null; selEl.innerHTML = 'Select a block, or add one'; shapeEl.innerHTML = ''; fieldsEl.innerHTML = ''; exEl.hidden = true; scopeEl.hidden = true; return; }
+  const isEx = blkSel.kind === 'extra';
+  exEl.hidden = !isEx; scopeEl.hidden = blkSel.kind !== 'seg' && blkSel.kind !== 'foot';
+  const name = isEx ? `Block ${BLK.extra.indexOf(spec) + 1}` : blkSel.kind === 'body' ? 'Hull' : blkSel.kind === 'turret' ? 'Upper body' : `${blkSel.leg} ${PART_LABEL[blkSel.part]}`;
+  selEl.innerHTML = `<b>${name}</b><br>${SHAPE_NAME[spec.shape]}${isEx ? `<span id="exPos"></span>` : ''}`;
+  if (isEx) {
+    showExtraPos(spec);
+    document.querySelectorAll('#blkOn button').forEach(b => b.setAttribute('aria-pressed', b.dataset.on === (spec.on || 'body')));
+    document.getElementById('blkMirror').checked = !!spec.mirror;
+  }
+  shapeEl.innerHTML = SHAPES[blkSel.kind].map(sh => `<button data-shape="${sh}" aria-pressed="${spec.shape === sh}">${SHAPE_NAME[sh]}</button>`).join('');
+  shapeEl.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    undoStack.push(snapshot()); specsFor(blkSel).forEach(sp => sp.shape = b.dataset.shape); TUNED[S.rig] = snapshot(); showBlockSel();
+  }));
+  const fmtF = (k, v) => k === 'ry' || k === 'rx' ? `${Math.round(v)}°` : `${(v * M_PER_UNIT * S.sc).toFixed(2)} m`;   // sizes shown in metres
+  fieldsEl.innerHTML = FIELDS[blkSel.kind].map(([k, label, min, max, step = 0.01]) =>
+    `<label class="field"><div class="top">${label.replace(' (°)', '')} <output>${fmtF(k, spec[k])}</output></div><input type="range" data-k="${k}" min="${min}" max="${max}" step="${step}" value="${spec[k]}"></label>`).join('');
+  fieldsEl.querySelectorAll('input').forEach(inp => {
+    inp.addEventListener('pointerdown', () => undoStack.push(snapshot()));
+    inp.addEventListener('input', () => {
+      specsFor(blkSel).forEach(sp => sp[inp.dataset.k] = +inp.value);
+      inp.closest('.field').querySelector('output').textContent = fmtF(inp.dataset.k, +inp.value);
+    });
+    inp.addEventListener('change', () => { TUNED[S.rig] = snapshot(); });
+  });
+}
+function showExtraPos(e) {
+  const el = document.getElementById('exPos'); if (!el) return;
+  el.textContent = ` on the ${e.on === 'turret' ? 'upper body' : 'hull'}${e.mirror ? ', mirrored' : ''} · x ${f2(e.x)} · y ${f2(e.y)} · z ${f2(e.z)}`;
+}
+// free blocks: add, carry, mirror, duplicate, delete
+let exSeq = 1;
+function newExtra(shape, from) {
+  BLK.extra ||= [];
+  const n = BLK.extra.length, e = from ? { ...from, x: from.mirror ? from.x : from.x + 0.15, z: from.z + 0.15 }
+    : { shape, on: 'body', x: 0, y: BLK.body.h / 2 + 0.2 + 0.06 * (n % 5), z: 0.3 - 0.12 * (n % 5), w: 0.5, h: 0.3, l: 0.5, ry: 0, rx: 0, mirror: false };
+  while (BLK.extra.some(x => x.id === `b${exSeq}`)) exSeq++;
+  e.id = `b${exSeq++}`;
+  return e;
+}
+function addExtra(e) {
+  undoStack.push(snapshot()); BLK.extra.push(e); TUNED[S.rig] = snapshot();
+  blkSel = { kind: 'extra', part: 'extra', leg: e.id, side: 'a' }; showBlockSel();
+}
+document.getElementById('addBox').addEventListener('click', () => addExtra(newExtra('box')));
+document.getElementById('addCyl').addEventListener('click', () => addExtra(newExtra('cyl')));
+document.getElementById('blkDup').addEventListener('click', () => { const e = specsFor(blkSel || {})[0]; if (blkSel?.kind === 'extra' && e) addExtra(newExtra(e.shape, e)); });
+document.getElementById('blkDel').addEventListener('click', () => {
+  if (blkSel?.kind !== 'extra') return;
+  undoStack.push(snapshot()); BLK.extra = BLK.extra.filter(x => x.id !== blkSel.leg); TUNED[S.rig] = snapshot(); blkSel = null; showBlockSel();
+});
+document.querySelectorAll('#blkOn button').forEach(b => b.addEventListener('click', () => {
+  const e = blkSel?.kind === 'extra' && specsFor(blkSel)[0]; if (!e || e.on === b.dataset.on) return;
+  undoStack.push(snapshot());
+  // keep it where it is in the world while it changes parent
+  const from = e.on === 'turret' ? turret : body, to = b.dataset.on === 'turret' ? turret : body;
+  const q = to.worldToLocal(from.localToWorld(V(e.x, e.y, e.z)));
+  Object.assign(e, { on: b.dataset.on, x: q.x, y: q.y, z: q.z }); TUNED[S.rig] = snapshot(); showBlockSel();
+}));
+document.getElementById('blkMirror').addEventListener('change', ev => {
+  const e = blkSel?.kind === 'extra' && specsFor(blkSel)[0]; if (!e) return;
+  undoStack.push(snapshot()); e.mirror = ev.target.checked;
+  if (e.mirror && Math.abs(e.x) < 0.05) e.x = 0.4;                 // a mirrored pair needs to sit off the centre line
+  TUNED[S.rig] = snapshot(); showBlockSel();
+});
+document.getElementById('blkSee').addEventListener('change', ev => {     // see-through, to trace the drawing behind
+  for (const m of [blockMat, blockSelMat]) { m.transparent = ev.target.checked; m.opacity = ev.target.checked ? 0.5 : 1; m.depthWrite = !ev.target.checked; m.needsUpdate = true; }
+});
+// mounts: what the walker carries
+function showFit() {
+  const el = document.getElementById('fitList');
+  el.innerHTML = Object.entries(FIT_LABEL).map(([k, l]) => `<label class="tog">${l} <input type="checkbox" data-fit="${k}" ${FIT[k] ? 'checked' : ''}></label>`).join('');
+  el.querySelectorAll('input').forEach(inp => inp.addEventListener('change', () => {
+    undoStack.push(snapshot()); FIT[inp.dataset.fit] = inp.checked; applyFit();
+    if (inp.dataset.fit === 'jets') { S.jets = inp.checked; document.getElementById('jetsOn').checked = inp.checked; }
+    for (const id in S.weap) if (!fittedFor(id)) delete S.weap[id];
+    TUNED[S.rig] = snapshot(); if (S.tuning) buildMarkers();
+  }));
+}
+function showParts() {
+  const note = document.getElementById('partsNote'), list = document.getElementById('partsList');
+  if (!S.converted) { note.textContent = 'Make parts from the blocks first.'; list.innerHTML = ''; return; }
+  note.textContent = 'These parts are the vehicle now. Each is one node with its pivot at its joint; mass and center of mass come from their volumes, and they export as the rig and its hit boxes.';
+  const rows = partList(), group = {};
+  rows.forEach(r => { const k = r.part === 'body' ? 'Hull' : r.part === 'turret' ? 'Upper body' : PART_LABEL[r.part]; (group[k] ||= { n: 0, share: 0 }); group[k].n++; group[k].share += r.share; });
+  list.innerHTML = '<table class="plist">' + Object.entries(group).map(([k, g]) =>
+    `<tr><td>${k[0].toUpperCase() + k.slice(1)}${g.n > 1 ? ` × ${g.n}` : ''}</td><td>${Math.round(g.share * 100)}% of mass</td></tr>`).join('') + '</table>';
+}
+document.getElementById('makeParts').addEventListener('click', () => {
+  S.converted = true; setLook('parts'); TUNED[S.rig] = snapshot();
+  { const rows = partList(), sum = p => rows.filter(r => r.part === p).reduce((a, r) => a + r.mass, 0), hu = sum('body'), tu = sum('turret');
+    setUpper(tu / (hu + tu)); }                                   // the upper body's share now comes from the part volumes
+  const d = steps.find(x => x.dataset.step === 'parts'); d.open = true; openStep('parts');
+});
+document.getElementById('showArt').addEventListener('change', e => { if (S.converted) setLook(e.target.checked ? 'art' : 'parts'); });
+function setTuning(on) {
+  S.tuning = on;
+  tuneBtn.setAttribute('aria-pressed', on); tuneEl.classList.toggle('open', on);
+  document.getElementById('hint').style.visibility = on ? 'hidden' : '';
+  deck.classList.toggle('dim', on);
+  if (on) {
+    openDrawer(false);
+    Object.assign(S, { loop: 'idle', body: null, weap: {}, hit: null, braced: false, dead: false });
+    S.p = { ...LOOP.idle, height: (LOOP.idle.height - 0.04 * clamp(S.weight - 1, -0.5, 3) + PILLAR_RAISE * S.stance) * legK() };   // the standing pose, as walking would settle to it
+    buildMarkers();
+    if (view === 'iso') setView('x'); else setView(view);
+    const first = steps[0]; if (!first.open) first.open = true; openStep('joints');
+  } else {
+    markers.forEach(m => { scene.remove(m.mesh); m.mesh.material.dispose(); }); markers.length = 0;
+    selected = null; drag = null; blkSel = null; setView(view);
+    if (S.look === 'blocks') setLook(S.converted ? 'parts' : 'art');
+  }
+}
+tuneBtn.addEventListener('click', () => setTuning(!S.tuning));
+document.getElementById('tuneDone').addEventListener('click', () => setTuning(false));
+document.getElementById('tuneUndo').addEventListener('click', tuneUndo);
+document.getElementById('tuneReset').addEventListener('click', () => {
+  undoStack.push(snapshot()); delete TUNED[S.rig]; BLK = JSON.parse(JSON.stringify(BLK_HOME));
+  for (const k in MOUNT_HOME) setMount(k, MOUNT_HOME[k]); FIT = { ...FIT_HOME }; applyFit(); showFit();
+  buildLegs(S.rig); buildMarkers(); blkSel = null; showBlockSel();
+});
+document.getElementById('tuneExport').addEventListener('click', () => {
+  const data = { schema: 'mm-model-forge/walker-rig@1', legs: S.rig, weight: S.weight, joints: snapshot(), madeParts: S.converted,
+    body: { legLook: S.legStyle, kneesForward: S.kneeFwd, upperShare: S.upper, cannon: S.twin ? 'twin' : 'single', kneeRams: S.rods, heightM: S.sizeFollows ? null : S.heightM, limbs: S.limb, stance: S.stance, tons: Math.round(S.weight * TONS) },
+    parts: S.converted ? partList().map(r => ({ name: r.name, part: r.part, massShare: +r.share.toFixed(4) })) : [],
+    references: Object.fromEntries(Object.entries(REF).filter(([, R]) => R.mesh && R.src).map(([k, R]) => [k, refProps(R)])) };   // the drawings travel with the rig
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  a.download = `walker-rig-${S.rig}-legs.json`; a.click(); URL.revokeObjectURL(a.href);
+});
+const tuneFile = document.getElementById('tuneFile');
+document.getElementById('tuneImport').addEventListener('click', () => tuneFile.click());
+tuneFile.addEventListener('change', async () => {
+  const f = tuneFile.files[0]; tuneFile.value = ''; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!data.joints?.legs || !RIGS[data.legs]) throw new Error('not a walker rig file');
+    undoStack.push(snapshot());
+    TUNED[data.legs] = data.joints; setLegs(data.legs);
+    const bd = data.body;
+    if (bd) {
+      if (bd.legLook) setLegStyle(bd.legLook);
+      S.kneeFwd = !!bd.kneesForward; setKnee(S.kneeFwd);
+      if (bd.upperShare != null) setUpper(bd.upperShare);
+      setTwin(bd.cannon === 'twin'); setRods(!!bd.kneeRams);
+      if (bd.tons) setWeight(bd.tons / TONS, true);
+      if (bd.limbs) setLimb(bd.limbs);
+      if (bd.stance != null) setStance(bd.stance, false);
+      if (bd.heightM) setHeight(bd.heightM);
+    }
+    for (const [k, R] of Object.entries(data.references || {})) if (REF[k] && R.src) await loadRef(k, R.src, R.name, R, false);
+    showFit(); blkSel = null; showBlockSel();
+    if (data.madeParts) { S.converted = true; setLook('parts'); }
+    if (S.tuning) buildMarkers();
+  } catch (err) { tuneSel.innerHTML = `<b>Could not import</b><br>${err.message}. Pick a file saved with Export rig.`; }
+});
+
+/* ---------- upper body and loadout ---------- */
+const upperEl = document.getElementById('upper'), upperOut = document.getElementById('upperOut');
+function setUpper(v) { S.upper = clamp(v, 0.05, 0.65); upperEl.value = S.upper; upperOut.textContent = `${Math.round(S.upper * 100)}% of the body`; }
+upperEl.addEventListener('input', () => setUpper(+upperEl.value));
+function setTwin(on) {
+  S.twin = on; delete S.weap.cannon;
+  document.querySelectorAll('#cannonKind button').forEach(b => b.setAttribute('aria-pressed', (b.dataset.cannon === 'twin') === on));
+}
+document.querySelectorAll('#cannonKind button').forEach(b => b.addEventListener('click', () => setTwin(b.dataset.cannon === 'twin')));
+document.getElementById('recoil').addEventListener('input', e => { S.recoil = +e.target.value; document.getElementById('recoilOut').textContent = `${S.recoil.toFixed(2)} N·s per kg`; });
+const rodsEl = document.getElementById('rodsOn');
+function setRods(on) { S.rods = on; rodsEl.checked = on; }
+rodsEl.addEventListener('change', () => setRods(rodsEl.checked));
+
+/* ---------- leg look: thin spider legs or armoured mech legs; the joints stay where they are ---------- */
+function setLegStyle(style) {
+  if (style === S.legStyle) return;
+  const sn = snapshot();
+  S.legStyle = style;
+  buildLegs(S.rig); applySnap(sn); applyLook();
+  if (TUNED[S.rig]) TUNED[S.rig] = snapshot();
+  document.querySelectorAll('#legLook button').forEach(b => b.setAttribute('aria-pressed', b.dataset.look === style));
+  if (S.tuning) buildMarkers();
+}
+document.querySelectorAll('#legLook button').forEach(b => b.addEventListener('click', () => setLegStyle(b.dataset.look)));
+
+/* ---------- knees: which way a biped's knees bend ---------- */
+function setKnee(fwd) {
+  S.kneeFwd = fwd;
+  document.querySelectorAll('#kneeDir button').forEach(b => b.setAttribute('aria-pressed', (b.dataset.knee === 'fwd') === fwd));
+  if (S.rig === 2) {
+    const s = fwd ? 1 : -1;
+    LEGS.forEach(L => { L.hint.z = Math.abs(L.hint.z) > 0.05 ? s * Math.abs(L.hint.z) : s; L.hint.normalize(); });
+    if (TUNED[2]) TUNED[2] = snapshot();
+  }
+  refreshRigLabel();
+}
+document.querySelectorAll('#kneeDir button').forEach(b => b.addEventListener('click', () => { undoStack.push(snapshot()); setKnee(b.dataset.knee === 'fwd'); }));
+function showKneeField() {
+  const two = S.rig === 2;
+  document.querySelectorAll('#kneeDir button').forEach(b => b.disabled = !two);
+  document.getElementById('kneeField').title = two ? '' : 'Two-legged rigs only. Four and six legs bend their knees up and out.';
+  document.querySelector('[data-legs="2"]').title = `Two legs, ${S.kneeFwd ? 'forward' : 'reverse'} knees`;
+}
+
+/* ---------- reference images: drawings behind the X (side) and Z (front) views and under the Y (top) view ---------- */
+const REF = {
+  side:  { view: 'x', mesh: null, aspect: 1, hM: 12, ox: 0, oy: 0, op: 0.55, flip: false, name: '', src: '' },
+  front: { view: 'z', mesh: null, aspect: 1, hM: 12, ox: 0, oy: 0, op: 0.55, flip: false, name: '', src: '' },
+  top:   { view: 'y', mesh: null, aspect: 1, hM: 12, ox: 0, oy: 0, op: 0.55, flip: false, name: '', src: '' },
+};
+OV.ref = true;
+let refPick = 'side';
+const refFile = document.getElementById('refFile');
+const refFor = () => view === 'z' ? REF.front : view === 'x' ? REF.side : view === 'y' ? REF.top : REF[refPick];
+const REF_NAME = { side: 'Side image', front: 'Front image', top: 'Top image' };
+const refKey = R => Object.keys(REF).find(k => REF[k] === R);
+function placeRef(R) {
+  if (!R.mesh) return;
+  const hU = R.hM / M_PER_UNIT, wU = hU * R.aspect;                 // scene units: metres over 2.7; hM is the drawing's height (top: its length)
+  const fx = R.flip ? -1 : 1;
+  if (R.view === 'x') { R.mesh.rotation.set(0, -Math.PI / 2, 0); R.mesh.scale.set(wU * fx, hU, 1); R.mesh.position.set(9, hU / 2 + R.oy * hU, R.ox * hU); }   // behind, seen from −X
+  else if (R.view === 'z') { R.mesh.rotation.set(0, 0, 0); R.mesh.scale.set(wU * fx, hU, 1); R.mesh.position.set(R.ox * hU, hU / 2 + R.oy * hU, -9); }  // behind, seen from +Z
+  else { R.mesh.rotation.set(Math.PI / 2, 0, 0); R.mesh.scale.set(-wU * fx, hU, 1); R.mesh.position.set(-R.ox * hU, -0.02, R.oy * hU); }     // under, seen from above, front of the drawing forward
+  R.mesh.material.opacity = R.op;
+}
+function showRefs() {
+  for (const R of Object.values(REF)) if (R.mesh) R.mesh.visible = OV.ref && view === R.view && !tween;
+}
+function showRefFields() {
+  const R = refFor(), on = !!R.mesh, box = document.getElementById('refFields');
+  box.hidden = !on;
+  if (!on) return;
+  const top = R.view === 'y';
+  document.getElementById('refSel').innerHTML = `<b>${REF_NAME[refKey(R)]}</b><br>${R.name} · shown in the ${R.view.toUpperCase()} view`;
+  document.getElementById('refHLabel').firstChild.textContent = top ? 'Drawing length ' : 'Drawing height ';
+  document.getElementById('refH').value = R.hM; document.getElementById('refHOut').textContent = `${R.hM.toFixed(1)} m`;
+  document.getElementById('refXLabel').firstChild.textContent = R.view === 'x' ? 'Move forward ' : 'Move sideways ';
+  document.getElementById('refYLabel').firstChild.textContent = top ? 'Move forward ' : 'Move up ';
+  document.getElementById('refX').value = R.ox; document.getElementById('refXOut').textContent = `${(R.ox * R.hM).toFixed(1)} m`;
+  document.getElementById('refY').value = R.oy; document.getElementById('refYOut').textContent = `${(R.oy * R.hM).toFixed(1)} m`;
+  document.getElementById('refO').value = R.op; document.getElementById('refOOut').textContent = `${Math.round(R.op * 100)}%`;
+}
+// phone photos are large (12 MP and up); a tracing image needs no more than 2048 px on its long side, and a smaller one
+// keeps GPU memory, the saved rig and Safari's canvas limits in check
+function shrinkImage(src, max = 2048) {
+  return new Promise(res => {
+    const img = new Image();
+    img.addEventListener('load', () => {
+      const k = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      if (k >= 1) return res(src);
+      try {
+        const c = document.createElement('canvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        const out = c.toDataURL('image/jpeg', 0.88); c.width = c.height = 0; res(out);
+      } catch (e) { window.__note?.(e, 'shrinking the image'); res(src); }
+    });
+    img.addEventListener('error', () => res(src));               // let the texture loader report it
+    img.src = src;
+  });
+}
+// load an image (a data URL, so Export rig can carry it) into one of the three slots
+function loadRef(key, src, name, props, show = true) {
+  const R = REF[key];
+  return new Promise(res => new THREE.TextureLoader().load(src, tex => {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    if (R.mesh) { scene.remove(R.mesh); R.mesh.material.map?.dispose(); R.mesh.material.dispose(); }
+    R.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false, side: THREE.DoubleSide }));
+    R.mesh.renderOrder = -5; scene.add(R.mesh);
+    Object.assign(R, { aspect: tex.image.width / tex.image.height, name, src, hM: +heightM().toFixed(1), ox: 0, oy: 0, op: 0.55, flip: false }, props || {});
+    if (key === 'top' && !props) R.hM = +(Math.max(BLK.body.l, 2 * Math.max(...LEGS.map(L => Math.abs(L.rest.z)), 0.5)) * 1.15 * M_PER_UNIT * S.sc).toFixed(1);
+    placeRef(R); if (show && view !== R.view) setView(R.view); showRefFields(); res(true);
+  }, undefined, () => { document.getElementById('refFields').hidden = false; document.getElementById('refSel').innerHTML = `<b>Could not open ${name}</b><br>Pick a PNG, JPEG or WebP image.`; res(false); }));
+}
+for (const [btn, key] of [['refSide', 'side'], ['refFront', 'front'], ['refTop', 'top']])
+  document.getElementById(btn).addEventListener('click', () => { refPick = key; refFile.click(); });
+refFile.addEventListener('change', () => {
+  const f = refFile.files[0]; refFile.value = ''; if (!f) return;
+  const key = refPick, rd = new FileReader();
+  rd.addEventListener('load', () => shrinkImage(rd.result).then(src => loadRef(key, src, f.name)));
+  rd.addEventListener('error', () => window.__err(`Could not read ${f.name}: ${rd.error?.message || 'unknown error'}`));
+  rd.readAsDataURL(f);
+});
+const refProps = R => ({ name: R.name, src: R.src, hM: R.hM, ox: R.ox, oy: R.oy, op: R.op, flip: R.flip });
+const bindRef = (id, key) => document.getElementById(id).addEventListener('input', e => { const R = refFor(); if (!R.mesh) return; R[key] = +e.target.value; placeRef(R); showRefFields(); });
+bindRef('refH', 'hM'); bindRef('refX', 'ox'); bindRef('refY', 'oy'); bindRef('refO', 'op');
+document.getElementById('refFlip').addEventListener('click', () => { const R = refFor(); if (!R.mesh) return; R.flip = !R.flip; placeRef(R); });
+document.getElementById('refClear').addEventListener('click', () => {
+  const R = refFor(); if (!R.mesh) return;
+  scene.remove(R.mesh); R.mesh.material.map?.dispose(); R.mesh.material.dispose(); R.mesh = null; R.src = ''; showRefFields();
+});
+bindTog('ovRef', 'ref');
+onView.push(showRefFields);
+
+/* ---------- the twin-cannon biped, one click ---------- */
+function twinCannonBiped() {
+  undoStack.push(snapshot()); delete TUNED[2];
+  S.legStyle = 'mech'; document.querySelectorAll('#legLook button').forEach(b => b.setAttribute('aria-pressed', b.dataset.look === 'mech'));
+  setKnee(true); setLegs(2); setKnee(true);
+  setWeight(90 / TONS, true); setLimb(1.9); setStance(1, false);
+  // proportions from the concept: thigh and shin about equal, hips under the back half of the hull, feet under the hips
+  LEGS.forEach(L => { L.up = 1.15; L.lo = 1.15; L.hip.z = -0.16; L.hipMesh.position.copy(L.hip); L.rest.z = -0.04; });
+  S.jets = false; document.getElementById('jetsOn').checked = false;
+  setUpper(0.45); setTwin(true); setRods(true);
+  FIT = { cannon: true, guns: false, laser: false, racks: true, pod: false, mg: false, stack: false, jets: false }; applyFit(); showFit();
+  turret.position.set(0, 0.24, -0.04);                              // the waist: the whole upper body turns on it
+  TUNED[2] = snapshot();
+  if (S.tuning) buildMarkers();
+  strengthNote(); refreshRigLabel(); showHeight();
+}
+document.getElementById('exTwin').addEventListener('click', twinCannonBiped);
+
+/* a link can open a state: #view=x&act=walk,laser */
+const hash = new URLSearchParams(location.hash.slice(1));
+setView(VIEWS[hash.get('view')] ? hash.get('view') : 'iso');
+tween.t = tween.dur; tweenCam(0);
+if (hash.has('events')) { OV.events = true; document.getElementById('ovEvents').checked = true; }
+if (hash.get('legs')) setLegs(+hash.get('legs'));
+if (hash.get('weight')) { const v = hash.get('weight'); setWeight(WEIGHT_PRESETS[v] ?? +v, true); }
+if (hash.get('tons')) setWeight(+hash.get('tons') / TONS, true);
+if (hash.get('limb')) setLimb(+hash.get('limb'));
+if (hash.get('jets') === 'off') { S.jets = false; document.getElementById('jetsOn').checked = false; }
+if (hash.get('stance')) setStance(+hash.get('stance'), false);
+if (hash.get('physics') === 'off') { S.sim = false; document.getElementById('simTop').checked = false; }
+if (hash.get('strength')) { S.strength = +hash.get('strength'); strEl.value = S.strength; strengthNote(); }
+if (hash.get('look') === 'mech') setLegStyle('mech');
+if (hash.get('knees') === 'fwd') setKnee(true);
+if (hash.get('upper')) setUpper(+hash.get('upper'));
+if (hash.get('cannon') === 'twin') setTwin(true);
+if (hash.has('rods')) setRods(true);
+if (hash.get('tfb')) TILT_FB = +hash.get('tfb');
+if (hash.get('ht')) HULL_TRAVEL = +hash.get('ht');
+if (hash.get('catch')) CATCH_TILT = +hash.get('catch');
+if (hash.get('zf')) Z_FOLLOW = +hash.get('zf');
+if (hash.get('recoil')) { S.recoil = +hash.get('recoil'); document.getElementById('recoil').value = S.recoil; }
+if (hash.get('height')) setHeight(+hash.get('height'));
+if (hash.get('example') === 'twin') { twinCannonBiped(); S.sc = sizeFor(S.weight); }
+if (hash.get('aim')) { S.aim = hash.get('aim'); document.querySelectorAll('#aim button').forEach(x => x.setAttribute('aria-pressed', x.dataset.aim === S.aim)); }
+if (hash.get('yaw')) { S.aim = 'cursor'; S.cursorYaw = +hash.get('yaw'); }
+if (hash.get('act')) { S.body = null; hash.get('act').split(',').forEach(a => act(a.trim())); }
+for (let i = 0, n = Math.round((+hash.get('t') || 0) * 60); i < n; i++) step(1 / 60);
+if (hash.has('tune')) setTuning(true);
+if (hash.has('paused')) togglePause();
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const rdt = clamp((now - last) / 1000, 0, 0.05); last = now;
+  const dt = S.paused || S.tuning ? 0 : rdt * S.speed;
+  tweenCam(rdt);
+  followHeight(rdt);
+  step(dt);
+  if (S.tuning) placeMarkers();
+  showRefs();
+  frameCamera();
+  updateUI();
+  renderer.render(scene, cam);
+}
+requestAnimationFrame(frame);
+</script>
+<div class="errbox" id="errbox" hidden role="dialog" aria-label="Errors">
+  <header><b>Errors on this page</b><button class="x" id="errClose" aria-label="Close">✕</button></header>
+  <ol id="errList"></ol>
+  <div class="row2"><button class="reset" id="errCopy">Copy all</button><button class="reset" id="errClear">Clear</button></div>
+</div>
+<script>
+  (() => {
+    const chip = document.getElementById('errs'), box = document.getElementById('errbox'), list = document.getElementById('errList');
+    window.__showErrs = () => {
+      const n = window.__errs.length;
+      chip.hidden = !n; chip.textContent = `${n} error${n > 1 ? 's' : ''}`;
+      list.innerHTML = window.__errs.map(m => `<li>${m.replace(/[<&]/g, c => c === '<' ? '&lt;' : '&amp;')}</li>`).join('');
+    };
+    chip.addEventListener('click', () => { box.hidden = !box.hidden; });
+    document.getElementById('errClose').addEventListener('click', () => { box.hidden = true; });
+    document.getElementById('errClear').addEventListener('click', () => { window.__errs.length = 0; box.hidden = true; window.__showErrs(); });
+    document.getElementById('errCopy').addEventListener('click', async () => {
+      const t = window.__errs.join('\n') + `\n\n${navigator.userAgent}`;
+      try { await navigator.clipboard.writeText(t); document.getElementById('errCopy').textContent = 'Copied'; }
+      catch { const r = document.createRange(); r.selectNodeContents(list); getSelection().removeAllRanges(); getSelection().addRange(r); }
+    });
+    window.__showErrs();
+  })();
+</script>
+</body>
+</html>
