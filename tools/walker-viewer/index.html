@@ -59,6 +59,7 @@
     --radius-panel:16px;
   }
   *{box-sizing:border-box}
+  [hidden]{display:none !important}
   html,body{margin:0;height:100%;overflow:hidden}
   body{
     font-family:"Barlow",system-ui,sans-serif;
@@ -171,8 +172,18 @@
   .sel b{color:var(--text);font-weight:600}
   .row2,.row3{display:flex;gap:8px}
   .row2 .reset,.row3 .reset{flex:1}
-  .fit{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:13.5px;padding:6px 0}
-  .fit button{height:28px;padding:0 10px;font-size:12.5px}
+  .lh{margin:4px 0 -6px;font:600 13px "Barlow Semi Condensed",sans-serif;color:var(--muted)}
+  .llist{display:flex;flex-direction:column;gap:6px}
+  .lrow{display:flex;flex-direction:column;gap:3px;padding:9px 10px;border-radius:9px;background:rgba(0,0,0,.18);border:1px solid transparent}
+  .lrow.cur{border-color:color-mix(in oklab,var(--body) 55%,transparent);background:rgba(143,211,200,.07)}
+  .lrow .nm{font-size:13.5px;color:var(--text);font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:text}
+  .lrow .nm input{width:100%;font:inherit;color:inherit;background:rgba(0,0,0,.3);border:1px solid var(--line);border-radius:6px;padding:2px 6px}
+  .lrow .mt{font-size:12px;color:var(--faint);line-height:1.4}
+  .lrow .acts{display:flex;gap:4px;justify-content:flex-end;margin-top:4px}
+  .lrow .acts button{height:28px;padding:0 9px;border:1px solid var(--line-soft);border-radius:7px;background:transparent;color:var(--muted);font-size:12.5px;cursor:pointer}
+  .lrow .acts button:hover{color:var(--text);background:rgba(255,255,255,.05)}
+  .lrow .acts button.go{color:var(--body);border-color:color-mix(in oklab,var(--body) 40%,transparent)}
+  .lempty{font-size:12.5px;color:var(--faint);padding:2px 2px 4px}
   .deck.dim{opacity:.32;pointer-events:none}
   .num{display:inline-grid;place-items:center;width:20px;height:20px;border-radius:50%;margin-right:10px;font-size:12px;font-weight:600;background:rgba(255,255,255,.07);color:var(--muted)}
   details.step[open] .num{background:rgba(143,211,200,.2);color:var(--body)}
@@ -304,6 +315,9 @@
   <button class="tool" id="pause" aria-pressed="false" title="Pause or play (Space)">
     <svg viewBox="0 0 24 24"><path id="pauseIcon" d="M9 6v12M15 6v12"/></svg><span>Pause</span>
   </button>
+  <button class="tool" id="libBtn" aria-expanded="false" title="Unit library: templates and the units made from them (U)">
+    <svg viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><path d="M16.75 14v5.5M14 16.75h5.5"/></svg><span>Library</span>
+  </button>
   <button class="tool" id="tuneBtn" aria-pressed="false" title="Joints, sizing blocks and parts (T)">
     <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.2"/><circle cx="12" cy="13" r="2.2"/><circle cx="18" cy="19" r="2.2"/><path d="M7.5 7.6l3 3.8M13.5 14.6l3 3"/></svg><span>Build rig</span>
   </button>
@@ -331,8 +345,8 @@
   <details class="step" data-step="joints" open>
     <summary><span><span class="num">1</span>Joints</span></summary>
     <div class="body-in">
-      <p class="note" style="margin:0">Drag a joint in the X, Y or Z view. Dragging a knee sets that leg's segment lengths and which way it bends.</p>
-      <div class="legend"><span><i style="background:#8fd3c8"></i>Hip</span><span><i style="background:#f2a541"></i>Knee</span><span><i style="background:#e6ebf1"></i>Foot</span><span><i style="background:#b89cff"></i>Turret</span></div>
+      <p class="note" style="margin:0">Drag a joint in the X, Y or Z view. Dragging a knee sets that leg's segment lengths and which way it bends. The legs bolt to a subframe; the chassis (cab, weapons, motor) sits on it at the chassis mount.</p>
+      <div class="legend"><span><i style="background:#8fd3c8"></i>Hip</span><span><i style="background:#f2a541"></i>Knee</span><span><i style="background:#e6ebf1"></i>Foot</span><span><i style="background:#6fb7ff"></i>Chassis</span><span><i style="background:#b89cff"></i>Turret</span></div>
       <div class="sel" id="tuneSel">Select a joint</div>
       <label class="tog">Mirror left and right <input type="checkbox" id="tuneSym" checked></label>
       <div class="field" id="kneeField">Knees bend
@@ -341,6 +355,14 @@
           <button data-knee="fwd" aria-pressed="false">Forward</button>
         </div>
       </div>
+      <div class="field">Chassis mount
+        <div class="seg" id="mountType">
+          <button data-mt="rigid" aria-pressed="true">Rigid</button>
+          <button data-mt="sprung" aria-pressed="false">Sprung</button>
+        </div>
+      </div>
+      <label class="field" id="springField" hidden><div class="top">Spring <output id="springOut"></output></div>
+        <input type="range" id="spring" min="0.5" max="4" step="0.1" value="1.6"></label>
       <div class="field">Leg look
         <div class="seg" id="legLook">
           <button data-look="spider" aria-pressed="true">Spider</button>
@@ -378,8 +400,9 @@
       <div id="blkExtra" hidden>
         <div class="field">Carried by
           <div class="seg" id="blkOn">
-            <button data-on="body" aria-pressed="true">Hull</button>
+            <button data-on="body" aria-pressed="true">Chassis</button>
             <button data-on="turret" aria-pressed="false">Upper body</button>
+            <button data-on="frame" aria-pressed="false">Subframe</button>
           </div>
         </div>
         <label class="tog">Mirror left and right <input type="checkbox" id="blkMirror"></label>
@@ -418,6 +441,21 @@
   </div>
 </aside>
 
+<aside class="drawer" id="lib" aria-label="Unit library">
+  <header><b>Unit library</b><button class="x" id="libClose" aria-label="Close">✕</button></header>
+  <div class="body-in">
+    <p class="note" style="margin:0">A template is base geometry: legs, joints, frames, blocks and mounts. Make a unit from it, change its weight, limbs, loadout or blocks, and save it. One template can become many units.</p>
+    <div class="sel" id="libCurrent"></div>
+    <div class="row2"><button class="primary" id="libSaveUnit" style="flex:1">Save unit</button><button class="reset" id="libSaveTpl">Save as template</button></div>
+    <h3 class="lh">Units</h3>
+    <div id="libUnits" class="llist"></div>
+    <h3 class="lh">Templates</h3>
+    <div id="libTpls" class="llist"></div>
+    <div class="row2"><button class="reset" id="libExport">Export library</button><button class="reset" id="libImport">Import library</button></div>
+    <p class="note" id="libStore" style="margin:0"></p>
+    <input type="file" id="libFile" accept=".json,application/json" hidden>
+  </div>
+</aside>
 <aside class="drawer" id="drawer" aria-label="Advanced settings">
   <header><b>Advanced</b><button class="x" id="close" aria-label="Close">✕</button></header>
   <details open>
@@ -627,7 +665,10 @@ function holder(parent, x = 0, y = 0, z = 0) { const g = new THREE.Group(); g.po
 
 /* ---------- the rig ---------- */
 const root = new THREE.Group(); scene.add(root);           // moves for jumps
-const body = holder(root);                                  // hull, mounts
+// Two frames, as on a real walker: the leg SUBFRAME takes the legs' loads and carries the hips; the CHASSIS rides on
+// it at the chassis mount (rigid or sprung) and carries the cab, weapons and motor. The physics poses the subframe.
+const frame = holder(root);                                 // leg subframe: hips
+const body = holder(frame);                                 // chassis: hull, cab (turret), weapons, motor
 rbox(1.5, 0.42, 1.9, M.hull, body, 0, 0, 0, 0.08);
 rbox(1.18, 0.12, 1.36, M.plate, body, 0, 0.26, -0.02, 0.05);
 rbox(1.1, 0.18, 1.5, M.dark, body, 0, -0.28, 0, 0.05);
@@ -699,7 +740,7 @@ function makeLeg(d, R) {
   const L = { ...d };
   L.hip = R.hip(L); L.rest = R.rest(L); L.hint = R.hint(L).normalize();
   L.mech = S.legStyle === 'mech';
-  const hh = mk(L.mech ? hubGeo(0.13, 0.3) : new THREE.SphereGeometry(0.17, 20, 14), M.joint, body); hh.position.copy(L.hip); hipMeshes.push(hh);
+  const hh = mk(L.mech ? hubGeo(0.13, 0.3) : new THREE.SphereGeometry(0.17, 20, 14), M.joint, frame); hh.position.copy(L.hip); hipMeshes.push(hh);
   L.hipMesh = hh; L.up = UPPER; L.lo = LOWER;
   L.blk = JSON.parse(JSON.stringify(LEG_BLK_HOME)); L.bm = {};
   L.upper = L.mech ? mechSeg(0.22, 0.24, 0.3, 0.1, 0.08, 0.86, true) : segGroup(0.085, true);
@@ -850,12 +891,16 @@ function setMount(k, arr) {
 }
 
 /* ---------- sizing blocks and parts: a block per segment between joints, then real parts ---------- */
-const BLK_HOME = { body: { shape: 'box', w: 1.5, h: 0.5, l: 2.2 }, turret: { shape: 'box', w: 0.96, h: 0.4, l: 1.0 }, extra: [] };
+const BLK_HOME = { body: { shape: 'box', w: 1.5, h: 0.5, l: 2.2 }, turret: { shape: 'box', w: 0.96, h: 0.4, l: 1.0 }, frame: { shape: 'box', auto: true, w: 1.6, h: 0.16, l: 0.5 }, extra: [] };
+// what carries a free block: the chassis (hull), the upper body (cab, turns with it) or the leg subframe
+const CARRIER = { body: 'chassis', turret: 'upper body', frame: 'subframe' };
+const carrierOf = on => on === 'turret' ? turret : on === 'frame' ? frame : body;
+const partOf = on => on === 'turret' ? 'turret' : on === 'frame' ? 'frame' : 'body';
 let BLK = JSON.parse(JSON.stringify(BLK_HOME));
 const LEG_BLK_HOME = { upper: { shape: 'box', w: 0.2, d: 0.17, ext: 0.07 }, lower: { shape: 'cyl', w: 0.13, d: 0.13, ext: 0.04 }, foot: { shape: 'box', w: 0.34, l: 0.4, h: 0.09 } };
 const blockMat = new THREE.MeshStandardMaterial({ color: 0x8b97a6, roughness: 0.82, metalness: 0.08 });
 const blockSelMat = new THREE.MeshStandardMaterial({ color: 0x9aa6b4, roughness: 0.8, metalness: 0.08, emissive: 0xf2a541, emissiveIntensity: 0.35 });
-const PART_MAT = { body: M.hull, turret: M.hull, upper: M.hull, lower: M.plate, foot: M.dark };
+const PART_MAT = { body: M.hull, turret: M.hull, upper: M.hull, lower: M.plate, foot: M.dark, frame: M.dark };
 let bodyBlk = null, turretBlk = null, blkSel = null;
 
 function blockGeo(spec, len, part, look) {
@@ -924,7 +969,7 @@ function placeExtras() {
     seen.add(e.id);
     let rec = EXM.get(e.id);
     if (!rec) { rec = {}; EXM.set(e.id, rec); }
-    const parent = e.on === 'turret' ? turret : body;
+    const parent = carrierOf(e.on);
     for (const side of ['a', 'b']) {
       const want = side === 'a' || e.mirror;
       if (!want) { if (rec.b) { rec.b.parent?.remove(rec.b); rec.b.geometry.dispose(); rec.b = null; } continue; }
@@ -935,7 +980,7 @@ function placeExtras() {
       const s = side === 'b' ? -1 : 1;
       m.position.set(s * e.x, e.y, e.z);
       m.rotation.set(e.rx * DEG, s * e.ry * DEG, 0, 'YXZ');
-      if (S.look === 'parts') m.material = PART_MAT[e.on === 'turret' ? 'turret' : 'body'];
+      if (S.look === 'parts') m.material = PART_MAT[partOf(e.on)];
     }
   }
   for (const [id, rec] of EXM) if (!seen.has(id)) {
@@ -957,20 +1002,21 @@ function segVolume(spec, len) {
   const L = len + 2 * spec.ext, a = spec.shape === 'box' ? 1 : Math.PI / 4;
   return a * spec.w * spec.d * L;
 }
-const DENSITY = { body: 0.35, turret: 0.5, upper: 1, lower: 1, foot: 1 };    // a hull is mostly hollow
+const DENSITY = { body: 0.35, turret: 0.5, frame: 0.6, upper: 1, lower: 1, foot: 1 };    // a hull is mostly hollow
 function partList() {
   const rows = [];
   const add = (name, part, vol, worldPos) => rows.push({ name, part, mass: vol * DENSITY[part], pos: worldPos });
   const bw = BLK.body, tw = BLK.turret;
   add('Hull', 'body', bw.w * bw.h * bw.l * (bw.shape === 'cyl' ? Math.PI / 4 : 1), body.getWorldPosition(V()));
   add('Turret', 'turret', tw.w * tw.h * tw.l * (tw.shape === 'cyl' ? Math.PI / 4 : 1), turret.localToWorld(V(0, tw.h / 2, 0)));
+  add('Leg subframe', 'frame', FRAME_SIZE.x * FRAME_SIZE.y * FRAME_SIZE.z * ((BLK.frame?.shape) === 'cyl' ? Math.PI / 4 : 1), frame.localToWorld(FRAME_CENTRE.clone()));
   (BLK.extra || []).forEach((e, i) => {                          // the designer's own blocks count toward the hull or upper body
-    const part = e.on === 'turret' ? 'turret' : 'body', vol = e.w * e.h * e.l * (e.shape === 'cyl' ? Math.PI / 4 : 1), par = e.on === 'turret' ? turret : body;
+    const part = partOf(e.on), vol = e.w * e.h * e.l * (e.shape === 'cyl' ? Math.PI / 4 : 1), par = carrierOf(e.on);
     add(`Block ${i + 1}`, part, vol, par.localToWorld(V(e.x, e.y, e.z)));
     if (e.mirror) add(`Block ${i + 1} (mirror)`, part, vol, par.localToWorld(V(-e.x, e.y, e.z)));
   });
   LEGS.forEach(L => {
-    const H = V().copy(L.hip).applyMatrix4(body.matrixWorld), K = L.knee.position, F = L.footG.position;
+    const H = V().copy(L.hip).applyMatrix4(frame.matrixWorld), K = L.knee.position, F = L.footG.position;
     add(`${L.n} upper leg`, 'upper', segVolume(L.blk.upper, L.up), H.clone().add(K).multiplyScalar(0.5));
     add(`${L.n} lower leg`, 'lower', segVolume(L.blk.lower, L.lo), K.clone().add(F).multiplyScalar(0.5));
     add(`${L.n} foot`, 'foot', L.blk.foot.w * L.blk.foot.l * L.blk.foot.h, F.clone());
@@ -1274,7 +1320,7 @@ function applyStance() {
 }
 function buildLegs(n) {
   const R = RIGS[n]; if (!R) return;
-  hipMeshes.forEach(m => body.remove(m)); hipMeshes.length = 0;
+  hipMeshes.forEach(m => frame.remove(m)); hipMeshes.length = 0;
   for (const c of [...legRoot.children]) legRoot.remove(c);
   contactRings.forEach(r => scene.remove(r)); contactRings.length = 0;
   while (prints.length) dropPrint(0);
@@ -1288,7 +1334,8 @@ function buildLegs(n) {
 function snapshot() {
   return { legs: LEGS.map(L => ({ n: L.n, hip: L.hip.toArray(), rest: L.rest.toArray(), up: L.up, lo: L.lo, hint: L.hint.toArray(), blk: JSON.parse(JSON.stringify(L.blk)) })),
            turret: turret.position.toArray(), blk: JSON.parse(JSON.stringify(BLK)),
-           mounts: Object.fromEntries(Object.entries(MOUNTS).map(([k, m]) => [k, m.node.position.toArray()])), fit: { ...FIT } };
+           mounts: Object.fromEntries(Object.entries(MOUNTS).map(([k, m]) => [k, m.node.position.toArray()])), fit: { ...FIT },
+           chassis: { mount: CH.mount.toArray(), type: CH.type, hz: CH.hz } };
 }
 function applySnap(sn) {
   sn.legs.forEach(d => {
@@ -1301,6 +1348,8 @@ function applySnap(sn) {
   if (!BLK.extra) BLK.extra = [];
   if (sn.mounts) for (const k in sn.mounts) setMount(k, sn.mounts[k]);
   if (sn.fit) { FIT = { ...FIT_HOME, ...sn.fit }; applyFit(); }
+  if (!BLK.frame) BLK.frame = { ...BLK_HOME.frame };
+  setChassis(sn.chassis || CH_HOME);
 }
 buildLegs(4);
 
@@ -1474,12 +1523,73 @@ function upperPoint(out) {
   return out.set(turret.position.x + Math.sin(y) * UPPER_FWD, turret.position.y + uh / 2, turret.position.z + Math.cos(y) * UPPER_FWD);
 }
 const comL = V();
+/* ---------- chassis mount: rigid, or sprung on the subframe ----------
+   Sprung: the chassis heaves, pitches and rolls on springs relative to the subframe, driven by the subframe's own
+   accelerations (the chassis's inertia makes it lag, overshoot and settle). Natural frequency hz / √scale (bigger
+   machines sway slower), damping ratio 0.35, travel limited to bump stops. */
+const CH = { mount: V(0, 0, 0), type: 'rigid', hz: 1.6, travel: 0.12, share: 0.7,
+             y: 0, vy: 0, p: 0, vp: 0, r: 0, vr: 0, last: null };
+const CH_HOME = { mount: [0, 0, 0], type: 'rigid', hz: 1.6 };
+function chassisMount(dt, sc) {
+  const sprung = CH.type === 'sprung' && S.sim && dt > 0;
+  if (sprung) {
+    // subframe motion this frame: vertical velocity and pitch/roll rates, then their change (accelerations)
+    const now = { y: frame.position.y, p: frame.rotation.x, r: frame.rotation.z };
+    const L0 = CH.last || { ...now, vy: 0, vp: 0, vr: 0 };
+    const vy = (now.y - L0.y) / dt, vp = (now.p - L0.p) / dt, vr = (now.r - L0.r) / dt;
+    const ay = clamp((vy - L0.vy) / dt, -40, 40), ap = clamp((vp - L0.vp) / dt, -40, 40), ar = clamp((vr - L0.vr) / dt, -40, 40);
+    CH.last = { ...now, vy, vp, vr };
+    const w = 2 * Math.PI * CH.hz / Math.sqrt(sc), z = 0.35, n = Math.max(1, Math.ceil(dt / (1 / 240))), h = dt / n;
+    for (let i = 0; i < n; i++) {
+      CH.vy += (-w * w * CH.y - 2 * z * w * CH.vy - ay) * h; CH.y += CH.vy * h;
+      CH.vp += (-w * w * CH.p - 2 * z * w * CH.vp - ap) * h; CH.p += CH.vp * h;
+      CH.vr += (-w * w * CH.r - 2 * z * w * CH.vr - ar) * h; CH.r += CH.vr * h;
+    }
+    const t = CH.travel;                                            // bump stops
+    if (Math.abs(CH.y) > t) { CH.y = Math.sign(CH.y) * t; CH.vy = 0; }
+    if (Math.abs(CH.p) > t) { CH.p = Math.sign(CH.p) * t; CH.vp = 0; }
+    if (Math.abs(CH.r) > t) { CH.r = Math.sign(CH.r) * t; CH.vr = 0; }
+  } else if (!(dt === 0 && CH.type === 'sprung')) { Object.assign(CH, { y: 0, vy: 0, p: 0, vp: 0, r: 0, vr: 0, last: null }); }
+  body.position.set(CH.mount.x, CH.mount.y + CH.y, CH.mount.z);
+  body.rotation.set(CH.p, 0, CH.r);
+}
+/* ---------- subframe art: a cross-member joining the hips and a spine under the chassis mount ---------- */
+const frameArt = new THREE.Group(); frame.add(frameArt);
+const frameBeam = mk(new RoundedBoxGeometry(1, 1, 1, 2, 0.03), M.dark, frameArt);
+const framePost = mk(new THREE.CylinderGeometry(0.5, 0.5, 1, 20), M.joint, frameArt);
+function placeFrameArt() {
+  if (!LEGS.length) return;
+  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9, y = 0;
+  for (const L of LEGS) { x0 = Math.min(x0, L.hip.x); x1 = Math.max(x1, L.hip.x); z0 = Math.min(z0, L.hip.z); z1 = Math.max(z1, L.hip.z); y += L.hip.y; }
+  y /= LEGS.length;
+  const auto = BLK.frame?.auto !== false, f = BLK.frame || {};
+  const w = auto ? x1 - x0 + 0.22 : f.w, l = auto ? Math.max(0.36, z1 - z0 + 0.3) : f.l, h = auto ? 0.16 : f.h;
+  FRAME_SIZE.set(w, h, l); FRAME_CENTRE.set((x0 + x1) / 2, y, (z0 + z1) / 2);
+  frameBeam.scale.set(w, h, l); frameBeam.position.copy(FRAME_CENTRE);
+  // a post from the subframe up to the chassis mount, shown when the chassis sits clear of the subframe
+  const top = CH.mount.y + CH.y - BLK.body.h / 2, gap = top - (y + h / 2);
+  framePost.visible = gap > 0.03 && S.look !== 'blocks';
+  if (framePost.visible) { framePost.scale.set(0.22, gap, 0.22); framePost.position.set(CH.mount.x, y + h / 2 + gap / 2, CH.mount.z); }
+  frameArt.visible = S.look === 'art';
+  if (frameBlk || S.look !== 'art') placeFrameBlock();
+}
+const FRAME_SIZE = V(1, 0.16, 1), FRAME_CENTRE = V();
+let frameBlk = null;
+function placeFrameBlock() {
+  const holderObj = { f: frameBlk }, spec = { shape: BLK.frame?.shape || 'box', w: FRAME_SIZE.x, h: FRAME_SIZE.y, l: FRAME_SIZE.z };
+  frameBlk = ensureBlock(holderObj, 'f', frame, spec, 0, 'body', { kind: 'frame', part: 'frame', leg: null });
+  frameBlk.position.copy(FRAME_CENTRE); frameBlk.visible = S.look !== 'art';
+  if (S.look === 'parts') frameBlk.material = PART_MAT.frame || PART_MAT.body;
+}
 function physics(dt, sc, wt, heightUnits) {
   if (!S.sim) { Object.assign(PH, { y: 0, vy: 0, roll: 0, wr: 0, pitch: 0, wp: 0, sx: 0, vsx: 0, sz: 0, vsz: 0, margin: 0 }); PH.kicks.length = 0; PH.r = 9; return { bx: 0, bz: 0, dy: 0, roll: 0, pitch: 0 }; }
   const mpu = M_PER_UNIT * sc, m = wt * TONS * 1000, N = LEGS.length;
   // centre of mass of the carried body: hull at its centre, upper body at upperPoint, in proportion to S.upper
   upperPoint(comL).multiplyScalar(S.upper);
-  const cxo = comL.x * mpu, czo = comL.z * mpu, uy = (comL.y / Math.max(0.01, S.upper)) * mpu;
+  const uy = (comL.y / Math.max(0.01, S.upper)) * mpu;
+  // in subframe coordinates: the chassis (and all it carries, CH.share of the mass) sits up on its mount
+  comL.addScaledVector(CH.mount, CH.share); comL.y += CH.y * CH.share;
+  const cxo = comL.x * mpu, czo = comL.z * mpu;
   const r = S.strength / sc;                                            // strength margin: max leg force over its share of the weight (square-cube law)
   const fMax = r * m * G / N;
   const wn = 2 * Math.PI * 2.2 / Math.sqrt(sc), zeta = 0.45;            // leg servo: natural frequency falls with size (Froude), lightly damped
@@ -1645,11 +1755,11 @@ function pose(dt) {
   let braceE = S.braced ? 1 : 0;
   if (b?.name === 'deploy') {
     const u = b.t / b.dur; braceE = ease(u);
-    if (u > 0.7 && !b.vented) { b.vented = true; logEvent('lock · all hips · steam'); if (OV.steam) LEGS.forEach(L => steamVent(tmp.copy(L.hip).applyMatrix4(body.matrixWorld), V(L.sx, 0.15, 0), S.sc, 5)); S.shake = Math.max(S.shake, 0.06 * wt); }
+    if (u > 0.7 && !b.vented) { b.vented = true; logEvent('lock · all hips · steam'); if (OV.steam) LEGS.forEach(L => steamVent(tmp.copy(L.hip).applyMatrix4(frame.matrixWorld), V(L.sx, 0.15, 0), S.sc, 5)); S.shake = Math.max(S.shake, 0.06 * wt); }
   }
   if (b?.name === 'undeploy') {
     const u = b.t / b.dur; braceE = 1 - ease(u);
-    if (!b.vented) { b.vented = true; if (OV.steam) LEGS.forEach(L => steamVent(tmp.copy(L.hip).applyMatrix4(body.matrixWorld), V(L.sx, 0.4, 0), S.sc, 3)); }
+    if (!b.vented) { b.vented = true; if (OV.steam) LEGS.forEach(L => steamVent(tmp.copy(L.hip).applyMatrix4(frame.matrixWorld), V(L.sx, 0.4, 0), S.sc, 3)); }
   }
   height -= 0.36 * braceE; spread += 0.42 * braceE; pitch += 0.035 * braceE;
   const steady = 1 - 0.6 * braceE;    // braced: recoil and hits move the body far less
@@ -1664,7 +1774,7 @@ function pose(dt) {
     sensor = smooth((u - 0.15) / 0.4);
     if (u > 0.45 && !b.vented) {
       b.vented = true; logEvent('vent · all hips');
-      if (OV.steam) LEGS.forEach(L => steamVent(tmp.copy(L.hip).applyMatrix4(body.matrixWorld), V(L.sx, 0.3, 0), S.sc, 4));
+      if (OV.steam) LEGS.forEach(L => steamVent(tmp.copy(L.hip).applyMatrix4(frame.matrixWorld), V(L.sx, 0.3, 0), S.sc, 4));
     }
     if (u > 0.55) { const k = (u - 0.55) / 0.45; yawAdd = 0.55 * Math.sin(2 * Math.PI * k) * bump(k); }
   }
@@ -1718,8 +1828,10 @@ function pose(dt) {
   root.scale.setScalar(sc);
   person.visible = OV.person; person.position.set(-(1.75 * sc + 0.7), 0, 0.6);
   root.position.y = rootY * sc;
-  body.position.set(bx, height, P.bz);
-  body.rotation.set(pitch, 0, roll);
+  frame.position.set(bx, height, P.bz);
+  frame.rotation.set(pitch, 0, roll);
+  chassisMount(dt, sc);
+  placeFrameArt();
   if (S.look !== 'art') placeHullBlocks();
   sensorLevel = damp(sensorLevel, sensor, 10, dt);
   M.sensor.emissiveIntensity = 2.4 * sensorLevel;
@@ -1734,7 +1846,7 @@ function pose(dt) {
   grid.position.z = -(S.scrollW % 1);
 
   // legs
-  body.updateMatrixWorld(true);
+  frame.updateMatrixWorld(true);
   const lift = S.p.lift * S.liftScale * sr * strideMul;
   const planted = [];
   // catch step: tipped past what the feet can hold (a big recoil, a hard hit), the next foot goes down under the
@@ -1780,7 +1892,7 @@ function pose(dt) {
     if (L.sz > 0) { target.z += 0.45 * buckle; target.x *= 1 + 0.25 * buckle; }
     else { target.x *= 1 + 0.15 * buckle; target.z -= 0.1 * buckle; }
     if (air > 0) target.set(L.rest.x, rootY + 0.01, L.rest.z);        // in the air the legs hang fully extended under the hips
-    hipW.copy(L.hip).applyMatrix4(body.matrixWorld);
+    hipW.copy(L.hip).applyMatrix4(frame.matrixWorld);
     tmp.copy(target).multiplyScalar(sc);
     solveLeg(hipW, tmp, kneeW, footW, L.hint, sc, L.up, L.lo);
     {
@@ -2099,7 +2211,7 @@ function frameCamera() {
   const w = innerWidth, h = innerHeight;
   // centre the rig between the controls at the top and the deck at the bottom
   // on a phone an open drawer is a bottom sheet, so the rig is framed in the space above it instead of above the deck
-  const sheet = w <= 640 && [tuneEl, drawer].find(d => d.classList.contains('open'));
+  const sheet = w <= 640 && [tuneEl, drawer, libEl].find(d => d.classList.contains('open'));
   const topUI = Math.max(viewsEl.getBoundingClientRect().bottom, w <= 640 ? document.getElementById('rigLabel').getBoundingClientRect().bottom + 40 : 0) + 6;   // phones stack the rig line and the move chips under the views
   const deckH = sheet ? h - sheet.getBoundingClientRect().top + 8 : deck.classList.contains('dim') && w <= 640 ? 0 : deck.getBoundingClientRect().height + 18;
   const lift = Math.max(0, deckH - topUI);
@@ -2178,6 +2290,8 @@ addEventListener('keydown', e => {
   if (e.metaKey || e.ctrlKey || e.altKey || e.target.matches('input')) return;
   const k = e.key.toLowerCase();
   if (k === 't') { setTuning(!S.tuning); return; }
+  if (k === 'u') { openLib(); return; }
+  if (k === 'escape' && libEl.classList.contains('open')) { openLib(false); return; }
   if (k === 'escape' && S.tuning) { setTuning(false); return; }
   if (S.tuning && KEYMAP[k]) return;
   if (k === ' ') { e.preventDefault(); togglePause(); return; }
@@ -2280,7 +2394,7 @@ pauseBtn.addEventListener('click', togglePause);
 
 const drawer = document.getElementById('drawer'), advBtn = document.getElementById('adv');
 function openDrawer(open = !drawer.classList.contains('open')) {
-  if (open && S.tuning) setTuning(false); drawer.classList.toggle('open', open); advBtn.setAttribute('aria-expanded', open); }
+  if (open && S.tuning) setTuning(false); if (open) openLib(false); drawer.classList.toggle('open', open); advBtn.setAttribute('aria-expanded', open); }
 advBtn.addEventListener('click', () => openDrawer());
 document.getElementById('close').addEventListener('click', () => openDrawer(false));
 
@@ -2361,7 +2475,7 @@ function updateUI() {
 
 /* ---------- loop ---------- */
 /* ---------- joint tuning: drag hips, knees, feet and the turret pivot in X, Y or Z ---------- */
-const TUNE_COLORS = { hip: 0x8fd3c8, knee: 0xf2a541, foot: 0xe6ebf1, turret: 0xb89cff, mount: 0xff8f6b };
+const TUNE_COLORS = { hip: 0x8fd3c8, knee: 0xf2a541, foot: 0xe6ebf1, turret: 0xb89cff, mount: 0xff8f6b, chassis: 0x6fb7ff };
 const markerGeo = new THREE.SphereGeometry(0.075, 16, 12);
 const markers = [];
 let drag = null, selected = null;
@@ -2375,16 +2489,17 @@ function buildMarkers() {
     const mesh = new THREE.Mesh(markerGeo, new THREE.MeshBasicMaterial({ color: TUNE_COLORS[kind], depthTest: false, transparent: true }));
     mesh.renderOrder = 20; scene.add(mesh); markers.push({ mesh, kind, leg, key });
   };
-  if (tuneStep === 'joints') { LEGS.forEach(L => { add('hip', L); add('knee', L); add('foot', L); }); add('turret', null); }
+  if (tuneStep === 'joints') { LEGS.forEach(L => { add('hip', L); add('knee', L); add('foot', L); }); add('chassis', null); add('turret', null); }
   if (tuneStep === 'mounts') for (const k in MOUNTS) if (k === 'guns' ? FIT.cannon || FIT.guns || FIT.laser : FIT[k]) add('mount', null, k);
   showSel();
 }
 function placeMarkers() {
   for (const m of markers) {
-    if (m.kind === 'hip') m.mesh.position.copy(m.leg.hip).applyMatrix4(body.matrixWorld);
+    if (m.kind === 'hip') m.mesh.position.copy(m.leg.hip).applyMatrix4(frame.matrixWorld);
     else if (m.kind === 'knee') m.mesh.position.copy(m.leg.knee.position);
     else if (m.kind === 'foot') m.mesh.position.copy(m.leg.footG.position);
     else if (m.kind === 'mount') MOUNTS[m.key].node.getWorldPosition(m.mesh.position);
+    else if (m.kind === 'chassis') m.mesh.position.copy(CH.mount).applyMatrix4(frame.matrixWorld);
     else turret.getWorldPosition(m.mesh.position);
     const sel = selected === m;
     m.mesh.scale.setScalar((sel ? 1.55 : 1) * S.sc);
@@ -2397,13 +2512,14 @@ function showSel() {
   if (!selected) { tuneSel.innerHTML = 'Select a joint'; mountSel.innerHTML = 'Select a mount'; return; }
   const m = selected, L = m.leg;
   if (m.kind === 'mount') {
-    const M_ = MOUNTS[m.key], p = M_.node.position, M_P = M_.node.parent === turret ? 'upper body' : 'hull';
+    const M_ = MOUNTS[m.key], p = M_.node.position, M_P = M_.node.parent === turret ? 'upper body' : 'chassis';
     mountSel.innerHTML = `<b>${M_.label}</b>${M_.note ? ` · ${M_.note}` : ''}<br>on the ${M_P} · x ${f2(p.x)} · y ${f2(p.y)} · z ${f2(p.z)}`; return;
   }
   if (m.kind === 'hip') tuneSel.innerHTML = `<b>${L.n} hip</b><br>x ${f2(L.hip.x)} · y ${f2(L.hip.y)} · z ${f2(L.hip.z)}`;
   if (m.kind === 'knee') tuneSel.innerHTML = `<b>${L.n} knee</b><br>upper leg ${L.up.toFixed(2)} · lower leg ${L.lo.toFixed(2)}`;
   if (m.kind === 'foot') tuneSel.innerHTML = `<b>${L.n} foot</b><br>x ${f2(L.rest.x)} · z ${f2(L.rest.z)}`;
   if (m.kind === 'turret') { const t = turret.position; tuneSel.innerHTML = `<b>Turret pivot</b><br>x ${f2(t.x)} · y ${f2(t.y)} · z ${f2(t.z)}`; }
+  if (m.kind === 'chassis') { const t = CH.mount; tuneSel.innerHTML = `<b>Chassis mount</b> · ${CH.type}<br>on the subframe · x ${f2(t.x)} · y ${f2(t.y)} · z ${f2(t.z)}`; }
 }
 const mirrorOf = L => LEGS.find(o => o !== L && o.sz === L.sz && o.sx === -L.sx);
 const kH = V(), kF = V(), kA = V(), kD = V();
@@ -2415,15 +2531,18 @@ function moveJoint(m, p) {
   } else if (m.kind === 'turret') {
     const q = body.worldToLocal(p.clone());
     turret.position.set(sym ? 0 : q.x, clamp(q.y, 0.15, 0.6), clamp(q.z, -0.7, 0.6));
+  } else if (m.kind === 'chassis') {                           // the chassis mount: where the chassis sits on the subframe
+    const q = frame.worldToLocal(p.clone());
+    CH.mount.set(sym ? 0 : clamp(q.x, -0.6, 0.6), clamp(q.y, -0.3, 1.2), clamp(q.z, -0.8, 0.8));
   } else if (m.kind === 'hip') {
-    const q = body.worldToLocal(p.clone());
+    const q = frame.worldToLocal(p.clone());
     L.hip.copy(q); L.hipMesh.position.copy(q);
     if (o) { o.hip.set(-q.x, q.y, q.z); o.hipMesh.position.copy(o.hip); }
   } else if (m.kind === 'foot') {
     L.rest.set(p.x / sc, 0, p.z / sc);
     if (o) o.rest.set(-L.rest.x, 0, L.rest.z);
   } else if (m.kind === 'knee') {
-    kH.copy(L.hip).applyMatrix4(body.matrixWorld); kF.copy(L.footG.position);
+    kH.copy(L.hip).applyMatrix4(frame.matrixWorld); kF.copy(L.footG.position);
     L.up = Math.max(0.25, kA.subVectors(p, kH).length() / sc);
     L.lo = Math.max(0.25, kD.subVectors(kF, p).length() / sc);
     const dir = kD.subVectors(kF, kH).normalize();
@@ -2469,7 +2588,7 @@ canvas.addEventListener('pointermove', e => {
   setNdc(e); ray.setFromCamera(ndc, cam);
   if (!ray.ray.intersectPlane(drag.plane, hitP)) return;
   if (drag.extra) {
-    const ex = drag.extra, par = ex.on === 'turret' ? turret : body, q = par.worldToLocal(hitP.add(drag.off));
+    const ex = drag.extra, par = carrierOf(ex.on), q = par.worldToLocal(hitP.add(drag.off));
     ex.x = drag.side === 'b' ? -q.x : q.x; ex.y = q.y; ex.z = q.z;
     showExtraPos(ex);
   } else { moveJoint(drag.m, hitP); showSel(); }
@@ -2494,13 +2613,14 @@ function openStep(name) {
   if (name === 'mounts') showFit();
   if (S.tuning) buildMarkers();
 }
-const SHAPES = { seg: ['box', 'cyl', 'capsule'], foot: ['box', 'cyl'], body: ['box', 'cyl'], turret: ['box', 'cyl'], extra: ['box', 'cyl'] };
+const SHAPES = { seg: ['box', 'cyl', 'capsule'], foot: ['box', 'cyl'], body: ['box', 'cyl'], turret: ['box', 'cyl'], frame: ['box', 'cyl'], extra: ['box', 'cyl'] };
 const SHAPE_NAME = { box: 'Box', cyl: 'Cylinder', capsule: 'Capsule' };
 const FIELDS = {
   seg:    [['w', 'Width', 0.04, 0.6], ['d', 'Depth', 0.04, 0.6], ['ext', 'Overhang past joints', 0, 0.3]],
   foot:   [['w', 'Width', 0.1, 0.8], ['l', 'Length', 0.1, 0.9], ['h', 'Height', 0.03, 0.4]],
   body:   [['w', 'Width', 0.2, 3.2], ['h', 'Height', 0.1, 1.6], ['l', 'Length', 0.3, 3.6]],
   turret: [['w', 'Width', 0.1, 2.2], ['h', 'Height', 0.05, 1.4], ['l', 'Length', 0.1, 2.4]],
+  frame:  [['w', 'Width', 0.1, 3.4], ['h', 'Height', 0.04, 0.8], ['l', 'Length', 0.1, 3.6]],
   extra:  [['w', 'Width', 0.02, 3], ['h', 'Height', 0.02, 3], ['l', 'Length', 0.02, 4], ['ry', 'Turn (°)', -180, 180, 1], ['rx', 'Tilt (°)', -90, 90, 1]],
 };
 const PART_LABEL = { upper: 'upper leg', lower: 'lower leg', foot: 'foot' };
@@ -2511,6 +2631,7 @@ document.querySelectorAll('#blkScope button').forEach(b => b.addEventListener('c
 function specsFor(sel) {
   if (sel.kind === 'extra') { const e = (BLK.extra || []).find(x => x.id === sel.leg); return e ? [e] : []; }
   if (sel.kind === 'body') return [BLK.body];
+  if (sel.kind === 'frame') { BLK.frame ||= { ...BLK_HOME.frame }; if (BLK.frame.auto !== false) Object.assign(BLK.frame, { w: FRAME_SIZE.x, h: FRAME_SIZE.y, l: FRAME_SIZE.z }); return [BLK.frame]; }
   if (sel.kind === 'turret') return [BLK.turret];
   const L = LEGS.find(l => l.n === sel.leg); if (!L) return [];
   if (blkScope === 'all') return LEGS.map(l => l.blk[sel.part]);
@@ -2524,7 +2645,7 @@ function showBlockSel() {
   if (!blkSel || !spec) { blkSel = null; selEl.innerHTML = 'Select a block, or add one'; shapeEl.innerHTML = ''; fieldsEl.innerHTML = ''; exEl.hidden = true; scopeEl.hidden = true; return; }
   const isEx = blkSel.kind === 'extra';
   exEl.hidden = !isEx; scopeEl.hidden = blkSel.kind !== 'seg' && blkSel.kind !== 'foot';
-  const name = isEx ? `Block ${BLK.extra.indexOf(spec) + 1}` : blkSel.kind === 'body' ? 'Hull' : blkSel.kind === 'turret' ? 'Upper body' : `${blkSel.leg} ${PART_LABEL[blkSel.part]}`;
+  const name = isEx ? `Block ${BLK.extra.indexOf(spec) + 1}` : blkSel.kind === 'body' ? 'Chassis' : blkSel.kind === 'turret' ? 'Upper body' : blkSel.kind === 'frame' ? 'Leg subframe' : `${blkSel.leg} ${PART_LABEL[blkSel.part]}`;
   selEl.innerHTML = `<b>${name}</b><br>${SHAPE_NAME[spec.shape]}${isEx ? `<span id="exPos"></span>` : ''}`;
   if (isEx) {
     showExtraPos(spec);
@@ -2542,6 +2663,7 @@ function showBlockSel() {
     inp.addEventListener('pointerdown', () => undoStack.push(snapshot()));
     inp.addEventListener('input', () => {
       specsFor(blkSel).forEach(sp => sp[inp.dataset.k] = +inp.value);
+      if (blkSel.kind === 'frame') BLK.frame.auto = false;           // sized by hand now, no longer following the hips
       inp.closest('.field').querySelector('output').textContent = fmtF(inp.dataset.k, +inp.value);
     });
     inp.addEventListener('change', () => { TUNED[S.rig] = snapshot(); });
@@ -2549,7 +2671,7 @@ function showBlockSel() {
 }
 function showExtraPos(e) {
   const el = document.getElementById('exPos'); if (!el) return;
-  el.textContent = ` on the ${e.on === 'turret' ? 'upper body' : 'hull'}${e.mirror ? ', mirrored' : ''} · x ${f2(e.x)} · y ${f2(e.y)} · z ${f2(e.z)}`;
+  el.textContent = ` on the ${CARRIER[e.on] || 'chassis'}${e.mirror ? ', mirrored' : ''} · x ${f2(e.x)} · y ${f2(e.y)} · z ${f2(e.z)}`;
 }
 // free blocks: add, carry, mirror, duplicate, delete
 let exSeq = 1;
@@ -2576,7 +2698,7 @@ document.querySelectorAll('#blkOn button').forEach(b => b.addEventListener('clic
   const e = blkSel?.kind === 'extra' && specsFor(blkSel)[0]; if (!e || e.on === b.dataset.on) return;
   undoStack.push(snapshot());
   // keep it where it is in the world while it changes parent
-  const from = e.on === 'turret' ? turret : body, to = b.dataset.on === 'turret' ? turret : body;
+  const from = carrierOf(e.on), to = carrierOf(b.dataset.on);
   const q = to.worldToLocal(from.localToWorld(V(e.x, e.y, e.z)));
   Object.assign(e, { on: b.dataset.on, x: q.x, y: q.y, z: q.z }); TUNED[S.rig] = snapshot(); showBlockSel();
 }));
@@ -2605,7 +2727,7 @@ function showParts() {
   if (!S.converted) { note.textContent = 'Make parts from the blocks first.'; list.innerHTML = ''; return; }
   note.textContent = 'These parts are the vehicle now. Each is one node with its pivot at its joint; mass and center of mass come from their volumes, and they export as the rig and its hit boxes.';
   const rows = partList(), group = {};
-  rows.forEach(r => { const k = r.part === 'body' ? 'Hull' : r.part === 'turret' ? 'Upper body' : PART_LABEL[r.part]; (group[k] ||= { n: 0, share: 0 }); group[k].n++; group[k].share += r.share; });
+  rows.forEach(r => { const k = r.part === 'body' ? 'Chassis' : r.part === 'turret' ? 'Upper body' : r.part === 'frame' ? 'Leg subframe' : PART_LABEL[r.part]; (group[k] ||= { n: 0, share: 0 }); group[k].n++; group[k].share += r.share; });
   list.innerHTML = '<table class="plist">' + Object.entries(group).map(([k, g]) =>
     `<tr><td>${k[0].toUpperCase() + k.slice(1)}${g.n > 1 ? ` × ${g.n}` : ''}</td><td>${Math.round(g.share * 100)}% of mass</td></tr>`).join('') + '</table>';
 }
@@ -2622,7 +2744,7 @@ function setTuning(on) {
   document.getElementById('hint').style.visibility = on ? 'hidden' : '';
   deck.classList.toggle('dim', on);
   if (on) {
-    openDrawer(false);
+    openDrawer(false); openLib(false);
     Object.assign(S, { loop: 'idle', body: null, weap: {}, hit: null, braced: false, dead: false });
     S.p = { ...LOOP.idle, height: (LOOP.idle.height - 0.04 * clamp(S.weight - 1, -0.5, 3) + PILLAR_RAISE * S.stance) * legK() };   // the standing pose, as walking would settle to it
     buildMarkers();
@@ -2639,44 +2761,175 @@ document.getElementById('tuneDone').addEventListener('click', () => setTuning(fa
 document.getElementById('tuneUndo').addEventListener('click', tuneUndo);
 document.getElementById('tuneReset').addEventListener('click', () => {
   undoStack.push(snapshot()); delete TUNED[S.rig]; BLK = JSON.parse(JSON.stringify(BLK_HOME));
-  for (const k in MOUNT_HOME) setMount(k, MOUNT_HOME[k]); FIT = { ...FIT_HOME }; applyFit(); showFit();
+  for (const k in MOUNT_HOME) setMount(k, MOUNT_HOME[k]); FIT = { ...FIT_HOME }; applyFit(); showFit(); setChassis(CH_HOME);
   buildLegs(S.rig); buildMarkers(); blkSel = null; showBlockSel();
 });
-document.getElementById('tuneExport').addEventListener('click', () => {
-  const data = { schema: 'mm-model-forge/walker-rig@1', legs: S.rig, weight: S.weight, joints: snapshot(), madeParts: S.converted,
-    body: { legLook: S.legStyle, kneesForward: S.kneeFwd, upperShare: S.upper, cannon: S.twin ? 'twin' : 'single', kneeRams: S.rods, heightM: S.sizeFollows ? null : S.heightM, limbs: S.limb, stance: S.stance, tons: Math.round(S.weight * TONS) },
+// a whole unit in one object: legs, joints, blocks, mounts, chassis mount, body settings, parts and reference images.
+// Export rig and Import rig use it, and so does the template library.
+function captureRig(withRefs = true) {
+  return { schema: 'mm-model-forge/walker-rig@1', legs: S.rig, weight: S.weight, joints: snapshot(), madeParts: S.converted,
+    body: { legLook: S.legStyle, kneesForward: S.kneeFwd, upperShare: S.upper, cannon: S.twin ? 'twin' : 'single', kneeRams: S.rods,
+            heightM: S.sizeFollows ? null : S.heightM, limbs: S.limb, stance: S.stance, stanceAuto: S.stanceAuto, tons: Math.round(S.weight * TONS),
+            jets: S.jets, strength: S.strength, legSpeed: S.legSpeed, recoil: S.recoil },
     parts: S.converted ? partList().map(r => ({ name: r.name, part: r.part, massShare: +r.share.toFixed(4) })) : [],
-    references: Object.fromEntries(Object.entries(REF).filter(([, R]) => R.mesh && R.src).map(([k, R]) => [k, refProps(R)])) };   // the drawings travel with the rig
+    references: withRefs ? Object.fromEntries(Object.entries(REF).filter(([, R]) => R.mesh && R.src).map(([k, R]) => [k, refProps(R)])) : {} };
+}
+async function applyRig(data, { refs = true } = {}) {
+  if (!data?.joints?.legs || !RIGS[data.legs]) throw new Error('not a walker rig');
+  data = JSON.parse(JSON.stringify(data));
+  undoStack.push(snapshot());
+  TUNED[data.legs] = data.joints; setLegs(data.legs);
+  const bd = data.body || {};
+  if (bd.legLook) setLegStyle(bd.legLook);
+  S.kneeFwd = !!bd.kneesForward; setKnee(S.kneeFwd);
+  if (bd.upperShare != null) setUpper(bd.upperShare);
+  setTwin(bd.cannon === 'twin'); setRods(!!bd.kneeRams);
+  if (bd.tons) setWeight(bd.tons / TONS, true);
+  if (bd.limbs) setLimb(bd.limbs);
+  if (bd.stanceAuto) setStance(stanceAutoFor(S.weight), true); else if (bd.stance != null) setStance(bd.stance, false);
+  if (bd.heightM) setHeight(bd.heightM);
+  else if (!S.sizeFollows) { const c = document.getElementById('sizeFollows'); c.checked = true; c.dispatchEvent(new Event('change')); }
+  if (bd.jets != null) { S.jets = bd.jets; document.getElementById('jetsOn').checked = bd.jets; }
+  if (bd.strength) { S.strength = bd.strength; strEl.value = bd.strength; }
+  if (bd.legSpeed) { S.legSpeed = bd.legSpeed; document.getElementById('legSpeed').value = bd.legSpeed; }
+  if (bd.recoil != null) { S.recoil = bd.recoil; document.getElementById('recoil').value = bd.recoil; }
+  applySnap(data.joints);                                         // joints last, so nothing above moves them
+  if (refs) for (const [k, R] of Object.entries(data.references || {})) if (REF[k] && R.src) await loadRef(k, R.src, R.name, R, false);
+  showFit(); blkSel = null; showBlockSel(); strengthNote(); refreshRigLabel();
+  if (data.madeParts) { S.converted = true; setLook('parts'); } else if (S.converted) { S.converted = false; setLook('art'); }
+  if (S.tuning) buildMarkers();
+}
+function download(name, obj) {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-  a.download = `walker-rig-${S.rig}-legs.json`; a.click(); URL.revokeObjectURL(a.href);
-});
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' }));
+  a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+document.getElementById('tuneExport').addEventListener('click', () => download(`walker-rig-${S.rig}-legs.json`, captureRig()));
 const tuneFile = document.getElementById('tuneFile');
 document.getElementById('tuneImport').addEventListener('click', () => tuneFile.click());
 tuneFile.addEventListener('change', async () => {
   const f = tuneFile.files[0]; tuneFile.value = ''; if (!f) return;
-  try {
-    const data = JSON.parse(await f.text());
-    if (!data.joints?.legs || !RIGS[data.legs]) throw new Error('not a walker rig file');
-    undoStack.push(snapshot());
-    TUNED[data.legs] = data.joints; setLegs(data.legs);
-    const bd = data.body;
-    if (bd) {
-      if (bd.legLook) setLegStyle(bd.legLook);
-      S.kneeFwd = !!bd.kneesForward; setKnee(S.kneeFwd);
-      if (bd.upperShare != null) setUpper(bd.upperShare);
-      setTwin(bd.cannon === 'twin'); setRods(!!bd.kneeRams);
-      if (bd.tons) setWeight(bd.tons / TONS, true);
-      if (bd.limbs) setLimb(bd.limbs);
-      if (bd.stance != null) setStance(bd.stance, false);
-      if (bd.heightM) setHeight(bd.heightM);
-    }
-    for (const [k, R] of Object.entries(data.references || {})) if (REF[k] && R.src) await loadRef(k, R.src, R.name, R, false);
-    showFit(); blkSel = null; showBlockSel();
-    if (data.madeParts) { S.converted = true; setLook('parts'); }
-    if (S.tuning) buildMarkers();
-  } catch (err) { tuneSel.innerHTML = `<b>Could not import</b><br>${err.message}. Pick a file saved with Export rig.`; }
+  try { await applyRig(JSON.parse(await f.text())); }
+  catch (err) { tuneSel.innerHTML = `<b>Could not import</b><br>${err.message}. Pick a file saved with Export rig.`; }
 });
+
+/* ---------- unit library: templates (base geometry) and the units made from them ----------
+   Kept in this browser (localStorage, JSON) and in files via Export / Import library. Units and templates are saved
+   without reference images, which belong to the tracing session (Export rig carries them). */
+const LIB_KEY = 'mm-model-forge.walker-library', LIB_SCHEMA = 'mm-model-forge/walker-library@1';
+const libEl = document.getElementById('lib'), libBtn = document.getElementById('libBtn');
+let LIB = { schema: LIB_SCHEMA, templates: [], units: [], current: null }, libStored = true;
+try { const t = JSON.parse(localStorage.getItem(LIB_KEY) || 'null'); if (t?.schema === LIB_SCHEMA) LIB = { ...LIB, ...t }; } catch { libStored = false; }
+function libSave() { try { localStorage.setItem(LIB_KEY, JSON.stringify(LIB)); libStored = true; } catch { libStored = false; } }
+const uid = p => `${p}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+
+// back to a plain walker before a built-in template is laid down, so nothing carries over from the last unit
+function resetUnit() {
+  BLK = JSON.parse(JSON.stringify(BLK_HOME));
+  for (const k in MOUNT_HOME) setMount(k, MOUNT_HOME[k]); FIT = { ...FIT_HOME }; applyFit();
+  setChassis(CH_HOME); turret.position.copy(TURRET_HOME);
+  S.legStyle = 'spider'; document.querySelectorAll('#legLook button').forEach(b => b.setAttribute('aria-pressed', b.dataset.look === 'spider'));
+  S.kneeFwd = false; setUpper(0.3); setTwin(false); setRods(false);
+  if (!S.sizeFollows) { const c = document.getElementById('sizeFollows'); c.checked = true; c.dispatchEvent(new Event('change')); }
+  S.jets = true; document.getElementById('jetsOn').checked = true;
+  S.strength = 2.3; strEl.value = 2.3; S.legSpeed = 0.35; document.getElementById('legSpeed').value = 0.35; S.recoil = 0.15; document.getElementById('recoil').value = 0.15;
+  setLimb(1); if (S.converted) { S.converted = false; setLook('art'); }
+}
+const fresh = (legs, tons, extra) => () => { resetUnit(); delete TUNED[legs]; setLegs(legs); setKnee(false); setWeight(tons / TONS, true); setStance(stanceAutoFor(S.weight), true); extra?.(); };
+const BUILT_IN = [
+  { id: 'tpl-hexapod', name: 'Hexapod', note: '6 legs, tripod gait', make: fresh(6, 40) },
+  { id: 'tpl-quad', name: 'Quad walker', note: '4 legs, wide stance', make: fresh(4, 40) },
+  { id: 'tpl-heavy-quad', name: 'Heavy quad', note: '4 pillar legs, 150 t', make: fresh(4, 150, () => setLimb(1.8)) },
+  { id: 'tpl-biped', name: 'Reverse-knee biped', note: '2 legs, light and quick', make: fresh(2, 30) },
+  { id: 'tpl-twin', name: 'Twin-cannon biped', note: 'armoured forward knees, 90 t', make: () => { resetUnit(); twinCannonBiped(); } },
+];
+const tplById = id => BUILT_IN.find(t => t.id === id) || LIB.templates.find(t => t.id === id);
+async function layTemplate(t) { if (t.make) t.make(); else await applyRig(t.rig, { refs: false }); }
+const rigSummary = rig => `${rig.legs} legs · ${rig.body?.tons ?? Math.round(rig.weight * TONS)} t${rig.body?.legLook === 'mech' ? ' · armoured' : ''}`;
+const sameRig = (a, b) => JSON.stringify({ ...a, references: {} }) === JSON.stringify({ ...b, references: {} });
+
+async function newUnitFrom(t) {
+  await layTemplate(t);
+  const n = LIB.units.filter(u => u.template === t.id).length + 1;
+  const u = { id: uid('u'), name: `${t.name} ${n}`, template: t.id, rig: captureRig(false), saved: new Date().toISOString() };
+  LIB.units.unshift(u); LIB.current = u.id; libSave(); renderLib();
+}
+function saveUnit() {
+  let u = LIB.units.find(x => x.id === LIB.current);
+  if (!u) { u = { id: uid('u'), name: `Unit ${LIB.units.length + 1}`, template: null }; LIB.units.unshift(u); LIB.current = u.id; }
+  u.rig = captureRig(false); u.saved = new Date().toISOString(); libSave(); renderLib();
+}
+function saveTemplate() {
+  const cur = LIB.units.find(x => x.id === LIB.current);
+  const t = { id: uid('t'), name: cur ? `${cur.name} template` : `Template ${LIB.templates.length + 1}`, rig: captureRig(false), saved: new Date().toISOString() };
+  LIB.templates.unshift(t); libSave(); renderLib();
+}
+function rowHTML(item, kind) {
+  const isUnit = kind === 'unit', cur = isUnit && item.id === LIB.current, from = isUnit && item.template ? tplById(item.template)?.name : null;
+  const meta = item.make ? item.note : `${rigSummary(item.rig)}${from ? ` · from ${from}` : ''}`;
+  const acts = isUnit
+    ? `${cur ? '' : '<button class="go" data-a="open">Open</button>'}<button data-a="dup">Duplicate</button><button data-a="del" aria-label="Delete">✕</button>`
+    : `<button class="go" data-a="new">New unit</button>${item.make ? '' : '<button data-a="del" aria-label="Delete">✕</button>'}`;
+  return `<div class="lrow${cur ? ' cur' : ''}" data-k="${kind}" data-id="${item.id}"><div class="nm" ${item.make ? '' : 'title="Tap to rename"'}>${item.name.replace(/</g, '&lt;')}</div><div class="mt">${meta}</div><div class="acts">${acts}</div></div>`;
+}
+function renderLib() {
+  const cur = LIB.units.find(x => x.id === LIB.current);
+  const dirty = cur && !sameRig(cur.rig, captureRig(false));
+  document.getElementById('libCurrent').innerHTML = cur
+    ? `<b>Editing ${cur.name.replace(/</g, '&lt;')}</b><br>${dirty ? 'Changes not saved yet' : 'Saved'}${cur.template ? ` · from ${tplById(cur.template)?.name || 'a deleted template'}` : ''}`
+    : `<b>No unit open</b><br>Make one from a template, or save what is on screen as a unit.`;
+  document.getElementById('libUnits').innerHTML = LIB.units.map(u => rowHTML(u, 'unit')).join('') || '<div class="lempty">No units yet.</div>';
+  document.getElementById('libTpls').innerHTML = [...LIB.templates, ...BUILT_IN].map(t => rowHTML(t, 'tpl')).join('');
+  document.getElementById('libStore').textContent = libStored
+    ? `${LIB.units.length} unit${LIB.units.length === 1 ? '' : 's'} and ${LIB.templates.length} saved template${LIB.templates.length === 1 ? '' : 's'}, kept in this browser. Export the library to keep a copy or move it to another device.`
+    : 'This browser is not keeping the library (private mode or blocked storage). Export it before you close the page.';
+}
+document.getElementById('lib').addEventListener('click', async e => {
+  const row = e.target.closest('.lrow'); if (!row) return;
+  const a = e.target.closest('button')?.dataset.a, kind = row.dataset.k, id = row.dataset.id;
+  const list = kind === 'unit' ? LIB.units : LIB.templates, item = kind === 'unit' ? LIB.units.find(x => x.id === id) : tplById(id);
+  if (!item) return;
+  if (!a && e.target.closest('.nm') && !item.make) {                           // rename in place
+    const nm = row.querySelector('.nm'); if (nm.querySelector('input')) return;
+    nm.innerHTML = `<input value="${item.name.replace(/"/g, '&quot;')}" aria-label="Name">`;
+    const inp = nm.querySelector('input'); inp.focus(); inp.select();
+    const done = ok => { if (ok && inp.value.trim()) { item.name = inp.value.trim(); libSave(); } renderLib(); };
+    inp.addEventListener('keydown', k => { if (k.key === 'Enter') done(true); if (k.key === 'Escape') done(false); k.stopPropagation(); });
+    inp.addEventListener('blur', () => done(true));
+    return;
+  }
+  try {
+    if (a === 'new') await newUnitFrom(item);
+    if (a === 'open') { await applyRig(item.rig, { refs: false }); LIB.current = item.id; libSave(); renderLib(); }
+    if (a === 'dup') { const c = { ...JSON.parse(JSON.stringify(item)), id: uid('u'), name: `${item.name} copy`, saved: new Date().toISOString() }; LIB.units.splice(LIB.units.indexOf(item) + 1, 0, c); libSave(); renderLib(); }
+    if (a === 'del') {
+      if (row.dataset.confirm !== '1') { row.dataset.confirm = '1'; const b = e.target.closest('button'); b.textContent = 'Delete?'; setTimeout(() => { if (row.isConnected) renderLib(); }, 2500); return; }
+      list.splice(list.indexOf(item), 1); if (LIB.current === id) LIB.current = null; libSave(); renderLib();
+    }
+  } catch (err) { window.__note?.(err, 'library'); }
+});
+document.getElementById('libSaveUnit').addEventListener('click', saveUnit);
+document.getElementById('libSaveTpl').addEventListener('click', saveTemplate);
+document.getElementById('libExport').addEventListener('click', () => download('walker-library.json', { schema: LIB_SCHEMA, templates: LIB.templates, units: LIB.units }));
+const libFile = document.getElementById('libFile');
+document.getElementById('libImport').addEventListener('click', () => libFile.click());
+libFile.addEventListener('change', async () => {
+  const f = libFile.files[0]; libFile.value = ''; if (!f) return;
+  try {
+    const d = JSON.parse(await f.text());
+    if (d.schema !== LIB_SCHEMA) throw new Error('not a walker library file');
+    const have = new Set([...LIB.templates, ...LIB.units].map(x => x.id));   // merge: nothing already here is replaced
+    LIB.templates.push(...(d.templates || []).filter(x => !have.has(x.id)));
+    LIB.units.push(...(d.units || []).filter(x => !have.has(x.id)));
+    libSave(); renderLib();
+  } catch (err) { document.getElementById('libCurrent').innerHTML = `<b>Could not import</b><br>${err.message}. Pick a file saved with Export library.`; }
+});
+function openLib(open = !libEl.classList.contains('open')) {
+  if (open) { if (S.tuning) setTuning(false); drawer.classList.remove('open'); advBtn.setAttribute('aria-expanded', false); renderLib(); }
+  libEl.classList.toggle('open', open); libBtn.setAttribute('aria-expanded', open);
+}
+libBtn.addEventListener('click', () => openLib());
+document.getElementById('libClose').addEventListener('click', () => openLib(false));
 
 /* ---------- upper body and loadout ---------- */
 const upperEl = document.getElementById('upper'), upperOut = document.getElementById('upperOut');
@@ -2691,6 +2944,20 @@ document.getElementById('recoil').addEventListener('input', e => { S.recoil = +e
 const rodsEl = document.getElementById('rodsOn');
 function setRods(on) { S.rods = on; rodsEl.checked = on; }
 rodsEl.addEventListener('change', () => setRods(rodsEl.checked));
+
+/* ---------- chassis mount: rigid or sprung ---------- */
+function setChassis(c) {
+  CH.mount.fromArray(c.mount || [0, 0, 0]); CH.type = c.type === 'sprung' ? 'sprung' : 'rigid'; CH.hz = c.hz || 1.6;
+  Object.assign(CH, { y: 0, vy: 0, p: 0, vp: 0, r: 0, vr: 0, last: null });
+  document.querySelectorAll('#mountType button').forEach(b => b.setAttribute('aria-pressed', b.dataset.mt === CH.type));
+  document.getElementById('springField').hidden = CH.type !== 'sprung';
+  document.getElementById('spring').value = CH.hz;
+  document.getElementById('springOut').textContent = `${CH.hz.toFixed(1)} Hz at this size: ${CH.hz < 1.2 ? 'soft, wallowing' : CH.hz < 2.4 ? 'firm' : 'stiff'}`;
+}
+document.querySelectorAll('#mountType button').forEach(b => b.addEventListener('click', () => {
+  undoStack.push(snapshot()); setChassis({ mount: CH.mount.toArray(), type: b.dataset.mt, hz: CH.hz }); if (TUNED[S.rig]) TUNED[S.rig] = snapshot();
+}));
+document.getElementById('spring').addEventListener('input', e => { setChassis({ mount: CH.mount.toArray(), type: CH.type, hz: +e.target.value }); if (TUNED[S.rig]) TUNED[S.rig] = snapshot(); });
 
 /* ---------- leg look: thin spider legs or armoured mech legs; the joints stay where they are ---------- */
 function setLegStyle(style) {
@@ -2820,6 +3087,7 @@ function twinCannonBiped() {
   setWeight(90 / TONS, true); setLimb(1.9); setStance(1, false);
   // proportions from the concept: thigh and shin about equal, hips under the back half of the hull, feet under the hips
   LEGS.forEach(L => { L.up = 1.15; L.lo = 1.15; L.hip.z = -0.16; L.hipMesh.position.copy(L.hip); L.rest.z = -0.04; });
+  setChassis({ mount: [0, 0, 0.04], type: 'rigid', hz: 1.6 });       // the chassis sits on the hip subframe, a little forward
   S.jets = false; document.getElementById('jetsOn').checked = false;
   setUpper(0.45); setTwin(true); setRods(true);
   FIT = { cannon: true, guns: false, laser: false, racks: true, pod: false, mg: false, stack: false, jets: false }; applyFit(); showFit();
@@ -2844,6 +3112,7 @@ if (hash.get('stance')) setStance(+hash.get('stance'), false);
 if (hash.get('physics') === 'off') { S.sim = false; document.getElementById('simTop').checked = false; }
 if (hash.get('strength')) { S.strength = +hash.get('strength'); strEl.value = S.strength; strengthNote(); }
 if (hash.get('look') === 'mech') setLegStyle('mech');
+if (hash.get('chassis')) { const [t, y] = hash.get('chassis').split(','); setChassis({ mount: [0, +y || 0, 0], type: t, hz: +(hash.get('hz') || 1.6) }); }
 if (hash.get('knees') === 'fwd') setKnee(true);
 if (hash.get('upper')) setUpper(+hash.get('upper'));
 if (hash.get('cannon') === 'twin') setTwin(true);
@@ -2862,8 +3131,8 @@ for (let i = 0, n = Math.round((+hash.get('t') || 0) * 60); i < n; i++) step(1 /
 if (hash.has('tune')) setTuning(true);
 if (hash.has('paused')) togglePause();
 let last = performance.now();
-function frame(now) {
-  requestAnimationFrame(frame);
+function tick(now) {
+  requestAnimationFrame(tick);
   const rdt = clamp((now - last) / 1000, 0, 0.05); last = now;
   const dt = S.paused || S.tuning ? 0 : rdt * S.speed;
   tweenCam(rdt);
@@ -2875,7 +3144,7 @@ function frame(now) {
   updateUI();
   renderer.render(scene, cam);
 }
-requestAnimationFrame(frame);
+requestAnimationFrame(tick);
 </script>
 <div class="errbox" id="errbox" hidden role="dialog" aria-label="Errors">
   <header><b>Errors on this page</b><button class="x" id="errClose" aria-label="Close">✕</button></header>
