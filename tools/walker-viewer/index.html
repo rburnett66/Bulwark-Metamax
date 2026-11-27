@@ -363,6 +363,8 @@
       </div>
       <label class="field" id="springField" hidden><div class="top">Spring <output id="springOut"></output></div>
         <input type="range" id="spring" min="0.5" max="4" step="0.1" value="1.6"></label>
+      <label class="field"><div class="top">Ride height <output id="rideOut">100%</output></div>
+        <input type="range" id="ride" min="0.8" max="1.25" step="0.01" value="1"></label>
       <div class="field">Leg look
         <div class="seg" id="legLook">
           <button data-look="spider" aria-pressed="true">Spider</button>
@@ -723,17 +725,29 @@ function mechSeg(w, d, plateW, plateD, y0, y1, upper) {
   }
   return g;
 }
+// the armoured foot, after the concept: a long two-piece foot under a raised ankle. The ankle sits about 38% of the
+// way back from the toe tip's opposite end; a dark sole, an olive armoured upper, a wide toe plate in front and a heel
+// block behind (both on the curl joints), and an ankle housing rising to the ankle hub. Lengths are in foot units
+// (x and z scale with limb thickness, y with the walker), so the foot reads long and flat whatever the build.
+const FOOT_MECH = 0.8;                                          // default foot length for Armoured legs
 function mechFoot(L) {
-  // a flat armoured foot: a sole, an ankle block with its hub, two front toe plates and a heel plate on curl joints
-  mk(new RoundedBoxGeometry(0.36, 0.08, 0.42, 2, 0.025).translate(0, 0.04, 0.02), M.dark, L.footG);
-  mk(new RoundedBoxGeometry(0.26, 0.1, 0.26, 2, 0.03).translate(0, 0.13, -0.02), M.olive, L.footG);
-  mk(hubGeo(0.075, 0.24), M.joint, L.footG).position.set(0, 0.17, -0.02);
-  for (const [x, z, heel] of [[-0.09, 0.22, false], [0.09, 0.22, false], [0, -0.2, true]]) {
-    const base = holder(L.footG, x, 0.03, z); base.rotation.y = heel ? Math.PI : 0;
-    const pivot = holder(base), len = heel ? 0.12 : 0.16;
-    mk(new RoundedBoxGeometry(heel ? 0.26 : 0.16, 0.07, len, 2, 0.02).translate(0, 0.005, len / 2), M.olive, pivot);
+  const FL = L.footLen ?? FOOT_MECH, ank = ankleOf(L), rear = 0.38 * FL, front = 0.62 * FL;
+  mk(new RoundedBoxGeometry(0.44, 0.08, rear + front * 0.72, 2, 0.02).translate(0, 0.04, (front * 0.72 - rear) / 2), M.dark, L.footG);
+  mk(new RoundedBoxGeometry(0.4, 0.16, FL * 0.52, 2, 0.04).translate(0, 0.16, FL * 0.06), M.olive, L.footG);
+  mk(new RoundedBoxGeometry(0.32, 0.12, FL * 0.3, 2, 0.04).translate(0, 0.28, -FL * 0.02), M.hull, L.footG);
+  const hh = Math.max(0.04, ank - 0.32);                         // ankle housing up to the hub
+  mk(new RoundedBoxGeometry(0.26, hh, 0.24, 2, 0.03).translate(0, 0.32 + hh / 2, -0.02), M.joint, L.footG);
+  for (const [z, heel] of [[front * 0.72, false], [-rear, true]]) {
+    const base = holder(L.footG, 0, 0.02, z); base.rotation.y = heel ? Math.PI : 0;
+    const pivot = holder(base), len = heel ? 0.14 * FL : 0.3 * FL;
+    const g = new RoundedBoxGeometry(heel ? 0.36 : 0.42, heel ? 0.17 : 0.15, len, 2, 0.03).translate(0, heel ? 0.08 : 0.07, len / 2);
+    mk(g, heel ? M.dark : M.olive, pivot);
     L.toes.push({ base, pivot, a: heel ? Math.PI : 0, heel, side: 0 });
   }
+}
+function rebuildMechFoot(L) {
+  for (const c of [...L.footG.children]) { L.footG.remove(c); c.traverse?.(o => o.geometry?.dispose()); }
+  L.toes = []; mechFoot(L);
 }
 const hipMeshes = [];
 function makeLeg(d, R) {
@@ -743,9 +757,14 @@ function makeLeg(d, R) {
   const hh = mk(L.mech ? hubGeo(0.13, 0.3) : new THREE.SphereGeometry(0.17, 20, 14), M.joint, frame); hh.position.copy(L.hip); hipMeshes.push(hh);
   L.hipMesh = hh; L.up = UPPER; L.lo = LOWER;
   L.blk = JSON.parse(JSON.stringify(LEG_BLK_HOME)); L.bm = {};
-  L.upper = L.mech ? mechSeg(0.22, 0.24, 0.3, 0.1, 0.08, 0.86, true) : segGroup(0.085, true);
-  L.lower = L.mech ? mechSeg(0.19, 0.2, 0.26, 0.09, 0.14, 0.8, false) : segGroup(0.062, false);
-  L.knee = L.mech ? mk(hubGeo(0.11, 0.3), M.joint, legRoot) : mk(new THREE.SphereGeometry(0.11, 18, 12), M.joint, legRoot);
+  L.upper = L.mech ? mechSeg(0.27, 0.3, 0.36, 0.13, 0.04, 1.1, true) : segGroup(0.085, true);   // the thigh plate runs on over the knee, as drawn
+  L.lower = L.mech ? mechSeg(0.2, 0.22, 0.29, 0.11, 0.3, 0.9, false) : segGroup(0.062, false);
+  L.knee = L.mech ? mk(hubGeo(0.12, 0.34), M.joint, legRoot) : mk(new THREE.SphereGeometry(0.11, 18, 12), M.joint, legRoot);
+  if (L.mech) {
+    L.ankleHub = mk(hubGeo(0.1, 0.36), M.joint, legRoot);
+    L.rearHub = mk(hubGeo(0.075, 0.26), M.joint, legRoot);         // the shin rams' top pivot, behind the knee
+    L.link = mk(new RoundedBoxGeometry(0.1, 1, 0.08, 2, 0.02).translate(0, 0.5, 0), M.dark, legRoot);
+  }
   L.footG = holder(legRoot);
   L.toes = [];
   if (L.mech) mechFoot(L);
@@ -1277,9 +1296,14 @@ const TONS = 40;
 const M_PER_UNIT = 2.7;                                          // scene units to metres: a 40 t walker stands about 6 m tall                                                  // Medium is 40 t; weight w is tons / 40
 const WEIGHT_PRESETS = { light: 0.5, medium: 1, heavy: 2, assault: 3.75 };
 // standing height in rig units at idle: body height, plus the turret pivot and the upper body above it
-// longer legs stand the body taller by the same ratio, so the knees keep the bend the gaits were tuned for
-const legK = () => LEGS.length ? LEGS.reduce((a, L) => a + L.up + L.lo, 0) / LEGS.length / (UPPER + LOWER) : 1;
-const standUnits = () => (LOOP.idle.height + PILLAR_RAISE * S.stance) * legK() + turret.position.y + Math.max(0.55, (BLK?.turret?.h ?? 0.4) + 0.03);
+// longer legs stand the body taller by the same ratio, so the knees keep the bend the gaits were tuned for;
+// ride height (RIDE.k, per rig) raises or lowers that, straighter or more crouched legs
+const RIDE = { k: 1 };
+// stand at the idle height straight away (a paused or freshly loaded walker would otherwise start crouched)
+const standHeight = () => (LOOP.idle.height - 0.04 * clamp(S.weight - 1, -0.5, 3) + PILLAR_RAISE * S.stance) * legK() * RIDE.k;
+const settleStand = () => { if (S.p && (!S.body || S.loop === 'idle')) S.p.height = standHeight(); };
+const legK = () => LEGS.length ? LEGS.reduce((a, L) => a + L.up + L.lo + ankleOf(L), 0) / LEGS.length / (UPPER + LOWER) : 1;
+const standUnits = () => (LOOP.idle.height + PILLAR_RAISE * S.stance) * legK() * RIDE.k + turret.position.y + Math.max(0.55, (BLK?.turret?.h ?? 0.4) + 0.03);
 const sizeFor = w => S.sizeFollows ? Math.pow(w, 0.38) : S.heightM / (standUnits() * M_PER_UNIT);   // or the height set in metres
 const heightM = () => standUnits() * sizeFor(S.weight) * M_PER_UNIT;   // 1000 t stands about 20 m, a five-storey building   // size follows weight, a little more than a solid would, so heavies read big
 const weightName = w => w * TONS < 30 ? 'Light' : w * TONS < 60 ? 'Medium' : w * TONS < 110 ? 'Heavy' : w * TONS < 400 ? 'Assault' : 'Colossal';
@@ -1288,10 +1312,10 @@ const heavyOf = w => clamp((w - 1) / 2.75, 0, 1);              // 0 at 40 t, 1 f
 // than that (plus 10%) the walker must move one leg at a time. S.gw eases between the two over half a second.
 function designGeom() {                                          // leg leverage at normal standing height: a property of the design
   if (!LEGS.length) return 1;
-  const Hs = (LOOP.idle.height + PILLAR_RAISE * S.stance) * legK();
+  const Hs = (LOOP.idle.height + PILLAR_RAISE * S.stance) * legK() * RIDE.k;
   let sum = 0;
   for (const L of LEGS) {
-    const Lm = (L.up + L.lo) / 2, dx = L.rest.x - L.hip.x, dz = L.rest.z - L.hip.z, dy = Hs + L.hip.y;
+    const Lm = (L.up + L.lo) / 2, dx = L.rest.x - L.hip.x, dz = L.rest.z - L.hip.z, dy = Hs + L.hip.y - ankleOf(L);
     const dd = Math.hypot(dx, dy, dz), hz = Math.hypot(dx, dz), e = clamp(dd / (2 * Lm), 0, 0.999);
     sum += clamp(0.8 * Lm / Math.max(Lm * Math.sqrt(1 - e * e), hz, 0.18 * Lm), 0.4, 3);
   }
@@ -1332,15 +1356,16 @@ function buildLegs(n) {
   applyLook();
 }
 function snapshot() {
-  return { legs: LEGS.map(L => ({ n: L.n, hip: L.hip.toArray(), rest: L.rest.toArray(), up: L.up, lo: L.lo, hint: L.hint.toArray(), blk: JSON.parse(JSON.stringify(L.blk)) })),
+  return { legs: LEGS.map(L => ({ n: L.n, hip: L.hip.toArray(), rest: L.rest.toArray(), up: L.up, lo: L.lo, ankle: L.ankle, foot: L.footLen, hint: L.hint.toArray(), blk: JSON.parse(JSON.stringify(L.blk)) })),
            turret: turret.position.toArray(), blk: JSON.parse(JSON.stringify(BLK)),
            mounts: Object.fromEntries(Object.entries(MOUNTS).map(([k, m]) => [k, m.node.position.toArray()])), fit: { ...FIT },
-           chassis: { mount: CH.mount.toArray(), type: CH.type, hz: CH.hz } };
+           chassis: { mount: CH.mount.toArray(), type: CH.type, hz: CH.hz }, ride: RIDE.k };
 }
 function applySnap(sn) {
   sn.legs.forEach(d => {
     const L = LEGS.find(l => l.n === d.n); if (!L) return;
     L.hip.fromArray(d.hip); L.rest.fromArray(d.rest); L.up = d.up; L.lo = d.lo; L.hint.fromArray(d.hint); L.hipMesh.position.copy(L.hip);
+    if (d.ankle != null) L.ankle = d.ankle; if (d.foot != null && L.footLen !== d.foot) { L.footLen = d.foot; if (L.mech) rebuildMechFoot(L); }
     if (d.blk) L.blk = JSON.parse(JSON.stringify(d.blk));
   });
   if (sn.turret) turret.position.fromArray(sn.turret);
@@ -1350,6 +1375,7 @@ function applySnap(sn) {
   if (sn.fit) { FIT = { ...FIT_HOME, ...sn.fit }; applyFit(); }
   if (!BLK.frame) BLK.frame = { ...BLK_HOME.frame };
   setChassis(sn.chassis || CH_HOME);
+  setRide(sn.ride ?? 1);
 }
 buildLegs(4);
 
@@ -1466,6 +1492,9 @@ function updWeapons(dt) {
 
 /* ---------- IK ---------- */
 const tA = V(), tB = V(), tN = V();
+// armoured legs have a raised ankle: the IK solves hip → knee → ankle, and the foot sits ankle-height below it
+const ANKLE_MECH = 0.2;                                         // default ankle height, rig units, for Armoured legs
+const ankleOf = L => L.mech ? (L.ankle ?? ANKLE_MECH) : 0;
 function solveLeg(H, F, outKnee, outFoot, hint, k = 1, up = UPPER, lo = LOWER) {
   const UP = up * k, LO = lo * k;
   tA.subVectors(F, H);
@@ -1486,7 +1515,7 @@ function place(g, A, B, k = 1) {
 }
 
 /* ---------- pose ---------- */
-const hipW = V(), kneeW = V(), footW = V(), target = V(), tmp = V();
+const hipW = V(), kneeW = V(), footW = V(), ankleW = V(), target = V(), tmp = V();
 let sensorLevel = 0;
 
 /* ---------- body dynamics: real mass, gravity and force-limited legs, integrated at 480 Hz ----------
@@ -1694,8 +1723,8 @@ function segFrame(g, A, B, n, o, k) {
   mZ.crossVectors(mX, mD); if (mZ.dot(o) < 0) { mX.negate(); mZ.negate(); }
   g.quaternion.setFromRotationMatrix(mM4.makeBasis(mX, mD, mZ)); g.position.copy(A); g.scale.set(k, len, k);
 }
-function placeMech(L, H, K, F, sc, lk) {
-  mA.copy(F); mA.y += 0.17 * sc;                                              // the ankle hub sits on the foot
+function placeMech(L, H, K, A, sc, lk) {
+  mA.copy(A);                                                                 // the ankle joint, solved by the IK
   mN.crossVectors(mD.subVectors(K, H), mZ.subVectors(mA, K));
   if (mN.lengthSq() < 1e-10) mN.set(1, 0, 0); mN.normalize();
   mD.subVectors(mA, H).normalize();
@@ -1710,6 +1739,7 @@ const rA = V(), rB = V(), rO = V(), rD = V();
 function placeRam(L, H, K, F, sc) {
   const on = S.rods && S.look !== 'blocks';
   L.ramB.visible = L.ramR.visible = on; L.ramEyes.forEach(e => e.visible = on);
+  if (L.rearHub) L.rearHub.visible = L.link.visible = false;
   if (!on) return;
   rD.subVectors(F, H).normalize();
   rO.subVectors(K, H).addScaledVector(rD, -rO.dot(rD));                      // outward from the hip–foot line, through the knee
@@ -1719,7 +1749,7 @@ function placeRam(L, H, K, F, sc) {
   let maxD;
   if (L.mech) {                                                    // mech legs: the ram runs down the back of the shin, from a pivot behind the knee to the ankle
     rA.lerpVectors(K, H, 0.14).addScaledVector(rO, -1.6 * off);
-    rB.lerpVectors(K, F, 0.86).addScaledVector(rO, -off); rB.y += 0.1 * sc;
+    rB.lerpVectors(K, F, 0.9).addScaledVector(rO, -off);
     maxD = (0.14 * L.up + 0.86 * L.lo + 0.25) * sc;
   } else {
     rA.lerpVectors(K, H, 0.55).addScaledVector(rO, off);
@@ -1732,6 +1762,11 @@ function placeRam(L, H, K, F, sc) {
   place(L.ramB, rA, tmp.copy(rA).addScaledVector(rD, Math.min(span, d)), 1); L.ramB.scale.x = L.ramB.scale.z = rb;
   place(L.ramR, rB, tmp.copy(rB).addScaledVector(rD, -Math.min(span, d)), 1); L.ramR.scale.x = L.ramR.scale.z = rr;
   L.ramEyes[0].position.copy(rA); L.ramEyes[1].position.copy(rB);
+  if (L.rearHub) {                                                 // the rams' top pivot rides a short link from the knee
+    L.rearHub.visible = L.link.visible = true;
+    L.rearHub.position.copy(rA); L.rearHub.quaternion.copy(L.lower.quaternion); L.rearHub.scale.setScalar(sc * (0.45 + 0.55 * S.limb));
+    place(L.link, K, rA, sc * (0.45 + 0.55 * S.limb));
+  }
   L.ramEyes.forEach(e => e.scale.setScalar(rb * 1.25));
 }
 function swingY(s, hw) {                                          // light: a smooth arc; heavy: a slow heave up, then a fall that slams
@@ -1893,22 +1928,25 @@ function pose(dt) {
     else { target.x *= 1 + 0.15 * buckle; target.z -= 0.1 * buckle; }
     if (air > 0) target.set(L.rest.x, rootY + 0.01, L.rest.z);        // in the air the legs hang fully extended under the hips
     hipW.copy(L.hip).applyMatrix4(frame.matrixWorld);
-    tmp.copy(target).multiplyScalar(sc);
-    solveLeg(hipW, tmp, kneeW, footW, L.hint, sc, L.up, L.lo);
+    const ank = ankleOf(L) * sc;
+    tmp.copy(target).multiplyScalar(sc); tmp.y += ank;
+    solveLeg(hipW, tmp, kneeW, ankleW, L.hint, sc, L.up, L.lo);
+    footW.copy(ankleW); footW.y -= ank;
     {
       // how much of the load the leg carries through its structure: a bent knee or a foot set out from the hip
       // must be held by joint torque (arm = the larger of the two lever arms); a straight column passes it down
-      const Lm = (L.up + L.lo) / 2, dd = hipW.distanceTo(footW) / sc, hz = Math.hypot(hipW.x - footW.x, hipW.z - footW.z) / sc;
+      const Lm = (L.up + L.lo) / 2, dd = hipW.distanceTo(ankleW) / sc, hz = Math.hypot(hipW.x - footW.x, hipW.z - footW.z) / sc;
       const e = clamp(dd / (2 * Lm), 0, 0.999), arm = Math.max(Lm * Math.sqrt(1 - e * e), hz, 0.18 * Lm);
       L.geom = clamp(0.8 * Lm / arm, 0.4, 3);                       // calibrated: the default wide stance, walking, is about 1
     }
     const lk = sc * S.limb, fk = sc * (0.55 + 0.45 * S.limb);            // thicker limbs, proportionally broader feet
-    if (L.mech) placeMech(L, hipW, kneeW, footW, sc, lk);
+    if (L.mech) placeMech(L, hipW, kneeW, ankleW, sc, lk);
     else { place(L.upper, hipW, kneeW, lk); place(L.lower, kneeW, footW, lk); }
     L.knee.position.copy(kneeW); L.knee.scale.setScalar(sc * (0.45 + 0.55 * S.limb));
+    if (L.ankleHub) { L.ankleHub.position.copy(ankleW); L.ankleHub.quaternion.copy(L.lower.quaternion); L.ankleHub.scale.setScalar(sc * (0.45 + 0.55 * S.limb)); L.ankleHub.visible = S.look === 'art'; }
     L.footG.position.copy(footW); L.footG.scale.set(fk, sc, fk);
     L.hipMesh.scale.setScalar(0.45 + 0.55 * S.limb);
-    placeRam(L, hipW, kneeW, footW, sc);
+    placeRam(L, hipW, kneeW, L.mech ? ankleW : footW, sc);
     if (!OV.toes) curl = 0;
     L.footG.rotation.set(curl * 0.4, L.sx * (L.mech ? 0.05 : 0.22), 0, 'YXZ');
     L.landT += dt;
@@ -2113,7 +2151,7 @@ function step(dt) {
     stride: tgt.stride * (1 - 0.2 * hw) * (S.amble ? 1.15 : 1),
     lift: tgt.lift * Math.pow(w, -0.35),                      // heavies barely clear the ground
     duty: clamp(tgt.duty + 0.06 * (w - 1), 0.4, 0.78) * (1 - S.gw) + heavyDuty * S.gw,   // one leg at a time keeps the rest down
-    height: (tgt.height - 0.04 * clamp(w - 1, -0.5, 3) + PILLAR_RAISE * S.stance) * legK(),
+    height: (tgt.height - 0.04 * clamp(w - 1, -0.5, 3) + PILLAR_RAISE * S.stance) * legK() * RIDE.k,
   };
   for (const k in g) S.p[k] = damp(S.p[k], g[k], 3 / Math.sqrt(w), dt);   // momentum: heavies take longer to get going and to stop
   // a controller does not start the next step until the body is back up and level (the relift)
@@ -2545,7 +2583,7 @@ function moveJoint(m, p) {
     L.rest.set(p.x / sc, 0, p.z / sc);
     if (o) o.rest.set(-L.rest.x, 0, L.rest.z);
   } else if (m.kind === 'knee') {
-    kH.copy(L.hip).applyMatrix4(frame.matrixWorld); kF.copy(L.footG.position);
+    kH.copy(L.hip).applyMatrix4(frame.matrixWorld); kF.copy(L.footG.position); kF.y += ankleOf(L) * sc;   // the shin ends at the ankle
     L.up = Math.max(0.25, kA.subVectors(p, kH).length() / sc);
     L.lo = Math.max(0.25, kD.subVectors(kF, p).length() / sc);
     const dir = kD.subVectors(kF, kH).normalize();
@@ -2749,7 +2787,7 @@ function setTuning(on) {
   if (on) {
     openDrawer(false); openLib(false);
     Object.assign(S, { loop: 'idle', body: null, weap: {}, hit: null, braced: false, dead: false });
-    S.p = { ...LOOP.idle, height: (LOOP.idle.height - 0.04 * clamp(S.weight - 1, -0.5, 3) + PILLAR_RAISE * S.stance) * legK() };   // the standing pose, as walking would settle to it
+    S.p = { ...LOOP.idle, height: standHeight() };   // the standing pose, as walking would settle to it
     buildMarkers();
     if (view === 'iso') setView('x'); else setView(view);
     const first = steps[0]; if (!first.open) first.open = true; openStep('joints');
@@ -2764,7 +2802,7 @@ document.getElementById('tuneDone').addEventListener('click', () => setTuning(fa
 document.getElementById('tuneUndo').addEventListener('click', tuneUndo);
 document.getElementById('tuneReset').addEventListener('click', () => {
   undoStack.push(snapshot()); delete TUNED[S.rig]; BLK = JSON.parse(JSON.stringify(BLK_HOME));
-  for (const k in MOUNT_HOME) setMount(k, MOUNT_HOME[k]); FIT = { ...FIT_HOME }; applyFit(); showFit(); setChassis(CH_HOME);
+  for (const k in MOUNT_HOME) setMount(k, MOUNT_HOME[k]); FIT = { ...FIT_HOME }; applyFit(); showFit(); setChassis(CH_HOME); setRide(1);
   buildLegs(S.rig); buildMarkers(); blkSel = null; showBlockSel();
 });
 // a whole unit in one object: legs, joints, blocks, mounts, chassis mount, body settings, parts and reference images.
@@ -2801,6 +2839,7 @@ async function applyRig(data, { refs = true } = {}) {
   showFit(); blkSel = null; showBlockSel(); strengthNote(); refreshRigLabel();
   if (data.madeParts) { S.converted = true; setLook('parts'); } else if (S.converted) { S.converted = false; setLook('art'); }
   if (S.tuning) buildMarkers();
+  settleStand();
 }
 function download(name, obj) {
   const a = document.createElement('a');
@@ -2830,7 +2869,7 @@ const uid = p => `${p}${Date.now().toString(36)}${Math.random().toString(36).sli
 function resetUnit() {
   BLK = JSON.parse(JSON.stringify(BLK_HOME));
   for (const k in MOUNT_HOME) setMount(k, MOUNT_HOME[k]); FIT = { ...FIT_HOME }; applyFit();
-  setChassis(CH_HOME); turret.position.copy(TURRET_HOME);
+  setChassis(CH_HOME); setRide(1); turret.position.copy(TURRET_HOME);
   S.legStyle = 'spider'; document.querySelectorAll('#legLook button').forEach(b => b.setAttribute('aria-pressed', b.dataset.look === 'spider'));
   S.kneeFwd = false; setUpper(0.3); setTwin(false); setRods(false);
   if (!S.sizeFollows) { const c = document.getElementById('sizeFollows'); c.checked = true; c.dispatchEvent(new Event('change')); }
@@ -2947,6 +2986,15 @@ document.getElementById('recoil').addEventListener('input', e => { S.recoil = +e
 const rodsEl = document.getElementById('rodsOn');
 function setRods(on) { S.rods = on; rodsEl.checked = on; }
 rodsEl.addEventListener('change', () => setRods(rodsEl.checked));
+
+/* ---------- ride height: how tall the walker stands on its legs (straighter or more crouched) ---------- */
+function setRide(k) {
+  RIDE.k = clamp(k, 0.8, 1.25); document.getElementById('ride').value = RIDE.k;
+  document.getElementById('rideOut').textContent = `${Math.round(RIDE.k * 100)}%${RIDE.k > 1.08 ? ', legs nearly straight' : RIDE.k < 0.92 ? ', crouched' : ''}`;
+  if (S.tuning || S.paused) settleStand();
+  if (typeof refreshRigLabel === 'function') refreshRigLabel();
+}
+document.getElementById('ride').addEventListener('input', e => { setRide(+e.target.value); if (TUNED[S.rig]) TUNED[S.rig] = snapshot(); });
 
 /* ---------- chassis mount: rigid or sprung ---------- */
 function setChassis(c) {
@@ -3089,7 +3137,13 @@ function twinCannonBiped() {
   setKnee(true); setLegs(2); setKnee(true);
   setWeight(90 / TONS, true); setLimb(1.9); setStance(1, false);
   // proportions from the concept: thigh and shin about equal, hips under the back half of the hull, feet under the hips
-  LEGS.forEach(L => { L.up = 1.15; L.lo = 1.15; L.hip.z = -0.16; L.hipMesh.position.copy(L.hip); L.rest.z = -0.04; });
+  // proportions measured off the concept's side view: thigh 0.57 of the shin, a raised ankle 0.38 of the shin above
+  // the ground, a long two-piece foot 1.3 shins long (in foot units), hips under the back half of the hull
+  LEGS.forEach(L => { L.up = 0.72; L.lo = 1.26; L.ankle = 0.48; L.footLen = 1.05; rebuildMechFoot(L);
+    L.blk.foot.l = 0.85; L.blk.foot.w = 0.4;                          // the physics' foot: long, so it resists pitch like the drawing's
+    L.hip.y = -0.42; L.hip.z = -0.16; L.hipMesh.position.copy(L.hip); L.rest.z = 0.02; });   // hips hang below the hull, as drawn
+  setRide(1.2);                                                       // the drawing stands nearly straight-legged
+  settleStand();
   setChassis({ mount: [0, 0, 0.04], type: 'rigid', hz: 1.6 });       // the chassis sits on the hip subframe, a little forward
   S.jets = false; document.getElementById('jetsOn').checked = false;
   setUpper(0.45); setTwin(true); setRods(true);
@@ -3129,6 +3183,7 @@ if (hash.get('height')) setHeight(+hash.get('height'));
 if (hash.get('example') === 'twin') { twinCannonBiped(); S.sc = sizeFor(S.weight); }
 if (hash.get('aim')) { S.aim = hash.get('aim'); document.querySelectorAll('#aim button').forEach(x => x.setAttribute('aria-pressed', x.dataset.aim === S.aim)); }
 if (hash.get('yaw')) { S.aim = 'cursor'; S.cursorYaw = +hash.get('yaw'); }
+settleStand();                                                          // stand up before the first frame
 if (hash.get('act')) { S.body = null; hash.get('act').split(',').forEach(a => act(a.trim())); }
 for (let i = 0, n = Math.round((+hash.get('t') || 0) * 60); i < n; i++) step(1 / 60);
 if (hash.has('tune')) setTuning(true);
