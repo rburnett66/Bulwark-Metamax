@@ -286,7 +286,7 @@
 <canvas id="c" tabindex="0" aria-label="3D view of the walker"></canvas>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · joints</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · ankle fore-aft</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -360,6 +360,8 @@
           <button data-scope="leg" aria-pressed="false">Selected leg</button>
         </div>
       </div>
+      <label class="field" id="ankleZField" data-new="ankle-fore-aft-2026-11-27" data-new-btn="tuneBtn" data-new-step="joints"><div class="top"><span>Ankle back ↔ forward <span class="newtag" hidden>New</span></span><output id="ankleZOut">centred</output></div>
+        <input type="range" id="ankleZ" min="-0.6" max="0.6" step="0.01" value="0"></label>
       <div class="row2" id="jointActs" hidden><button class="reset" id="jointFlip">Flip bend</button><button class="reset" id="jointDel">Remove joint</button></div>
       <p class="note" style="margin:0">Drag a joint in the X, Y or Z view. Dragging a knee sets that leg's segment lengths and which way it bends. Add a hip segment, more knees or an ankle to any leg; drag an added knee along the leg, an ankle up or down, a hip segment in or out. The legs bolt to a leg subframe; the main body, with the cab, weapons and motor, sits on it at the main body mount.</p>
       <div class="legend"><span><i style="background:#8fd3c8"></i>Hip</span><span><i style="background:#f2a541"></i>Knee</span><span><i style="background:#ffd36b"></i>Ankle</span><span><i style="background:#e6ebf1"></i>Foot</span><span><i style="background:#6fb7ff"></i>Main body</span><span><i style="background:#b89cff"></i>Turret</span></div>
@@ -754,7 +756,7 @@ function mechFoot(L) {
   mk(new RoundedBoxGeometry(0.4, 0.16, FL * 0.52, 2, 0.04).translate(0, 0.16, FL * 0.06), M.olive, L.footG);
   mk(new RoundedBoxGeometry(0.32, 0.12, FL * 0.3, 2, 0.04).translate(0, 0.28, -FL * 0.02), M.hull, L.footG);
   const hh = Math.max(0.04, ank - 0.32);                         // ankle housing up to the hub
-  mk(new RoundedBoxGeometry(0.26, hh, 0.24, 2, 0.03).translate(0, 0.32 + hh / 2, -0.02), M.joint, L.footG);
+  L.housing = mk(new RoundedBoxGeometry(0.26, hh, 0.24, 2, 0.03).translate(0, 0.32 + hh / 2, -0.02), M.joint, L.footG);   // follows the ankle fore and aft (pose)
   for (const [z, heel] of [[front * 0.72, false], [-rear, true]]) {
     const base = holder(L.footG, 0, 0.02, z); base.rotation.y = heel ? Math.PI : 0;
     const pivot = holder(base), len = heel ? 0.14 * FL : 0.3 * FL;
@@ -1409,7 +1411,7 @@ function buildLegs(n) {
   applyLook();
 }
 function snapshot() {
-  return { legs: LEGS.map(L => ({ n: L.n, hip: L.hip.toArray(), rest: L.rest.toArray(), up: L.up, lo: L.lo, ankle: ankleOf(L), foot: L.footLen, coxa: L.coxa || 0, xk: L.xk.map(j => ({ ...j })), hint: L.hint.toArray(), blk: JSON.parse(JSON.stringify(L.blk)) })),
+  return { legs: LEGS.map(L => ({ n: L.n, hip: L.hip.toArray(), rest: L.rest.toArray(), up: L.up, lo: L.lo, ankle: ankleOf(L), ankleZ: L.ankleZ || 0, foot: L.footLen, coxa: L.coxa || 0, xk: L.xk.map(j => ({ ...j })), hint: L.hint.toArray(), blk: JSON.parse(JSON.stringify(L.blk)) })),
            turret: turret.position.toArray(), blk: JSON.parse(JSON.stringify(BLK)),
            mounts: Object.fromEntries(Object.entries(MOUNTS).map(([k, m]) => [k, m.node.position.toArray()])), fit: { ...FIT },
            chassis: { mount: CH.mount.toArray(), type: CH.type, hz: CH.hz }, ride: RIDE.k };
@@ -1421,7 +1423,7 @@ function applySnap(sn) {
     const ank0 = ankleOf(L), foot0 = L.footLen;
     if (d.ankle != null) L.ankle = d.ankle; if (d.foot != null) L.footLen = d.foot;
     if (L.mech && (ankleOf(L) !== ank0 || L.footLen !== foot0)) rebuildMechFoot(L);
-    L.coxa = d.coxa || 0; L.xk = (d.xk || []).map(j => ({ ...j })); ensureLegParts(L);
+    L.coxa = d.coxa || 0; L.ankleZ = d.ankleZ || 0; L.xk = (d.xk || []).map(j => ({ ...j })); ensureLegParts(L);
     if (d.blk) L.blk = JSON.parse(JSON.stringify(d.blk));
   });
   if (sn.turret) turret.position.fromArray(sn.turret);
@@ -2033,6 +2035,10 @@ function pose(dt) {
     if (air > 0) target.set(L.rest.x, rootY + 0.01, L.rest.z);        // in the air the legs hang fully extended under the hips
     hipW.copy(L.hip).applyMatrix4(frame.matrixWorld);
     const ank = ankleOf(L) * sc;
+    // the ankle sits forward (+) or back (−) of the foot's centre. The leg keeps its reach and stance: the ankle stays
+    // where the leg puts it and the foot shifts the other way under it (moving the ankle instead would overreach a
+    // straight-legged walker and lift its foot off the ground)
+    const az = ank > 0 ? (L.ankleZ || 0) * sc : 0;               // no ankle, nothing to move
     tmp.copy(target).multiplyScalar(sc); tmp.y += ank;
     let R0 = hipW;                                              // where the bending leg starts: the hip, or the end of a hip segment
     if (L.coxa > 0) { L.cw.copy(hipW).addScaledVector(coxaDir(L, hipW, tmp, cxC), L.coxa * sc); R0 = L.cw; }
@@ -2040,11 +2046,11 @@ function pose(dt) {
     if (nx) { chainOf(L, sc); solveChain(R0, tmp, CH_LENS, CH_BENDS, L.hint, J); kneeW.copy(J[1]); ankleW.copy(J[nx + 2]); }
     else { solveLeg(R0, tmp, kneeW, ankleW, L.hint, sc, L.up, L.lo); J[0].copy(R0); J[1].copy(kneeW); J[2].copy(ankleW); }
     const K2 = J[2];                                            // the end of the first shin piece
-    footW.copy(ankleW); footW.y -= ank;
+    footW.copy(ankleW); footW.y -= ank; footW.z -= az;
     {
       // how much of the load the leg carries through its structure: a bent knee or a foot set out from the hip
       // must be held by joint torque (arm = the larger of the two lever arms); a straight column passes it down
-      const Lm = (L.up + L.lo) / 2, dd = R0.distanceTo(ankleW) / sc, hz = Math.hypot(R0.x - footW.x, R0.z - footW.z) / sc;
+      const Lm = (L.up + L.lo) / 2, dd = R0.distanceTo(ankleW) / sc, hz = Math.hypot(R0.x - ankleW.x, R0.z - ankleW.z) / sc;   // the load runs hip → ankle
       const e = clamp(dd / (2 * Lm), 0, 0.999), arm = Math.max(Lm * Math.sqrt(1 - e * e), hz, 0.18 * Lm);
       L.geom = clamp(0.8 * Lm / arm, 0.4, 3);                       // calibrated: the default wide stance, walking, is about 1
     }
@@ -2065,6 +2071,7 @@ function pose(dt) {
     L.knee.position.copy(kneeW); L.knee.scale.setScalar(hk);
     if (L.ankleHub) { L.ankleHub.position.copy(ankleW); L.ankleHub.quaternion.copy(L.upper.quaternion); L.ankleHub.scale.setScalar(hk); L.ankleHub.visible = art; }
     L.footG.position.copy(footW); L.footG.scale.set(fk, sc, fk);
+    if (L.housing) L.housing.position.z = az / fk;
     L.hipMesh.scale.setScalar(0.45 + 0.55 * S.limb);
     placeRam(L, R0, kneeW, K2, sc);
     if (!OV.toes) curl = 0;
@@ -2096,11 +2103,11 @@ function pose(dt) {
       if (OV.steam) steamVent(kneeW, V(L.sx * 0.9, 0.2, -0.3), sc * Math.sqrt(Math.min(wt, 2)), 3);
       logEvent(`liftoff · ${L.n} · steam`);
     }
-    L.footPos.copy(footW).divideScalar(sc);
+    L.footPos.copy(footW).divideScalar(sc); L.footPos.z += az / sc;   // the leg's load goes down through the ankle
     const ring = contactRings[i];
     ring.visible = OV.feet && L.planted;
     ring.position.x = footW.x; ring.position.z = footW.z; ring.scale.setScalar(sc);
-    if (L.planted) planted.push(footW.clone());
+    if (L.planted) planted.push(footW.clone().setZ(footW.z + az));
   });
 
   // support polygon of planted feet, ordered around their centre (a line for a biped)
@@ -2678,6 +2685,7 @@ function placeMarkers() {
 const f2 = v => (v >= 0 ? ' ' : '') + v.toFixed(2);
 function showSel() {
   const mountSel = document.getElementById('mountSel');
+  syncAnkleZ();
   const acts = document.getElementById('jointActs');
   acts.hidden = !(selected && ['coxa', 'xknee', 'ankle'].includes(selected.kind));
   document.getElementById('jointFlip').hidden = selected?.kind !== 'xknee';
@@ -2691,7 +2699,7 @@ function showSel() {
   if (m.kind === 'knee') tuneSel.innerHTML = `<b>${L.n} knee</b><br>upper leg ${L.up.toFixed(2)} · lower leg ${L.lo.toFixed(2)}`;
   if (m.kind === 'coxa') tuneSel.innerHTML = `<b>${L.n} hip segment</b><br>${L.coxa.toFixed(2)} long · the leg bends down at its end`;
   if (m.kind === 'xknee') { const j = L.xk[m.key]; tuneSel.innerHTML = `<b>${L.n} knee ${m.key + 2}</b><br>${Math.round(j.at * 100)}% down the lower leg · bends ${j.bend > 0 ? 'with' : 'against'} the knee`; }
-  if (m.kind === 'ankle') tuneSel.innerHTML = `<b>${L.n} ankle</b><br>${ankleOf(L).toFixed(2)} above the foot`;
+  if (m.kind === 'ankle') { const z = L.ankleZ || 0; tuneSel.innerHTML = `<b>${L.n} ankle</b><br>${ankleOf(L).toFixed(2)} above the foot · ${Math.abs(z) < 0.005 ? 'centred over it' : `${Math.abs(z).toFixed(2)} ${z > 0 ? 'forward' : 'back'}`}`; }
   if (m.kind === 'foot') tuneSel.innerHTML = `<b>${L.n} foot</b><br>x ${f2(L.rest.x)} · z ${f2(L.rest.z)}`;
   if (m.kind === 'turret') { const t = turret.position; tuneSel.innerHTML = `<b>Turret pivot</b><br>x ${f2(t.x)} · y ${f2(t.y)} · z ${f2(t.z)}`; }
   if (m.kind === 'chassis') { const t = CH.mount; tuneSel.innerHTML = `<b>Main body mount</b> · ${CH.type}<br>on the leg subframe · x ${f2(t.x)} · y ${f2(t.y)} · z ${f2(t.z)}`; }
@@ -2731,9 +2739,15 @@ function moveJoint(m, p) {
     if (o && o.xk[i]) o.xk[i].at = L.xk[i].at;
   } else if (m.kind === 'ankle') {                             // the ankle rides up or down over the foot
     const a = clamp((p.y - L.footG.position.y) / sc, 0.05, 1);
-    for (const l of [L, o]) if (l && ankleOf(l) > 0 && Math.abs(ankleOf(l) - a) > 0.004) { l.ankle = a; if (l.mech) rebuildMechFoot(l); }
+    if (m._footZ == null) m._footZ = L.footG.position.z;         // measured from where the foot was when the drag began
+    const z = view === 'z' ? (L.ankleZ || 0) : clamp((p.z - m._footZ) / sc, -ANKLE_Z_MAX, ANKLE_Z_MAX);   // fore and aft in the X and Y views
+    for (const l of [L, o]) if (l && ankleOf(l) > 0) {
+      l.ankleZ = z;
+      if (view !== 'y' && Math.abs(ankleOf(l) - a) > 0.004) { l.ankle = a; if (l.mech) rebuildMechFoot(l); }
+    }
+    syncAnkleZ();
   } else if (m.kind === 'knee') {
-    kH.copy(L.jw[0]); kF.copy(L.footG.position); kF.y += ankleOf(L) * sc;   // from the hip (or hip segment) to the ankle
+    kH.copy(L.jw[0]); kF.copy(L.footG.position); kF.y += ankleOf(L) * sc; kF.z += (L.ankleZ || 0) * sc;   // from the hip (or hip segment) to the ankle
     L.up = Math.max(0.25, kA.subVectors(p, kH).length() / sc);
     // with added knees the lower leg is folded, so a drag scales it rather than setting it to the straight distance
     L.lo = Math.max(0.25, L.xk.length ? L.lo * kD.subVectors(kF, p).length() / Math.max(1e-6, kF.distanceTo(L.jw[1])) : kD.subVectors(kF, p).length() / sc);
@@ -2785,13 +2799,13 @@ canvas.addEventListener('pointermove', e => {
     showExtraPos(ex);
   } else { moveJoint(drag.m, hitP); showSel(); }
 });
-const endDrag = () => { if (!drag) return; drag = null; controls.enabled = !tween; TUNED[S.rig] = snapshot(); };
+const endDrag = () => { if (!drag) return; if (drag.m) drag.m._footZ = null; drag = null; controls.enabled = !tween; TUNED[S.rig] = snapshot(); };
 canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
 
 /* ---------- add and remove joints: a hip segment, more knees, an ankle ---------- */
-let jointScope = 'all';
+var jointScope = 'all';                                         // var: showSel can run before this line
 document.querySelectorAll('#jointScope button').forEach(b => b.addEventListener('click', () => {
-  jointScope = b.dataset.scope; document.querySelectorAll('#jointScope button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  jointScope = b.dataset.scope; document.querySelectorAll('#jointScope button').forEach(x => x.setAttribute('aria-pressed', x === b)); syncAnkleZ();
 }));
 function scopeLegs() {                                           // all legs, or the selected joint's leg and its mirror
   if (jointScope === 'all' || !selected?.leg) return LEGS;
@@ -2839,6 +2853,25 @@ function flipBend() {
 document.querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', () => addJoint(b.dataset.add)));
 document.getElementById('jointDel').addEventListener('click', removeJoint);
 document.getElementById('jointFlip').addEventListener('click', flipBend);
+// ankle fore and aft: moves the ankle along the foot (the foot stays where it is on the ground). Applies to the same legs
+// as Add a joint (all legs, or the selected leg and its mirror); a leg with no ankle has nothing to move.
+const ANKLE_Z_MAX = 0.6;
+const ankleZEl = document.getElementById('ankleZ'), ankleZOut = document.getElementById('ankleZOut');
+function ankleZText(z) { return Math.abs(z) < 0.005 ? 'centred' : `${Math.abs(z).toFixed(2)} ${z > 0 ? 'forward' : 'back'}`; }
+function syncAnkleZ() {
+  const ankleZEl = document.getElementById('ankleZ'), ankleZOut = document.getElementById('ankleZOut');
+  const legs = scopeLegs().filter(l => ankleOf(l) > 0), z = legs[0]?.ankleZ || 0;
+  ankleZEl.disabled = !legs.length; ankleZEl.value = z;
+  ankleZOut.textContent = legs.length ? ankleZText(z) : 'add an ankle first';
+}
+let ankleZUndo = false;
+ankleZEl.addEventListener('input', () => {
+  if (!ankleZUndo) { undoStack.push(snapshot()); ankleZUndo = true; }
+  const z = +ankleZEl.value;
+  for (const l of scopeLegs()) if (ankleOf(l) > 0) l.ankleZ = z;
+  ankleZOut.textContent = ankleZText(z); showSel();
+});
+ankleZEl.addEventListener('change', () => { ankleZUndo = false; TUNED[S.rig] = snapshot(); });
 
 function tuneUndo() { const sn = undoStack.pop(); if (sn) { applySnap(sn); TUNED[S.rig] = snapshot(); if (S.tuning) buildMarkers(); showSel(); showBlockSel(); } }
 
