@@ -286,7 +286,7 @@
 <canvas id="c" tabindex="0" aria-label="3D view of the walker"></canvas>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · ankle fore-aft</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · cockpit body</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -382,11 +382,17 @@
       <label class="field" id="springField" hidden><div class="top">Spring <output id="springOut"></output></div>
         <input type="range" id="spring" min="0.5" max="4" step="0.1" value="1.6"></label>
       <label class="field"><div class="top">Ride height <output id="rideOut">100%</output></div>
-        <input type="range" id="ride" min="0.8" max="1.25" step="0.01" value="1"></label>
+        <input type="range" id="ride" min="0.8" max="1.6" step="0.01" value="1"></label>
       <div class="field">Leg look
         <div class="seg" id="legLook">
           <button data-look="spider" aria-pressed="true">Spider</button>
           <button data-look="mech" aria-pressed="false">Armoured</button>
+        </div>
+      </div>
+      <div class="field" data-new="body-look-2026-11-27" data-new-btn="tuneBtn" data-new-step="joints"><div class="top"><span>Body look</span><span class="newtag" hidden>New</span></div>
+        <div class="seg" id="hullLook">
+          <button data-hull="std" aria-pressed="true">Standard</button>
+          <button data-hull="cab" aria-pressed="false" title="A cockpit cab with a sloped nose, missile pods on the shoulders, twin cannons stacked on the right flank">Cockpit</button>
         </div>
       </div>
       <div class="field">Reference image
@@ -910,6 +916,75 @@ const racks = [-1, 1].map(s => {
   return { s, pivot, tubes };
 });
 
+/* ---------- body look: Standard (the sample hull and turret) or Cockpit, after the owner's concept art ----------
+   Cockpit: a long lower hull with olive armour skirts at the rear flanks; on it, turning at the waist, a cockpit cab
+   with a sloped nose and side windows; two olive missile pods stacked on each rear shoulder, tubes facing aft; the
+   twin cannons stacked one above the other on the right flank in an olive breech housing, long barrels with collars
+   and muzzle brakes. Proportions measured off the concept (1 unit ≈ the drawing's body length / 2.2). The cockpit
+   art lives beside the standard art and the two swap; weapons keep their mounts, muzzles and firing logic. */
+M.glass = new THREE.MeshStandardMaterial({ color: 0x0c1519, metalness: 0.9, roughness: 0.12 });
+const CAB_ART = [];
+const sideShape = pts => { const sh = new THREE.Shape(); pts.forEach(([z, y], i) => i ? sh.lineTo(z, y) : sh.moveTo(z, y)); return sh; };
+function sideExtrude(pts, width, bevel = 0.03) {                 // a side profile (z forward, y up) extruded across x
+  const g = new THREE.ExtrudeGeometry(sideShape(pts), { depth: width - 2 * bevel, bevelEnabled: bevel > 0, bevelSize: bevel, bevelThickness: bevel, bevelSegments: 2, curveSegments: 1 });
+  return g.rotateY(-Math.PI / 2).translate(width / 2 - bevel, 0, 0);
+}
+{
+  // main body: lower hull, belly, chin, olive skirts on the rear flanks
+  const hull = holder(body); CAB_ART.push(hull);
+  rbox(1.5, 0.5, 2.0, M.hull, hull, 0, -0.04, -0.05, 0.08);
+  rbox(1.1, 0.16, 1.5, M.dark, hull, 0, -0.33, -0.05, 0.05);
+  rbox(1.24, 0.22, 0.2, M.dark, hull, 0, -0.12, 0.98, 0.05);
+  rbox(1.1, 0.12, 0.5, M.plate, hull, 0, 0.23, -0.72, 0.04);
+  for (const s of [-1, 1]) {
+    rbox(0.1, 0.7, 0.44, M.olive, hull, 0.79 * s, 0.1, -0.56, 0.03);
+    rbox(0.06, 0.2, 0.26, M.dark, hull, 0.82 * s, 0.24, -0.56, 0.02);          // a vent on the skirt
+  }
+  // the cockpit cab, on the upper body: sloped nose, roof, side windows
+  const cab = holder(turret); CAB_ART.push(cab);
+  mk(sideExtrude([[-0.72, 0], [0.68, 0], [0.68, 0.2], [0.22, 0.66], [-0.62, 0.66], [-0.72, 0.56]], 1.2), M.hull, cab);
+  mk(sideExtrude([[-0.5, 0.64], [0.12, 0.64], [0.12, 0.72], [-0.5, 0.72]], 0.7, 0.02), M.hull, cab);   // a raised roof plate
+  for (const s of [-1, 1]) {
+    const w = mk(sideExtrude([[0.0, 0.41], [0.43, 0.41], [0.28, 0.56], [0.02, 0.56]], 0.03, 0), M.glass, cab); w.position.x = 0.6 * s;
+    rbox(0.04, 0.3, 0.5, M.olive, cab, 0.61 * s, 0.22, -0.38, 0.02);          // an armour panel behind the window
+  }
+  const nose = mk(sideExtrude([[0.3, 0.52], [0.45, 0.37], [0.48, 0.4], [0.33, 0.55]], 0.8, 0), M.glass, cab);   // a slit on the nose slope
+}
+// standard art for the parts that swap
+const mantletStd = mantlet.children.filter(c => c.isMesh);
+twins.forEach(tw => { tw.std = tw.slide.children.filter(c => c.isMesh); tw.muzzleStd = tw.muzzle.position.z; });
+racks.forEach(R => { R.std = R.pivot.children.filter(c => c.isMesh); R.tubeStd = R.tubes.map(t => t.position.clone()); });
+// the cannons' olive breech housing (on the mantlet) and each cannon's long barrel
+const breech = holder(mantlet); CAB_ART.push(breech);
+rbox(0.32, 0.52, 0.86, M.olive, breech, 0, -0.01, -0.38, 0.04);
+rbox(0.34, 0.12, 0.5, M.hull, breech, 0, 0.29, -0.5, 0.03);
+twins.forEach(tw => {
+  const g = holder(tw.slide); tw.cab = g; CAB_ART.push(g);
+  mk(barrelGeo(0.058, 1.08), M.dark, g).position.z = 0.04;
+  for (const z of [0.32, 0.72]) mk(barrelGeo(0.075, 0.06), M.joint, g).position.z = z;
+  mk(barrelGeo(0.082, 0.16), M.joint, g).position.z = 1.06;                     // muzzle brake
+});
+racks.forEach(R => {                                              // two stacked pods, 2 × 5 tubes on the aft face
+  const g = holder(R.pivot); R.cab = g; CAB_ART.push(g);
+  for (const y of [0.115, 0.35]) {
+    rbox(0.42, 0.22, 0.78, M.olive, g, 0, y, 0.39, 0.03);
+    rbox(0.44, 0.05, 0.8, M.hull, g, 0, y - 0.075, 0.39, 0.015);
+    for (let i = 0; i < 10; i++) mk(barrelGeo(0.032, 0.02, 12), M.dark, g).position.set(-0.16 + 0.08 * (i % 5), y + (i < 5 ? 0.05 : -0.04), 0.78);
+  }
+});
+const CAB_TUBES = Array.from({ length: 8 }, (_, i) => V(-0.16 + 0.08 * (i % 4), 0.35 + (i < 4 ? 0.05 : -0.04), 0.79));
+function placeBodyLook() {                                        // the parts that move with the body look
+  const cab = S.hullLook === 'cab';
+  twins.forEach(tw => {
+    tw.slide.position.x = cab ? 0 : 0.2 * tw.s; tw.slide.position.y = cab ? (tw.s > 0 ? 0.12 : -0.13) : -0.2;   // stacked, or side by side
+    tw.muzzle.position.z = cab ? 1.2 : tw.muzzleStd;
+  });
+  racks.forEach(R => {
+    R.pivot.rotation.order = 'YXZ'; R.pivot.rotation.y = cab ? Math.PI : 0;   // the pods' tubes face aft
+    R.tubes.forEach((t, i) => t.position.copy(cab ? CAB_TUBES[i] : R.tubeStd[i]));
+  });
+}
+
 /* jump jets: four nozzles under the hull, each firing straight down */
 const flameOuterMat = additive(0xff7a2a, 0.75), flameCoreMat = additive(0xfff1c2, 0.95);
 const flameGeo = new THREE.ConeGeometry(0.11, 1, 14, 1, true); flameGeo.translate(0, -0.5, 0);
@@ -1065,7 +1140,13 @@ function placeExtras() {
 const extraMeshes = () => [...EXM.values()].flatMap(r => [r.a, r.b]).filter(Boolean);
 function applyLook() {
   const art = S.look === 'art';
-  HULL_ART.forEach(m => m.visible = art);
+  const cab = S.hullLook === 'cab';
+  HULL_ART.forEach(m => m.visible = art && !cab);
+  CAB_ART.forEach(m => m.visible = art && cab);
+  mantletStd.forEach(m => m.visible = !cab);
+  twins.forEach(tw => tw.std.forEach(m => m.visible = !cab));
+  racks.forEach(R => R.std.forEach(m => m.visible = !cab));
+  placeBodyLook();
   hipMeshes.forEach(m => m.visible = art);
   LEGS.forEach(L => { L.upper.visible = L.lower.visible = L.knee.visible = L.footG.visible = art; for (const k in L.bm) L.bm[k].visible = !art; });
   if (bodyBlk) bodyBlk.visible = !art;
@@ -1344,7 +1425,7 @@ const S = {
   aim: 'center', yaw: 0, pitch: 0, cursorYaw: 0,
   strideScale: 1, liftScale: 1, shake: 0,
   weight: 1, sizeFollows: true, sc: 1, scrollW: 0, thud: 0, braced: false, tuning: false, rate: 1, strength: 2.3, gw: 0, sim: true, overloaded: false, amble: false, oneAtATime: false, limb: 1, legSpeed: 0.35, jets: true, jetTW: 1.8, jetBurn: 1.2, jetForward: 6, jet: 0, stance: 0, stanceAuto: true, geomAvg: 1, look: 'art', converted: false,
-  kneeFwd: false, legStyle: 'spider', upper: 0.3, twin: false, rods: false, heightM: 6, yawV: 0, recoil: 0.15,
+  kneeFwd: false, legStyle: 'spider', hullLook: 'std', upper: 0.3, twin: false, rods: false, heightM: 6, yawV: 0, recoil: 0.15,
 };
 
 const TONS = 40;
@@ -2712,7 +2793,7 @@ function moveJoint(m, p) {
     // weapons and the motor belong to the main body (or the cab on it), never the leg subframe: a mount stays on its
     // carrier and cannot go below the main body's underside (or below the cab ring, for cab mounts)
     const node = MOUNTS[m.key].node, q = node.parent.worldToLocal(p.clone());
-    const floor = node.parent === turret ? -0.05 : -BLK.body.h / 2;
+    const floor = node.parent === turret ? -BLK.body.h : -BLK.body.h / 2;   // cab mounts may hang down the hull's flank
     setMount(m.key, [MOUNTS[m.key].pair ? Math.abs(q.x) : q.x, Math.max(floor, q.y), q.z]);
   } else if (m.kind === 'turret') {
     const q = body.worldToLocal(p.clone());
@@ -3066,7 +3147,7 @@ document.getElementById('tuneReset').addEventListener('click', () => {
 // Export rig and Import rig use it, and so does the template library.
 function captureRig(withRefs = true) {
   return { schema: 'mm-model-forge/walker-rig@1', legs: S.rig, weight: S.weight, joints: snapshot(), madeParts: S.converted,
-    body: { legLook: S.legStyle, kneesForward: S.kneeFwd, upperShare: S.upper, cannon: S.twin ? 'twin' : 'single', kneeRams: S.rods,
+    body: { legLook: S.legStyle, bodyLook: S.hullLook, kneesForward: S.kneeFwd, upperShare: S.upper, cannon: S.twin ? 'twin' : 'single', kneeRams: S.rods,
             heightM: S.sizeFollows ? null : S.heightM, limbs: S.limb, stance: S.stance, stanceAuto: S.stanceAuto, tons: Math.round(S.weight * TONS),
             jets: S.jets, strength: S.strength, legSpeed: S.legSpeed, recoil: S.recoil },
     parts: S.converted ? partList().map(r => ({ name: r.name, part: r.part, massShare: +r.share.toFixed(4) })) : [],
@@ -3079,6 +3160,7 @@ async function applyRig(data, { refs = true } = {}) {
   TUNED[data.legs] = data.joints; setLegs(data.legs);
   const bd = data.body || {};
   if (bd.legLook) setLegStyle(bd.legLook);
+  setHullLook(bd.bodyLook || 'std');
   S.kneeFwd = !!bd.kneesForward; setKnee(S.kneeFwd);
   if (bd.upperShare != null) setUpper(bd.upperShare);
   setTwin(bd.cannon === 'twin'); setRods(!!bd.kneeRams);
@@ -3128,7 +3210,7 @@ function resetUnit() {
   for (const k in MOUNT_HOME) setMount(k, MOUNT_HOME[k]); FIT = { ...FIT_HOME }; applyFit();
   setChassis(CH_HOME); setRide(1); turret.position.copy(TURRET_HOME);
   S.legStyle = 'spider'; document.querySelectorAll('#legLook button').forEach(b => b.setAttribute('aria-pressed', b.dataset.look === 'spider'));
-  S.kneeFwd = false; setUpper(0.3); setTwin(false); setRods(false);
+  S.kneeFwd = false; setUpper(0.3); setTwin(false); setRods(false); setHullLook('std');
   if (!S.sizeFollows) { const c = document.getElementById('sizeFollows'); c.checked = true; c.dispatchEvent(new Event('change')); }
   S.jets = true; document.getElementById('jetsOn').checked = true;
   S.strength = 2.3; strEl.value = 2.3; S.legSpeed = 0.35; document.getElementById('legSpeed').value = 0.35; S.recoil = 0.15; document.getElementById('recoil').value = 0.15;
@@ -3246,7 +3328,7 @@ rodsEl.addEventListener('change', () => setRods(rodsEl.checked));
 
 /* ---------- ride height: how tall the walker stands on its legs (straighter or more crouched) ---------- */
 function setRide(k) {
-  RIDE.k = clamp(k, 0.8, 1.25); document.getElementById('ride').value = RIDE.k;
+  RIDE.k = clamp(k, 0.8, 1.6); document.getElementById('ride').value = RIDE.k;
   document.getElementById('rideOut').textContent = `${Math.round(RIDE.k * 100)}%${RIDE.k > 1.08 ? ', legs nearly straight' : RIDE.k < 0.92 ? ', crouched' : ''}`;
   if (S.tuning || S.paused) settleStand();
   if (typeof refreshRigLabel === 'function') refreshRigLabel();
@@ -3278,6 +3360,13 @@ function setLegStyle(style) {
   if (S.tuning) buildMarkers();
 }
 document.querySelectorAll('#legLook button').forEach(b => b.addEventListener('click', () => setLegStyle(b.dataset.look)));
+function setHullLook(look) {
+  S.hullLook = look === 'cab' ? 'cab' : 'std';
+  M.hull.color.setHex(S.hullLook === 'cab' ? 0x4a4e4b : 0x55606e);   // the concept's charcoal, or the standard blue-grey
+  document.querySelectorAll('#hullLook button').forEach(b => b.setAttribute('aria-pressed', b.dataset.hull === S.hullLook));
+  applyLook();
+}
+document.querySelectorAll('#hullLook button').forEach(b => b.addEventListener('click', () => { undoStack.push(snapshot()); setHullLook(b.dataset.hull); }));
 
 /* ---------- knees: which way a biped's knees bend ---------- */
 function setKnee(fwd) {
@@ -3388,6 +3477,9 @@ bindTog('ovRef', 'ref');
 onView.push(showRefFields);
 
 /* ---------- the twin-cannon biped, one click ---------- */
+// legs a little longer than drawn and a little more bent (the drawing's near-straight legs at its proportions cannot
+// step: measured, the walker stops or its feet slide 46 cm); hips and cab where the twin stays steady (2.9c-4)
+const TWIN = { up: 0.66, lo: 1.14, ankle: 0.46, ankleZ: -0.15, foot: 1.0, hipZ: -0.16, restZ: 0.02, ride: 1.2, cabZ: 0.1 };
 function twinCannonBiped() {
   undoStack.push(snapshot()); delete TUNED[2];
   S.legStyle = 'mech'; document.querySelectorAll('#legLook button').forEach(b => b.setAttribute('aria-pressed', b.dataset.look === 'mech'));
@@ -3396,16 +3488,21 @@ function twinCannonBiped() {
   // proportions from the concept: thigh and shin about equal, hips under the back half of the hull, feet under the hips
   // proportions measured off the concept's side view: thigh 0.57 of the shin, a raised ankle 0.38 of the shin above
   // the ground, a long two-piece foot 1.3 shins long (in foot units), hips under the back half of the hull
-  LEGS.forEach(L => { L.up = 0.72; L.lo = 1.26; L.ankle = 0.48; L.footLen = 1.05; rebuildMechFoot(L);
+  // second concept (three-quarter view, 2026-11-27): thigh 0.58 of the shin, the ankle 0.4 of the shin up and a little
+  // behind the foot's middle, a long foot
+  LEGS.forEach(L => { L.up = TWIN.up; L.lo = TWIN.lo; L.ankle = TWIN.ankle; L.ankleZ = TWIN.ankleZ; L.footLen = TWIN.foot; rebuildMechFoot(L);
     L.blk.foot.l = 0.85; L.blk.foot.w = 0.4;                          // the physics' foot: long, so it resists pitch like the drawing's
-    L.hip.y = -0.42; L.hip.z = -0.16; L.hipMesh.position.copy(L.hip); L.rest.z = 0.02; });   // hips hang below the hull, as drawn
-  setRide(1.2);                                                       // the drawing stands nearly straight-legged
+    L.hip.y = -0.42; L.hip.z = TWIN.hipZ; L.hipMesh.position.copy(L.hip); L.rest.z = TWIN.restZ; });   // hips hang below the hull, as drawn
+  setRide(TWIN.ride);
   settleStand();
   setChassis({ mount: [0, 0, 0.04], type: 'rigid', hz: 1.6 });       // the chassis sits on the hip subframe, a little forward
   S.jets = false; document.getElementById('jetsOn').checked = false;
   setUpper(0.45); setTwin(true); setRods(true);
   FIT = { cannon: true, guns: false, laser: false, racks: true, pod: false, mg: false, stack: false, jets: false }; applyFit(); showFit();
-  turret.position.set(0, 0.24, -0.04);                              // the waist: the whole upper body turns on it
+  // the Cockpit body: the cab on the front of the hull, the cannons stacked on its right flank, pods on the shoulders
+  setHullLook('cab');
+  turret.position.set(0, 0.22, TWIN.cabZ);                          // the waist: the whole upper body turns on it
+  setMount('guns', [-0.86, -0.3, 0.1]);   // on the walker's right flank (−x), as drawn setMount('racks', [0.32, 0.29, -0.65]);
   TUNED[2] = snapshot();
   if (S.tuning) buildMarkers();
   strengthNote(); refreshRigLabel(); showHeight();
