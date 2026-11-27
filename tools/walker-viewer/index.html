@@ -345,8 +345,8 @@
   <details class="step" data-step="joints" open>
     <summary><span><span class="num">1</span>Joints</span></summary>
     <div class="body-in">
-      <p class="note" style="margin:0">Drag a joint in the X, Y or Z view. Dragging a knee sets that leg's segment lengths and which way it bends. The legs bolt to a subframe; the chassis (cab, weapons, motor) sits on it at the chassis mount.</p>
-      <div class="legend"><span><i style="background:#8fd3c8"></i>Hip</span><span><i style="background:#f2a541"></i>Knee</span><span><i style="background:#e6ebf1"></i>Foot</span><span><i style="background:#6fb7ff"></i>Chassis</span><span><i style="background:#b89cff"></i>Turret</span></div>
+      <p class="note" style="margin:0">Drag a joint in the X, Y or Z view. Dragging a knee sets that leg's segment lengths and which way it bends. The legs bolt to a leg subframe; the main body, with the cab, weapons and motor, sits on it at the main body mount.</p>
+      <div class="legend"><span><i style="background:#8fd3c8"></i>Hip</span><span><i style="background:#f2a541"></i>Knee</span><span><i style="background:#e6ebf1"></i>Foot</span><span><i style="background:#6fb7ff"></i>Main body</span><span><i style="background:#b89cff"></i>Turret</span></div>
       <div class="sel" id="tuneSel">Select a joint</div>
       <label class="tog">Mirror left and right <input type="checkbox" id="tuneSym" checked></label>
       <div class="field" id="kneeField">Knees bend
@@ -355,7 +355,7 @@
           <button data-knee="fwd" aria-pressed="false">Forward</button>
         </div>
       </div>
-      <div class="field">Chassis mount
+      <div class="field">Main body mount
         <div class="seg" id="mountType">
           <button data-mt="rigid" aria-pressed="true">Rigid</button>
           <button data-mt="sprung" aria-pressed="false">Sprung</button>
@@ -400,7 +400,7 @@
       <div id="blkExtra" hidden>
         <div class="field">Carried by
           <div class="seg" id="blkOn">
-            <button data-on="body" aria-pressed="true">Chassis</button>
+            <button data-on="body" aria-pressed="true">Main body</button>
             <button data-on="turret" aria-pressed="false">Upper body</button>
             <button data-on="frame" aria-pressed="false">Subframe</button>
           </div>
@@ -421,7 +421,7 @@
   <details class="step" data-step="mounts">
     <summary><span><span class="num">3</span>Mounts</span></summary>
     <div class="body-in">
-      <p class="note" style="margin:0">Drag a weapon mount in the X, Y or Z view to where the drawing has it. Untick what this walker does not carry; its key leaves the weapon row.</p>
+      <p class="note" style="margin:0">Weapons mount on the main body or the cab, never the leg subframe. Drag a mount in the X, Y or Z view to where the drawing has it. Untick what this walker does not carry; its key leaves the weapon row.</p>
       <div class="sel" id="mountSel">Select a mount</div>
       <div id="fitList"></div>
     </div>
@@ -893,7 +893,7 @@ function setMount(k, arr) {
 /* ---------- sizing blocks and parts: a block per segment between joints, then real parts ---------- */
 const BLK_HOME = { body: { shape: 'box', w: 1.5, h: 0.5, l: 2.2 }, turret: { shape: 'box', w: 0.96, h: 0.4, l: 1.0 }, frame: { shape: 'box', auto: true, w: 1.6, h: 0.16, l: 0.5 }, extra: [] };
 // what carries a free block: the chassis (hull), the upper body (cab, turns with it) or the leg subframe
-const CARRIER = { body: 'chassis', turret: 'upper body', frame: 'subframe' };
+const CARRIER = { body: 'main body', turret: 'upper body', frame: 'leg subframe' };
 const carrierOf = on => on === 'turret' ? turret : on === 'frame' ? frame : body;
 const partOf = on => on === 'turret' ? 'turret' : on === 'frame' ? 'frame' : 'body';
 let BLK = JSON.parse(JSON.stringify(BLK_HOME));
@@ -2512,22 +2512,25 @@ function showSel() {
   if (!selected) { tuneSel.innerHTML = 'Select a joint'; mountSel.innerHTML = 'Select a mount'; return; }
   const m = selected, L = m.leg;
   if (m.kind === 'mount') {
-    const M_ = MOUNTS[m.key], p = M_.node.position, M_P = M_.node.parent === turret ? 'upper body' : 'chassis';
+    const M_ = MOUNTS[m.key], p = M_.node.position, M_P = M_.node.parent === turret ? 'cab (upper body)' : 'main body';
     mountSel.innerHTML = `<b>${M_.label}</b>${M_.note ? ` · ${M_.note}` : ''}<br>on the ${M_P} · x ${f2(p.x)} · y ${f2(p.y)} · z ${f2(p.z)}`; return;
   }
   if (m.kind === 'hip') tuneSel.innerHTML = `<b>${L.n} hip</b><br>x ${f2(L.hip.x)} · y ${f2(L.hip.y)} · z ${f2(L.hip.z)}`;
   if (m.kind === 'knee') tuneSel.innerHTML = `<b>${L.n} knee</b><br>upper leg ${L.up.toFixed(2)} · lower leg ${L.lo.toFixed(2)}`;
   if (m.kind === 'foot') tuneSel.innerHTML = `<b>${L.n} foot</b><br>x ${f2(L.rest.x)} · z ${f2(L.rest.z)}`;
   if (m.kind === 'turret') { const t = turret.position; tuneSel.innerHTML = `<b>Turret pivot</b><br>x ${f2(t.x)} · y ${f2(t.y)} · z ${f2(t.z)}`; }
-  if (m.kind === 'chassis') { const t = CH.mount; tuneSel.innerHTML = `<b>Chassis mount</b> · ${CH.type}<br>on the subframe · x ${f2(t.x)} · y ${f2(t.y)} · z ${f2(t.z)}`; }
+  if (m.kind === 'chassis') { const t = CH.mount; tuneSel.innerHTML = `<b>Main body mount</b> · ${CH.type}<br>on the leg subframe · x ${f2(t.x)} · y ${f2(t.y)} · z ${f2(t.z)}`; }
 }
 const mirrorOf = L => LEGS.find(o => o !== L && o.sz === L.sz && o.sx === -L.sx);
 const kH = V(), kF = V(), kA = V(), kD = V();
 function moveJoint(m, p) {
   const sc = S.sc, sym = document.getElementById('tuneSym').checked, L = m.leg, o = L && sym ? mirrorOf(L) : null;
   if (m.kind === 'mount') {
+    // weapons and the motor belong to the main body (or the cab on it), never the leg subframe: a mount stays on its
+    // carrier and cannot go below the main body's underside (or below the cab ring, for cab mounts)
     const node = MOUNTS[m.key].node, q = node.parent.worldToLocal(p.clone());
-    setMount(m.key, [MOUNTS[m.key].pair ? Math.abs(q.x) : q.x, q.y, q.z]);
+    const floor = node.parent === turret ? -0.05 : -BLK.body.h / 2;
+    setMount(m.key, [MOUNTS[m.key].pair ? Math.abs(q.x) : q.x, Math.max(floor, q.y), q.z]);
   } else if (m.kind === 'turret') {
     const q = body.worldToLocal(p.clone());
     turret.position.set(sym ? 0 : q.x, clamp(q.y, 0.15, 0.6), clamp(q.z, -0.7, 0.6));
@@ -2645,7 +2648,7 @@ function showBlockSel() {
   if (!blkSel || !spec) { blkSel = null; selEl.innerHTML = 'Select a block, or add one'; shapeEl.innerHTML = ''; fieldsEl.innerHTML = ''; exEl.hidden = true; scopeEl.hidden = true; return; }
   const isEx = blkSel.kind === 'extra';
   exEl.hidden = !isEx; scopeEl.hidden = blkSel.kind !== 'seg' && blkSel.kind !== 'foot';
-  const name = isEx ? `Block ${BLK.extra.indexOf(spec) + 1}` : blkSel.kind === 'body' ? 'Chassis' : blkSel.kind === 'turret' ? 'Upper body' : blkSel.kind === 'frame' ? 'Leg subframe' : `${blkSel.leg} ${PART_LABEL[blkSel.part]}`;
+  const name = isEx ? `Block ${BLK.extra.indexOf(spec) + 1}` : blkSel.kind === 'body' ? 'Main body' : blkSel.kind === 'turret' ? 'Upper body' : blkSel.kind === 'frame' ? 'Leg subframe' : `${blkSel.leg} ${PART_LABEL[blkSel.part]}`;
   selEl.innerHTML = `<b>${name}</b><br>${SHAPE_NAME[spec.shape]}${isEx ? `<span id="exPos"></span>` : ''}`;
   if (isEx) {
     showExtraPos(spec);
@@ -2671,7 +2674,7 @@ function showBlockSel() {
 }
 function showExtraPos(e) {
   const el = document.getElementById('exPos'); if (!el) return;
-  el.textContent = ` on the ${CARRIER[e.on] || 'chassis'}${e.mirror ? ', mirrored' : ''} · x ${f2(e.x)} · y ${f2(e.y)} · z ${f2(e.z)}`;
+  el.textContent = ` on the ${CARRIER[e.on] || 'main body'}${e.mirror ? ', mirrored' : ''} · x ${f2(e.x)} · y ${f2(e.y)} · z ${f2(e.z)}`;
 }
 // free blocks: add, carry, mirror, duplicate, delete
 let exSeq = 1;
@@ -2727,7 +2730,7 @@ function showParts() {
   if (!S.converted) { note.textContent = 'Make parts from the blocks first.'; list.innerHTML = ''; return; }
   note.textContent = 'These parts are the vehicle now. Each is one node with its pivot at its joint; mass and center of mass come from their volumes, and they export as the rig and its hit boxes.';
   const rows = partList(), group = {};
-  rows.forEach(r => { const k = r.part === 'body' ? 'Chassis' : r.part === 'turret' ? 'Upper body' : r.part === 'frame' ? 'Leg subframe' : PART_LABEL[r.part]; (group[k] ||= { n: 0, share: 0 }); group[k].n++; group[k].share += r.share; });
+  rows.forEach(r => { const k = r.part === 'body' ? 'Main body' : r.part === 'turret' ? 'Upper body' : r.part === 'frame' ? 'Leg subframe' : PART_LABEL[r.part]; (group[k] ||= { n: 0, share: 0 }); group[k].n++; group[k].share += r.share; });
   list.innerHTML = '<table class="plist">' + Object.entries(group).map(([k, g]) =>
     `<tr><td>${k[0].toUpperCase() + k.slice(1)}${g.n > 1 ? ` × ${g.n}` : ''}</td><td>${Math.round(g.share * 100)}% of mass</td></tr>`).join('') + '</table>';
 }
