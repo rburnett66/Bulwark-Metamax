@@ -126,6 +126,13 @@
   .tool:hover{background:rgba(46,58,75,.9)}
   .tool svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   .tool[aria-pressed="true"]{color:var(--weap)}
+  /* what's new: a dot on the button that leads to a new feature, a tag on the feature, and a flash when shown */
+  .tool{position:relative}
+  .newdot{position:absolute;top:7px;right:7px;width:9px;height:9px;border-radius:50%;background:var(--weap);box-shadow:0 0 0 3px rgba(242,165,65,.25)}
+  .newtag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:6px;background:rgba(242,165,65,.18);color:var(--weap);font-size:11.5px;font-weight:600;vertical-align:1px}
+  @keyframes newflash{0%,100%{box-shadow:0 0 0 6px rgba(242,165,65,0)}30%{box-shadow:0 0 0 6px rgba(242,165,65,.28),0 0 0 8px rgba(242,165,65,.7)}}
+  .flashnew{border-radius:10px;outline-offset:4px;animation:newflash 1.1s ease-in-out 3}
+  @media (prefers-reduced-motion:reduce){.flashnew{animation:none;box-shadow:0 0 0 2px rgba(242,165,65,.7)}}
 
   /* the deck */
   .deck{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);display:flex;align-items:stretch;gap:18px;
@@ -319,7 +326,7 @@
     <svg viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><path d="M16.75 14v5.5M14 16.75h5.5"/></svg><span>Library</span>
   </button>
   <button class="tool" id="tuneBtn" aria-pressed="false" title="Joints, sizing blocks and parts (T)">
-    <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.2"/><circle cx="12" cy="13" r="2.2"/><circle cx="18" cy="19" r="2.2"/><path d="M7.5 7.6l3 3.8M13.5 14.6l3 3"/></svg><span>Build rig</span>
+    <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.2"/><circle cx="12" cy="13" r="2.2"/><circle cx="18" cy="19" r="2.2"/><path d="M7.5 7.6l3 3.8M13.5 14.6l3 3"/></svg><span>Build rig</span><span class="newdot" data-new-dot="tuneBtn" hidden></span>
   </button>
   <button class="tool" id="adv" aria-expanded="false" title="Speed, turret aim, overlays">
     <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>Advanced</span>
@@ -345,11 +352,7 @@
   <details class="step" data-step="joints" open>
     <summary><span><span class="num">1</span>Joints</span></summary>
     <div class="body-in">
-      <p class="note" style="margin:0">Drag a joint in the X, Y or Z view. Dragging a knee sets that leg's segment lengths and which way it bends. Add a hip segment, more knees or an ankle to any leg; drag an added knee along the leg, an ankle up or down, a hip segment in or out. The legs bolt to a leg subframe; the main body, with the cab, weapons and motor, sits on it at the main body mount.</p>
-      <div class="legend"><span><i style="background:#8fd3c8"></i>Hip</span><span><i style="background:#f2a541"></i>Knee</span><span><i style="background:#ffd36b"></i>Ankle</span><span><i style="background:#e6ebf1"></i>Foot</span><span><i style="background:#6fb7ff"></i>Main body</span><span><i style="background:#b89cff"></i>Turret</span></div>
-      <div class="sel" id="tuneSel">Select a joint</div>
-      <label class="tog">Mirror left and right <input type="checkbox" id="tuneSym" checked></label>
-      <div class="field">Add a joint
+      <div class="field" id="addJointField" data-new="add-joint-2026-11-27" data-new-btn="tuneBtn" data-new-step="joints"><div class="top"><span>Add a joint</span><span class="newtag" hidden>New</span></div>
         <div class="row3"><button class="reset" data-add="hip" title="A hip segment: the leg swings out from the subframe before it bends down, like an insect's">Hip</button><button class="reset" data-add="knee" title="Another bend in the lower leg, like the backward hock of a dog's or bird's leg">Knee</button><button class="reset" data-add="ankle" title="A raised ankle: the leg ends above the foot, which hangs below it">Ankle</button></div>
         <div class="seg" id="jointScope" style="margin-top:6px">
           <button data-scope="all" aria-pressed="true">All legs</button>
@@ -357,6 +360,10 @@
         </div>
       </div>
       <div class="row2" id="jointActs" hidden><button class="reset" id="jointFlip">Flip bend</button><button class="reset" id="jointDel">Remove joint</button></div>
+      <p class="note" style="margin:0">Drag a joint in the X, Y or Z view. Dragging a knee sets that leg's segment lengths and which way it bends. Add a hip segment, more knees or an ankle to any leg; drag an added knee along the leg, an ankle up or down, a hip segment in or out. The legs bolt to a leg subframe; the main body, with the cab, weapons and motor, sits on it at the main body mount.</p>
+      <div class="legend"><span><i style="background:#8fd3c8"></i>Hip</span><span><i style="background:#f2a541"></i>Knee</span><span><i style="background:#ffd36b"></i>Ankle</span><span><i style="background:#e6ebf1"></i>Foot</span><span><i style="background:#6fb7ff"></i>Main body</span><span><i style="background:#b89cff"></i>Turret</span></div>
+      <div class="sel" id="tuneSel">Select a joint</div>
+      <label class="tog">Mirror left and right <input type="checkbox" id="tuneSym" checked></label>
       <div class="field" id="kneeField">Knees bend
         <div class="seg" id="kneeDir">
           <button data-knee="back" aria-pressed="true">Backward</button>
@@ -2986,6 +2993,7 @@ function setTuning(on) {
     buildMarkers();
     if (view === 'iso') setView('x'); else setView(view);
     const first = steps[0]; if (!first.open) first.open = true; openStep('joints');
+    if (seenNew) revealNew('tuneBtn');                          // a new feature here: open its step and point it out
   } else {
     markers.forEach(m => { scene.remove(m.mesh); m.mesh.material.dispose(); }); markers.length = 0;
     selected = null; drag = null; blkSel = null; setView(view);
@@ -2993,6 +3001,26 @@ function setTuning(on) {
   }
 }
 tuneBtn.addEventListener('click', () => setTuning(!S.tuning));
+/* what's new: each new feature carries data-new="<id>" (plus the toolbar button and Build rig step that lead to it).
+   Until it has been shown once, its button gets a dot and the feature a New tag; opening that button opens the step,
+   scrolls to the feature and flashes it. Seen ids are kept per browser (a convenience; nothing breaks without them). */
+const NEW_KEY = 'mm-model-forge.walker-seen';
+var seenNew = (() => { try { return new Set(JSON.parse(localStorage.getItem(NEW_KEY) || '[]')); } catch { return new Set(); } })();
+const unseen = () => [...document.querySelectorAll('[data-new]')].filter(el => !seenNew.has(el.dataset.new));
+function showNewMarks() {
+  const fresh = unseen();
+  document.querySelectorAll('[data-new-dot]').forEach(d => d.hidden = !fresh.some(el => el.dataset.newBtn === d.dataset.newDot));
+  document.querySelectorAll('[data-new]').forEach(el => { const t = el.querySelector('.newtag'); if (t) t.hidden = seenNew.has(el.dataset.new) && !el.dataset.newShown; });
+}
+function revealNew(btnId) {
+  const el = unseen().find(e => e.dataset.newBtn === btnId); if (!el) return;
+  if (el.dataset.newStep) openStep(el.dataset.newStep);
+  setTimeout(() => { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); el.classList.remove('flashnew'); void el.offsetWidth; el.classList.add('flashnew'); }, 250);
+  el.dataset.newShown = '1'; seenNew.add(el.dataset.new);
+  try { localStorage.setItem(NEW_KEY, JSON.stringify([...seenNew])); } catch {}
+  showNewMarks();
+}
+showNewMarks();
 document.getElementById('tuneDone').addEventListener('click', () => setTuning(false));
 document.getElementById('tuneUndo').addEventListener('click', tuneUndo);
 document.getElementById('tuneReset').addEventListener('click', () => {
