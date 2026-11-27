@@ -286,7 +286,7 @@
 <canvas id="c" tabindex="0" aria-label="3D view of the walker"></canvas>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · leg alignment</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · sprung toes</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -769,7 +769,22 @@ function mechFoot(L) {
     const pivot = holder(base), len = heel ? 0.14 * FL : 0.3 * FL;
     const g = new RoundedBoxGeometry(heel ? 0.36 : 0.42, heel ? 0.17 : 0.15, len, 2, 0.03).translate(0, heel ? 0.08 : 0.07, len / 2);
     mk(g, heel ? M.dark : M.olive, pivot);
-    L.toes.push({ base, pivot, a: heel ? Math.PI : 0, heel, side: 0 });
+    L.toes.push({ base, pivot, a: heel ? Math.PI : 0, heel, side: 0, len, th: 0, w: 0 });
+  }
+}
+// armoured toes (the front toe and the rear toe) hang on sprung hinges: lifted, they droop; coming down, their tips touch
+// first and the ground folds them flat as the foot settles; planting, the load flexes them up and they spring back.
+// Visual only (the physics' foot is unchanged). Angles: + tip down.
+const TOE_DROOP = { front: 0.42, heel: 0.5 }, TOE_K = 90, TOE_ZETA = 0.38;
+function springToes(L, footW, fk, sc, dt, brace) {
+  const lifted = footW.y > 0.03 * sc, c = 2 * Math.sqrt(TOE_K) * TOE_ZETA;
+  for (const t of L.toes) {
+    const target = lifted ? (t.heel ? TOE_DROOP.heel : TOE_DROOP.front) : brace;
+    t.w += (TOE_K * (target - t.th) - c * t.w) * dt; t.th += t.w * dt;
+    // the ground: the tip cannot go below it (pivot height over the toe's length, both in world units)
+    const lim = Math.asin(clamp((footW.y + 0.02 * sc) / Math.max(1e-6, t.len * fk), 0, 1));
+    if (t.th > lim) { t.th = lim; if (t.w > 0) t.w = 0; }
+    t.pivot.rotation.x = t.th;
   }
 }
 function rebuildMechFoot(L) {
@@ -2157,13 +2172,12 @@ function pose(dt) {
     L.hipMesh.scale.setScalar(0.45 + 0.55 * S.limb);
     placeRam(L, R0, kneeW, K2, sc);
     if (!OV.toes) curl = 0;
-    L.footG.rotation.set(curl * 0.4, L.sx * (L.mech ? 0.05 : 0.22), 0, 'YXZ');
+    L.footG.rotation.set(curl * (L.mech ? 0.2 : 0.4), L.sx * (L.mech ? 0.05 : 0.22), 0, 'YXZ');
     L.landT += dt;
     const splay = OV.toes ? Math.exp(-L.landT * 9) : 0;
-    for (const t of L.toes) {
-      t.pivot.rotation.x = (t.heel ? curl * 0.5 : curl) + (L.planted && OV.toes ? 0.38 * braceE : 0);   // dig in when braced
-      t.base.rotation.y = t.a + t.side * 0.16 * splay;
-    }
+    if (L.mech && OV.toes) springToes(L, footW, fk, sc, Math.min(dt, 0.05), L.planted ? 0.38 * braceE : 0);
+    else for (const t of L.toes) t.pivot.rotation.x = (t.heel ? curl * 0.5 : curl) + (L.planted && OV.toes ? 0.38 * braceE : 0);   // dig in when braced
+    for (const t of L.toes) t.base.rotation.y = t.a + t.side * 0.16 * splay;
     if (S.look !== 'art') placeLegBlocks(L, R0, kneeW, footW, sc);
     L.maxY = Math.max(L.maxY, footW.y / sc);
     const was = L.planted;
@@ -2173,6 +2187,7 @@ function pose(dt) {
       if (L.maxY > 0.03) {
         if (OV.prints) addPrint(footW.x, footW.z, L.sx * 0.22, sc * (0.55 + 0.45 * S.limb), wt);
         const impact = Math.abs(PH.vy) + Math.abs(PH.wr) * 2 + Math.abs(PH.wp) * 2;          // body speed when the foot catches it, m/s
+        if (L.mech) for (const t of L.toes) t.w -= clamp(2.5 + 4 * impact, 2.5, 9);         // the load flexes the toes up
         S.shake = Math.max(S.shake, Math.min(0.3, impact * 0.08 * Math.sqrt(sc)));
         if (wt >= 2 && sr > 0.2) stompRing(footW.x, footW.z, sc * Math.sqrt(wt / 2));
         const hard = S.body?.name === 'jump';
