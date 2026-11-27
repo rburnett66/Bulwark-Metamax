@@ -286,7 +286,7 @@
 <canvas id="c" tabindex="0" aria-label="3D view of the walker"></canvas>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · cockpit body</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · leg alignment</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -362,6 +362,7 @@
       </div>
       <label class="field" id="ankleZField" data-new="ankle-fore-aft-2026-11-27" data-new-btn="tuneBtn" data-new-step="joints"><div class="top"><span>Ankle back ↔ forward <span class="newtag" hidden>New</span></span><output id="ankleZOut">centred</output></div>
         <input type="range" id="ankleZ" min="-0.6" max="0.6" step="0.01" value="0"></label>
+      <button class="reset" id="alignKnee" title="Sets the ankle's place on the foot so the foot's middle stands under the knee">Line up knee over foot</button>
       <div class="row2" id="jointActs" hidden><button class="reset" id="jointFlip">Flip bend</button><button class="reset" id="jointDel">Remove joint</button></div>
       <p class="note" style="margin:0">Drag a joint in the X, Y or Z view. Dragging a knee sets that leg's segment lengths and which way it bends. Add a hip segment, more knees or an ankle to any leg; drag an added knee along the leg, an ankle up or down, a hip segment in or out. The legs bolt to a leg subframe; the main body, with the cab, weapons and motor, sits on it at the main body mount.</p>
       <div class="legend"><span><i style="background:#8fd3c8"></i>Hip</span><span><i style="background:#f2a541"></i>Knee</span><span><i style="background:#ffd36b"></i>Ankle</span><span><i style="background:#e6ebf1"></i>Foot</span><span><i style="background:#6fb7ff"></i>Main body</span><span><i style="background:#b89cff"></i>Turret</span></div>
@@ -2190,6 +2191,12 @@ function pose(dt) {
     ring.position.x = footW.x; ring.position.z = footW.z; ring.scale.setScalar(sc);
     if (L.planted) planted.push(footW.clone().setZ(footW.z + az));
   });
+  // line the knee up over the foot's middle: once the walker has stood still for a moment, set each ankle's place on its
+  // foot so the foot's middle sits under the knee (Line up knee over foot, and the twin preset)
+  if (S.alignKnees && !S.body && S.loop === 'idle' && LEGS.every(l => l.planted) && ++S.alignN > 20) {
+    LEGS.forEach(l => { if (ankleOf(l) > 0) l.ankleZ = clamp((l.jw[l.xk.length + 2].z - l.jw[1].z) / sc, -ANKLE_Z_MAX, ANKLE_Z_MAX); });
+    S.alignKnees = false; if (TUNED[S.rig]) TUNED[S.rig] = snapshot(); syncAnkleZ();
+  }
 
   // support polygon of planted feet, ordered around their centre (a line for a biped)
   if (OV.feet && planted.length >= 2) {
@@ -2953,6 +2960,7 @@ ankleZEl.addEventListener('input', () => {
   ankleZOut.textContent = ankleZText(z); showSel();
 });
 ankleZEl.addEventListener('change', () => { ankleZUndo = false; TUNED[S.rig] = snapshot(); });
+document.getElementById('alignKnee').addEventListener('click', () => { undoStack.push(snapshot()); S.alignKnees = true; S.alignN = 0; });
 
 function tuneUndo() { const sn = undoStack.pop(); if (sn) { applySnap(sn); TUNED[S.rig] = snapshot(); if (S.tuning) buildMarkers(); showSel(); showBlockSel(); } }
 
@@ -3479,7 +3487,7 @@ onView.push(showRefFields);
 /* ---------- the twin-cannon biped, one click ---------- */
 // legs a little longer than drawn and a little more bent (the drawing's near-straight legs at its proportions cannot
 // step: measured, the walker stops or its feet slide 46 cm); hips and cab where the twin stays steady (2.9c-4)
-const TWIN = { up: 0.66, lo: 1.14, ankle: 0.46, ankleZ: -0.15, foot: 1.0, hipZ: -0.16, restZ: 0.02, ride: 1.2, cabZ: 0.1 };
+const TWIN = { up: 0.66, lo: 1.14, ankle: 0.46, ankleZ: -0.15, foot: 1.0, hipY: -0.62, hipZ: 0.19, restZ: 0.19, ride: 1.25, cabZ: 0.1 };   // hipZ: over the centre of mass, so the hips stand over the ankles
 function twinCannonBiped() {
   undoStack.push(snapshot()); delete TUNED[2];
   S.legStyle = 'mech'; document.querySelectorAll('#legLook button').forEach(b => b.setAttribute('aria-pressed', b.dataset.look === 'mech'));
@@ -3492,7 +3500,7 @@ function twinCannonBiped() {
   // behind the foot's middle, a long foot
   LEGS.forEach(L => { L.up = TWIN.up; L.lo = TWIN.lo; L.ankle = TWIN.ankle; L.ankleZ = TWIN.ankleZ; L.footLen = TWIN.foot; rebuildMechFoot(L);
     L.blk.foot.l = 0.85; L.blk.foot.w = 0.4;                          // the physics' foot: long, so it resists pitch like the drawing's
-    L.hip.y = -0.42; L.hip.z = TWIN.hipZ; L.hipMesh.position.copy(L.hip); L.rest.z = TWIN.restZ; });   // hips hang below the hull, as drawn
+    L.hip.y = TWIN.hipY; L.hip.z = TWIN.hipZ; L.hipMesh.position.copy(L.hip); L.rest.z = TWIN.restZ; });   // hips below the chassis on the subframe; the ankle stands under the hip (rest z = hip z)
   setRide(TWIN.ride);
   settleStand();
   setChassis({ mount: [0, 0, 0.04], type: 'rigid', hz: 1.6 });       // the chassis sits on the hip subframe, a little forward
@@ -3501,6 +3509,7 @@ function twinCannonBiped() {
   FIT = { cannon: true, guns: false, laser: false, racks: true, pod: false, mg: false, stack: false, jets: false }; applyFit(); showFit();
   // the Cockpit body: the cab on the front of the hull, the cannons stacked on its right flank, pods on the shoulders
   setHullLook('cab');
+  S.alignKnees = true; S.alignN = 0;                                // the knee over the foot's middle, once it stands
   turret.position.set(0, 0.22, TWIN.cabZ);                          // the waist: the whole upper body turns on it
   setMount('guns', [-0.86, -0.3, 0.1]);   // on the walker's right flank (−x), as drawn setMount('racks', [0.32, 0.29, -0.65]);
   TUNED[2] = snapshot();
