@@ -286,7 +286,7 @@
 <canvas id="c" tabindex="0" aria-label="3D view of the walker"></canvas>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · sprung toes</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · strong legs</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -330,7 +330,7 @@
     <svg viewBox="0 0 24 24"><circle cx="6" cy="6" r="2.2"/><circle cx="12" cy="13" r="2.2"/><circle cx="18" cy="19" r="2.2"/><path d="M7.5 7.6l3 3.8M13.5 14.6l3 3"/></svg><span>Build rig</span><span class="newdot" data-new-dot="tuneBtn" hidden></span>
   </button>
   <button class="tool" id="adv" aria-expanded="false" title="Speed, turret aim, overlays">
-    <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>Advanced</span>
+    <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg><span>Advanced</span><span class="newdot" data-new-dot="adv" hidden></span>
   </button>
 </div>
 
@@ -503,8 +503,10 @@
       <label class="tog">Height follows weight <input type="checkbox" id="sizeFollows" checked></label>
       <label class="field"><div class="top">Height in metres <output id="heightOut"></output></div>
         <input type="number" id="heightNum" min="2" max="80" step="0.5" value="6" class="num-in" disabled></label>
-      <label class="field"><div class="top">Leg strength <output id="strOut">2.3× at 40 t</output></div>
-        <input type="range" id="strength" min="1.2" max="4" step="0.1" value="2.3"></label>
+      <div class="field" id="strField" data-new="strength-100-2026-11-27" data-new-btn="adv"><div class="top"><span>Leg strength <span class="newtag" hidden>New</span></span><output id="strOut">2.3× at 40 t</output></div>
+        <input type="range" id="strength" min="0" max="1" step="0.001" aria-label="Leg strength, 1.2× to 100×">
+        <div class="row2" style="margin-top:6px"><input type="number" id="strNum" min="1.2" max="100" step="0.1" value="2.3" class="num-in" aria-label="Exact leg strength"><button class="reset" id="strFit" title="Sets leg strength so this walker can walk at its size and weight">Strong enough to walk</button></div>
+      </div>
       <p class="note" style="margin:0" id="strNote"></p>
       <label class="field"><div class="top">Leg speed <output id="legSpeedOut">0.35 m/s at 40 t</output></div>
         <input type="range" id="legSpeed" min="0.1" max="1.5" step="0.05" value="0.35"></label>
@@ -776,13 +778,20 @@ function mechFoot(L) {
 // first and the ground folds them flat as the foot settles; planting, the load flexes them up and they spring back.
 // Visual only (the physics' foot is unchanged). Angles: + tip down.
 const TOE_DROOP = { front: 0.42, heel: 0.5 }, TOE_K = 90, TOE_ZETA = 0.38;
-function springToes(L, footW, fk, sc, dt, brace) {
-  const lifted = footW.y > 0.03 * sc, c = 2 * Math.sqrt(TOE_K) * TOE_ZETA;
+// reach: the share of the leg's length it is held at on its toe (straight, short of locking); max: most roll (rad);
+// back: the share of the swing it takes to roll level again
+const ankFlat = V();
+const TOE_OFF = { reach: 0.88, max: 1.0, back: 0.3 };
+function springToes(L, footW, footY0, phi, fk, sc, dt, brace) {
+  const lifted = footY0 > 0.03 * sc, c = 2 * Math.sqrt(TOE_K) * TOE_ZETA;
   for (const t of L.toes) {
-    const target = lifted ? (t.heel ? TOE_DROOP.heel : TOE_DROOP.front) : brace;
+    // on its toe (phi: the foot rolled heel-up), the front toe stays flat on the ground
+    const target = lifted ? (t.heel ? TOE_DROOP.heel : TOE_DROOP.front) : t.heel ? brace : brace - phi;
     t.w += (TOE_K * (target - t.th) - c * t.w) * dt; t.th += t.w * dt;
-    // the ground: the tip cannot go below it (pivot height over the toe's length, both in world units)
-    const lim = Math.asin(clamp((footW.y + 0.02 * sc) / Math.max(1e-6, t.len * fk), 0, 1));
+    // the ground: the tip cannot go below it. The hinge's height (the foot pitched by phi) over the toe's length, both
+    // in world units; the foot's pitch adds to the front toe's angle and takes from the rear toe's
+    const pz = t.base.position.z * fk, hinge = footW.y + 0.02 * sc * Math.cos(phi) - pz * Math.sin(phi);
+    const lim = Math.asin(clamp(hinge / Math.max(1e-6, t.len * fk), -1, 1)) + (t.heel ? phi : -phi);
     if (t.th > lim) { t.th = lim; if (t.w > 0) t.w = 0; }
     t.pivot.rotation.x = t.th;
   }
@@ -2139,15 +2148,44 @@ function pose(dt) {
     tmp.copy(target).multiplyScalar(sc); tmp.y += ank;
     let R0 = hipW;                                              // where the bending leg starts: the hip, or the end of a hip segment
     if (L.coxa > 0) { L.cw.copy(hipW).addScaledVector(coxaDir(L, hipW, tmp, cxC), L.coxa * sc); R0 = L.cw; }
+    // toe-off (armoured feet): late in the stance the heel rises and the foot rolls onto its front toe until the leg is
+    // straight, so the trailing leg stands fully extended on its toe as the other foot comes down; early in the swing
+    // the foot rolls back level. The ball of the foot stays where it was planted; physics keeps the planted point.
+    let phi = 0;
+    if (L.mech && OV.toes && stride > 0.01 && air === 0 && !S.tuning && !S.dead && (stance || L.phiEnd > 0)) {
+      const fk0 = sc * (0.55 + 0.45 * S.limb), zb = 0.62 * (L.footLen ?? FOOT_MECH) * 0.72 * fk0;   // ball: the front toe's hinge
+      const ay = ank, azb = az - zb, by = tmp.y - ank, bz = tmp.z - az + zb, reach = TOE_OFF.reach * (L.up + L.lo) * sc;
+      const ankAt = f => tA.set(tmp.x, by + ay * Math.cos(f) - azb * Math.sin(f), bz + ay * Math.sin(f) + azb * Math.cos(f));
+      if (stance) {
+        // the heel rises once the leg is straight and the foot is still going back: just enough to keep the leg at its
+        // full reach, so the trailing leg stands fully extended on its toe; the foot rolls level again early in the swing
+        if (L.xk.length || R0.distanceTo(ankAt(0)) <= reach) phi = 0;
+        else {
+          let lo = 0, hi = TOE_OFF.max;
+          if (R0.distanceTo(ankAt(hi)) > reach) lo = hi;
+          else for (let k = 0; k < 12; k++) { const m = (lo + hi) / 2; if (R0.distanceTo(ankAt(m)) > reach) lo = m; else hi = m; }
+          phi = hi;
+        }
+        L.phiEnd = phi;
+      } else phi = L.phiEnd * (1 - smooth(clamp(s / TOE_OFF.back, 0, 1)));
+      if (phi > 0.001) { ankFlat.copy(tmp); tmp.copy(ankAt(phi)); }
+      if (!stance && s >= TOE_OFF.back) L.phiEnd = 0;
+    } else L.phiEnd = 0;
     const J = L.jw, nx = L.xk.length;
     if (nx) { chainOf(L, sc); solveChain(R0, tmp, CH_LENS, CH_BENDS, L.hint, J); kneeW.copy(J[1]); ankleW.copy(J[nx + 2]); }
     else { solveLeg(R0, tmp, kneeW, ankleW, L.hint, sc, L.up, L.lo); J[0].copy(R0); J[1].copy(kneeW); J[2].copy(ankleW); }
     const K2 = J[2];                                            // the end of the first shin piece
     footW.copy(ankleW); footW.y -= ank; footW.z -= az;
+    const footY0 = phi > 0.001 && stance ? 0 : footW.y;          // on its toe, the foot is still down
+    if (phi > 0.001) { footW.copy(ankleW); footW.y += -ank * Math.cos(phi) + az * Math.sin(phi); footW.z += -ank * Math.sin(phi) - az * Math.cos(phi); }
+    // the point the foot bears on: its middle, or on its toe the ball (the front toe's hinge)
+    L.contact = L.contact || V(); L.contact.copy(footW);
+    if (phi > 0.001) { const zb = 0.62 * (L.footLen ?? FOOT_MECH) * 0.72 * sc * (0.55 + 0.45 * S.limb); L.contact.y -= zb * Math.sin(phi); L.contact.z += zb * Math.cos(phi) - zb; }
     {
       // how much of the load the leg carries through its structure: a bent knee or a foot set out from the hip
       // must be held by joint torque (arm = the larger of the two lever arms); a straight column passes it down
-      const Lm = (L.up + L.lo) / 2, dd = R0.distanceTo(ankleW) / sc, hz = Math.hypot(R0.x - ankleW.x, R0.z - ankleW.z) / sc;   // the load runs hip → ankle
+      const A0 = phi > 0.001 ? ankFlat : ankleW;                   // physics reads the leg as if the foot were flat (toe-off is the look)
+      const Lm = (L.up + L.lo) / 2, dd = Math.min(R0.distanceTo(A0), 0.985 * (L.up + L.lo) * sc) / sc, hz = Math.hypot(R0.x - A0.x, R0.z - A0.z) / sc;   // the load runs hip → ankle
       const e = clamp(dd / (2 * Lm), 0, 0.999), arm = Math.max(Lm * Math.sqrt(1 - e * e), hz, 0.18 * Lm);
       L.geom = clamp(0.8 * Lm / arm, 0.4, 3);                       // calibrated: the default wide stance, walking, is about 1
     }
@@ -2172,16 +2210,16 @@ function pose(dt) {
     L.hipMesh.scale.setScalar(0.45 + 0.55 * S.limb);
     placeRam(L, R0, kneeW, K2, sc);
     if (!OV.toes) curl = 0;
-    L.footG.rotation.set(curl * (L.mech ? 0.2 : 0.4), L.sx * (L.mech ? 0.05 : 0.22), 0, 'YXZ');
+    L.footG.rotation.set(curl * (L.mech ? 0.2 : 0.4) + phi, L.sx * (L.mech ? 0.05 : 0.22), 0, 'YXZ');
     L.landT += dt;
     const splay = OV.toes ? Math.exp(-L.landT * 9) : 0;
-    if (L.mech && OV.toes) springToes(L, footW, fk, sc, Math.min(dt, 0.05), L.planted ? 0.38 * braceE : 0);
+    if (L.mech && OV.toes) springToes(L, footW, footY0, phi, fk, sc, Math.min(dt, 0.05), L.planted ? 0.38 * braceE : 0);
     else for (const t of L.toes) t.pivot.rotation.x = (t.heel ? curl * 0.5 : curl) + (L.planted && OV.toes ? 0.38 * braceE : 0);   // dig in when braced
     for (const t of L.toes) t.base.rotation.y = t.a + t.side * 0.16 * splay;
     if (S.look !== 'art') placeLegBlocks(L, R0, kneeW, footW, sc);
     L.maxY = Math.max(L.maxY, footW.y / sc);
     const was = L.planted;
-    L.planted = footW.y < 0.02 * sc && air < 0.05;
+    L.planted = footY0 < 0.02 * sc && air < 0.05;
     if (L.planted && !was) {
       L.landT = 0;
       if (L.maxY > 0.03) {
@@ -2200,7 +2238,8 @@ function pose(dt) {
       if (OV.steam) steamVent(kneeW, V(L.sx * 0.9, 0.2, -0.3), sc * Math.sqrt(Math.min(wt, 2)), 3);
       logEvent(`liftoff · ${L.n} · steam`);
     }
-    L.footPos.copy(footW).divideScalar(sc); L.footPos.z += az / sc;   // the leg's load goes down through the ankle
+    if (phi > 0.001 && stance) L.footPos.set(target.x, 0, target.z);   // on its toe: still the planted point
+    else { L.footPos.copy(footW).divideScalar(sc); L.footPos.z += az / sc; }   // the leg's load goes down through the ankle
     const ring = contactRings[i];
     ring.visible = OV.feet && L.planted;
     ring.position.x = footW.x; ring.position.z = footW.z; ring.scale.setScalar(sc);
@@ -2364,6 +2403,8 @@ function updFx(dt) {
   S.shake *= Math.exp(-9 * dt);
 }
 
+const RELIFT_MIN = 0.75;
+const RUN_DUTY_MAX = 0.42;                                       // a run has a flight phase: each foot down less than half the stride
 function step(dt) {
   S.time += dt;
   const w = S.weight, hw = heavyOf(w);
@@ -2380,7 +2421,7 @@ function step(dt) {
     freq: tgt.freq / Math.sqrt(S.sc) * (S.amble ? 1.35 : 1),   // Froude scaling: a pendulum twice as long swings √2 slower
     stride: tgt.stride * (1 - 0.2 * hw) * (S.amble ? 1.15 : 1),
     lift: tgt.lift * Math.pow(w, -0.35),                      // heavies barely clear the ground
-    duty: clamp(tgt.duty + 0.06 * (w - 1), 0.4, 0.78) * (1 - S.gw) + heavyDuty * S.gw,   // one leg at a time keeps the rest down
+    duty: clamp(tgt.duty + 0.06 * (w - 1), 0.4, running && !S.amble ? RUN_DUTY_MAX : 0.78) * (1 - S.gw) + heavyDuty * S.gw,   // one leg at a time keeps the rest down
     height: (tgt.height - 0.04 * clamp(w - 1, -0.5, 3) + PILLAR_RAISE * S.stance) * legK() * RIDE.k,
   };
   for (const k in g) S.p[k] = damp(S.p[k], g[k], 3 / Math.sqrt(w), dt);   // momentum: heavies take longer to get going and to stop
@@ -2396,7 +2437,9 @@ function step(dt) {
   if (S.sim && -PH.y > 0.25 * Hm) S.overloaded = true;
   if (S.overloaded && (!S.sim || -PH.y < 0.12 * Hm)) S.overloaded = false;
   const tipping = S.sim && (Math.abs(PH.pitch) > CATCH_TILT || Math.abs(PH.roll) > CATCH_TILT);   // falling: step now, do not wait
-  S.rate = S.overloaded && !swinging ? 0 : swinging || (tipping && canStand) ? 1 : !canStand ? 0 : off > 1.6 ? 0 : clamp(1.6 - off, 0, 1);
+  // a walker that can stand never stops between steps (owner: the stop-start read as "a weird delay"): an unsettled
+  // body only slows the next lift-off, to RELIFT_MIN of the pace at worst
+  S.rate = S.overloaded && !swinging ? 0 : swinging || (tipping && canStand) ? 1 : !canStand ? 0 : RELIFT_MIN + (1 - RELIFT_MIN) * clamp(1.6 - off, 0, 1);
   if (tipping && !S.tipLogged) { logEvent('off balance · catch step'); S.tipLogged = true; } else if (!tipping) S.tipLogged = false;
   S.phase = (S.phase + S.p.freq * S.rate * dt) % 1;
   if (S.body) {
@@ -2624,9 +2667,29 @@ function strengthNote() {
   el.textContent = r < 1 ? `Too weak to stand: at ${Math.round(S.weight * TONS)} t each leg can lift ${r.toFixed(2)}× its share. Raise leg strength or lower tonnage.`
     : r < need ? `Legs give way on every step: each can lift ${r.toFixed(2)}× its share, and ${need.toFixed(2)}× is needed with a leg in the air. It sinks and lurches until each foot lands.`
     : `Each leg can lift ${r.toFixed(2)}× its share at ${Math.round(S.weight * TONS)} t.`;
+  const nd = strengthNeeded();
+  el.textContent += ` At this size it needs ${nd.stand.toFixed(1)}× to stand and ${nd.walk.toFixed(1)}× to walk well.`;
   document.getElementById('strOut').textContent = `${S.strength.toFixed(1)}× at 40 t`;
 }
-strEl.addEventListener('input', () => { S.strength = +strEl.value; strengthNote(); refreshRigLabel(); });
+// leg strength runs 1.2× to 100× on a log slider (an alien universe: giants are allowed); the box takes an exact value
+const STR_MIN = 1.2, STR_MAX = 100;
+const strToSlider = v => Math.log(v / STR_MIN) / Math.log(STR_MAX / STR_MIN), sliderToStr = u => STR_MIN * Math.pow(STR_MAX / STR_MIN, u);
+function setStrength(v) {
+  S.strength = clamp(v, STR_MIN, STR_MAX); strEl.value = strToSlider(S.strength);
+  const n = document.getElementById('strNum'); if (document.activeElement !== n) n.value = +S.strength.toFixed(1);
+  strengthNote(); refreshRigLabel();
+}
+strEl.addEventListener('input', () => setStrength(+sliderToStr(+strEl.value).toFixed(S.strength < 10 ? 1 : 0)));
+document.getElementById('strNum').addEventListener('change', e => { if (+e.target.value > 0) setStrength(+e.target.value); });
+// what this walker needs at its size: to stand, and to walk (a leg in the air; a biped also needs its run margin)
+function strengthNeeded() {
+  const k = sizeFor(S.weight) / Math.max(1e-6, designGeom()), n = LEGS.length, minLegs = n === 2 ? 1 : n - 1;
+  // walking steadily takes more than lifting a leg: measured, a biped wants each leg able to lift about 5.5× its share
+  // (the 13 m twin, steady, has 5.2×; 50 m twins sank and fell at 2.8× and walked at 5.5×), other walkers about 3×
+  return { stand: k, walk: k * (n === 2 ? 5.5 : 3) };
+}
+document.getElementById('strFit').addEventListener('click', () => { setStrength(Math.max(S.strength, strengthNeeded().walk)); });
+strEl.value = strToSlider(S.strength);
 document.getElementById('legSpeed').addEventListener('input', e => { S.legSpeed = +e.target.value; document.getElementById('legSpeedOut').textContent = `${S.legSpeed.toFixed(2)} m/s at 40 t`; });
 setTimeout(strengthNote);
 tonsNum.addEventListener('change', () => { if (+tonsNum.value > 0) setWeight(+tonsNum.value / TONS); });
@@ -2662,7 +2725,8 @@ pauseBtn.addEventListener('click', togglePause);
 
 const drawer = document.getElementById('drawer'), advBtn = document.getElementById('adv');
 function openDrawer(open = !drawer.classList.contains('open')) {
-  if (open && S.tuning) setTuning(false); if (open) openLib(false); drawer.classList.toggle('open', open); advBtn.setAttribute('aria-expanded', open); }
+  if (open && S.tuning) setTuning(false); if (open) openLib(false); drawer.classList.toggle('open', open); advBtn.setAttribute('aria-expanded', open);
+  if (open && seenNew) revealNew('adv'); }
 advBtn.addEventListener('click', () => openDrawer());
 document.getElementById('close').addEventListener('click', () => openDrawer(false));
 
@@ -3153,6 +3217,7 @@ function showNewMarks() {
 function revealNew(btnId) {
   const el = unseen().find(e => e.dataset.newBtn === btnId); if (!el) return;
   if (el.dataset.newStep) openStep(el.dataset.newStep);
+  const det = el.closest('details'); if (det) det.open = true;
   setTimeout(() => { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); el.classList.remove('flashnew'); void el.offsetWidth; el.classList.add('flashnew'); }, 250);
   el.dataset.newShown = '1'; seenNew.add(el.dataset.new);
   try { localStorage.setItem(NEW_KEY, JSON.stringify([...seenNew])); } catch {}
@@ -3193,7 +3258,7 @@ async function applyRig(data, { refs = true } = {}) {
   if (bd.heightM) setHeight(bd.heightM);
   else if (!S.sizeFollows) { const c = document.getElementById('sizeFollows'); c.checked = true; c.dispatchEvent(new Event('change')); }
   if (bd.jets != null) { S.jets = bd.jets; document.getElementById('jetsOn').checked = bd.jets; }
-  if (bd.strength) { S.strength = bd.strength; strEl.value = bd.strength; }
+  if (bd.strength) setStrength(bd.strength);
   if (bd.legSpeed) { S.legSpeed = bd.legSpeed; document.getElementById('legSpeed').value = bd.legSpeed; }
   if (bd.recoil != null) { S.recoil = bd.recoil; document.getElementById('recoil').value = bd.recoil; }
   applySnap(data.joints);                                         // joints last, so nothing above moves them
@@ -3236,7 +3301,7 @@ function resetUnit() {
   S.kneeFwd = false; setUpper(0.3); setTwin(false); setRods(false); setHullLook('std');
   if (!S.sizeFollows) { const c = document.getElementById('sizeFollows'); c.checked = true; c.dispatchEvent(new Event('change')); }
   S.jets = true; document.getElementById('jetsOn').checked = true;
-  S.strength = 2.3; strEl.value = 2.3; S.legSpeed = 0.35; document.getElementById('legSpeed').value = 0.35; S.recoil = 0.15; document.getElementById('recoil').value = 0.15;
+  setStrength(2.3); S.legSpeed = 0.35; document.getElementById('legSpeed').value = 0.35; S.recoil = 0.15; document.getElementById('recoil').value = 0.15;
   setLimb(1); if (S.converted) { S.converted = false; setLook('art'); }
 }
 const fresh = (legs, tons, extra) => () => { resetUnit(); delete TUNED[legs]; setLegs(legs); setKnee(false); setWeight(tons / TONS, true); setStance(stanceAutoFor(S.weight), true); extra?.(); };
@@ -3502,7 +3567,7 @@ onView.push(showRefFields);
 /* ---------- the twin-cannon biped, one click ---------- */
 // legs a little longer than drawn and a little more bent (the drawing's near-straight legs at its proportions cannot
 // step: measured, the walker stops or its feet slide 46 cm); hips and cab where the twin stays steady (2.9c-4)
-const TWIN = { up: 0.66, lo: 1.14, ankle: 0.46, ankleZ: -0.15, foot: 1.0, hipY: -0.62, hipZ: 0.19, restZ: 0.19, ride: 1.25, cabZ: 0.1 };   // hipZ: over the centre of mass, so the hips stand over the ankles
+const TWIN = { up: 0.66, lo: 1.14, ankle: 0.46, ankleZ: -0.15, foot: 1.0, hipY: -0.62, hipZ: 0.19, restZ: 0.19, ride: 1.32, cabZ: 0.1 };   // hipZ: over the centre of mass, so the hips stand over the ankles
 function twinCannonBiped() {
   undoStack.push(snapshot()); delete TUNED[2];
   S.legStyle = 'mech'; document.querySelectorAll('#legLook button').forEach(b => b.setAttribute('aria-pressed', b.dataset.look === 'mech'));
@@ -3545,7 +3610,7 @@ if (hash.get('limb')) setLimb(+hash.get('limb'));
 if (hash.get('jets') === 'off') { S.jets = false; document.getElementById('jetsOn').checked = false; }
 if (hash.get('stance')) setStance(+hash.get('stance'), false);
 if (hash.get('physics') === 'off') { S.sim = false; document.getElementById('simTop').checked = false; }
-if (hash.get('strength')) { S.strength = +hash.get('strength'); strEl.value = S.strength; strengthNote(); }
+if (hash.get('strength')) setStrength(+hash.get('strength'));
 if (hash.get('look') === 'mech') setLegStyle('mech');
 if (hash.get('chassis')) { const [t, y] = hash.get('chassis').split(','); setChassis({ mount: [0, +y || 0, 0], type: t, hz: +(hash.get('hz') || 1.6) }); }
 if (hash.get('knees') === 'fwd') setKnee(true);
