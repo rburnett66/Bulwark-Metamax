@@ -307,7 +307,7 @@
 </div>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · touch fix</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · smooth cycle</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -812,7 +812,7 @@ const TOE_DROOP = { front: 0.42, heel: 0.5 }, TOE_K = 90, TOE_ZETA = 0.38;
 // back: the share of the swing it takes to roll level again
 const RIGID_KEEP = 0.2;                                          // rigid bipeds keep the centre of mass this far inside the stance foot's edge
 const ankFlat = V();
-const TOE_OFF = { reach: 0.88, max: 1.0, back: 0.3 };
+const TOE_OFF = { reach: 0.82, max: 1.0, back: 0.3 };
 function springToes(L, footW, footY0, phi, fk, sc, dt, brace) {
   const lifted = footY0 > 0.03 * sc, c = 2 * Math.sqrt(TOE_K) * TOE_ZETA;
   for (const t of L.toes) {
@@ -2339,12 +2339,15 @@ function pose(dt) {
       if (stance) {
         // the heel rises once the leg is straight and the foot is still going back: just enough to keep the leg at its
         // full reach, so the trailing leg stands fully extended on its toe; the foot rolls level again early in the swing
-        if (L.xk.length || R0.distanceTo(ankAt(0)) <= reach) phi = 0;
+        // only the trailing foot (late in the stance, behind the hip): a foot planted ahead at full stretch stays flat
+        if (L.xk.length || tmp.z > R0.z || R0.distanceTo(ankAt(0)) <= reach) phi = 0;
         else {
           let lo = 0, hi = TOE_OFF.max;
           if (R0.distanceTo(ankAt(hi)) > reach) lo = hi;
           else for (let k = 0; k < 12; k++) { const m = (lo + hi) / 2; if (R0.distanceTo(ankAt(m)) > reach) lo = m; else hi = m; }
-          phi = hi;
+          // eased in over the first 0.15 rig units behind the hip, so the heel lifts smoothly rather than in one frame (the leg
+          // is held at 88% of its length here, well inside the IK's reach, so a smaller roll is only a smaller lift)
+          phi = hi * smooth(clamp((R0.z - tmp.z) / (0.15 * sc), 0, 1));
         }
         L.phiEnd = phi;
       } else phi = L.phiEnd * (1 - smooth(clamp(s / TOE_OFF.back, 0, 1)));
