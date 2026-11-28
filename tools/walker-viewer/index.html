@@ -288,7 +288,7 @@
 <canvas id="c" tabindex="0" aria-label="3D view of the walker"></canvas>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · twin default</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · lateral stability</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -767,15 +767,16 @@ const ankleOf = L => L.ankle ?? (L.mech ? ANKLE_MECH : 0);       // any leg can 
 const FOOT_MECH = 0.8;                                          // default foot length for Armoured legs
 function mechFoot(L) {
   const FL = L.footLen ?? FOOT_MECH, ank = ankleOf(L), rear = 0.38 * FL, front = 0.62 * FL;
-  mk(new RoundedBoxGeometry(0.44, 0.08, rear + front * 0.72, 2, 0.02).translate(0, 0.04, (front * 0.72 - rear) / 2), M.dark, L.footG);
-  mk(new RoundedBoxGeometry(0.4, 0.16, FL * 0.52, 2, 0.04).translate(0, 0.16, FL * 0.06), M.olive, L.footG);
+  const wf = clamp((L.blk?.foot?.w ?? 0.4) / 0.4, 0.7, 2.5);       // the foot is as wide as the physics' foot block
+  mk(new RoundedBoxGeometry(0.44 * wf, 0.08, rear + front * 0.72, 2, 0.02).translate(0, 0.04, (front * 0.72 - rear) / 2), M.dark, L.footG);
+  mk(new RoundedBoxGeometry(0.4 * wf, 0.16, FL * 0.52, 2, 0.04).translate(0, 0.16, FL * 0.06), M.olive, L.footG);
   mk(new RoundedBoxGeometry(0.32, 0.12, FL * 0.3, 2, 0.04).translate(0, 0.28, -FL * 0.02), M.hull, L.footG);
   const hh = Math.max(0.04, ank - 0.32);                         // ankle housing up to the hub
   L.housing = mk(new RoundedBoxGeometry(0.26, hh, 0.24, 2, 0.03).translate(0, 0.32 + hh / 2, -0.02), M.joint, L.footG);   // follows the ankle fore and aft (pose)
   for (const [z, heel] of [[front * 0.72, false], [-rear, true]]) {
     const base = holder(L.footG, 0, 0.02, z); base.rotation.y = heel ? Math.PI : 0;
     const pivot = holder(base), len = heel ? 0.14 * FL : 0.3 * FL;
-    const g = new RoundedBoxGeometry(heel ? 0.36 : 0.42, heel ? 0.17 : 0.15, len, 2, 0.03).translate(0, heel ? 0.08 : 0.07, len / 2);
+    const g = new RoundedBoxGeometry((heel ? 0.36 : 0.42) * wf, heel ? 0.17 : 0.15, len, 2, 0.03).translate(0, heel ? 0.08 : 0.07, len / 2);
     mk(g, heel ? M.dark : M.olive, pivot);
     L.toes.push({ base, pivot, a: heel ? Math.PI : 0, heel, side: 0, len, th: 0, w: 0 });
   }
@@ -3729,7 +3730,7 @@ onView.push(showRefFields);
 /* ---------- the twin-cannon biped, one click ---------- */
 // legs a little longer than drawn and a little more bent (the drawing's near-straight legs at its proportions cannot
 // step: measured, the walker stops or its feet slide 46 cm); hips and cab where the twin stays steady (2.9c-4)
-const TWIN = { up: 0.66, lo: 1.14, ankle: 0.46, ankleZ: -0.15, foot: 1.0, hipY: -0.62, hipZ: 0.19, restZ: 0.19, ride: 1.32, cabZ: 0.1 };   // hipZ: over the centre of mass, so the hips stand over the ankles
+const TWIN = { up: 0.66, lo: 1.14, ankle: 0.46, ankleZ: -0.15, foot: 1.0, hipY: -0.62, hipZ: 0.19, restZ: 0.19, ride: 1.32, cabZ: 0.1, footW: 0.55, strength: 3.5 };   // hipZ: over the centre of mass, so the hips stand over the ankles
 function twinCannonBiped() {
   undoStack.push(snapshot()); delete TUNED[2];
   S.legStyle = 'mech'; document.querySelectorAll('#legLook button').forEach(b => b.setAttribute('aria-pressed', b.dataset.look === 'mech'));
@@ -3740,14 +3741,16 @@ function twinCannonBiped() {
   // the ground, a long two-piece foot 1.3 shins long (in foot units), hips under the back half of the hull
   // second concept (three-quarter view, 2026-11-27): thigh 0.58 of the shin, the ankle 0.4 of the shin up and a little
   // behind the foot's middle, a long foot
-  LEGS.forEach(L => { L.up = TWIN.up; L.lo = TWIN.lo; L.ankle = TWIN.ankle; L.ankleZ = TWIN.ankleZ; L.footLen = TWIN.foot; rebuildMechFoot(L);
-    L.blk.foot.l = 0.85; L.blk.foot.w = 0.4;                          // the physics' foot: long, so it resists pitch like the drawing's
+  // high lateral stability (owner): wide feet hold the walker against rolling over them (roll walking halves, 6.7° → 3.3°)
+  LEGS.forEach(L => { L.up = TWIN.up; L.lo = TWIN.lo; L.ankle = TWIN.ankle; L.ankleZ = TWIN.ankleZ; L.footLen = TWIN.foot;
+    L.blk.foot.l = 0.85; L.blk.foot.w = TWIN.footW; rebuildMechFoot(L);   // the physics' foot: long and wide, as drawn
     L.hip.y = TWIN.hipY; L.hip.z = TWIN.hipZ; L.hipMesh.position.copy(L.hip); L.rest.z = TWIN.restZ; });   // hips below the chassis on the subframe; the ankle stands under the hip (rest z = hip z)
   setRide(TWIN.ride);
   settleStand();
   setChassis({ mount: [0, 0, 0.04], type: 'rigid', hz: 1.6 });       // the chassis sits on the hip subframe, a little forward
   S.jets = false; document.getElementById('jetsOn').checked = false;
   setUpper(0.45); setTwin(false); setRods(true);
+  setStrength(TWIN.strength);                                        // walks and runs with margin to spare (each leg lifts ~7.9× its share)
   // the weapons are on the body's hard points: the twin cannon on the lower right, missile pods on top, a sensor ball
   FIT = { cannon: false, guns: false, laser: false, racks: false, pod: false, mg: false, stack: false, jets: false }; applyFit(); showFit();
   setHardpoints({ lowR: 'cannon', topL: 'missiles', topR: 'missiles' }); setSensorBall(true);
