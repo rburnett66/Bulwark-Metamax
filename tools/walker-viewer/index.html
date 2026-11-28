@@ -237,6 +237,20 @@
   }
   /* phones: title and tools on one line, views under them, the rig folded into one line that opens,
      a compact deck whose rows scroll sideways, and the drawers as bottom sheets */
+  /* the joystick: shown in Build rig while a joint or mount is selected; moves it in the plane of the screen */
+  .joy{position:fixed;left:18px;bottom:18px;z-index:6;display:flex;flex-direction:column;align-items:center;gap:8px;padding:12px 14px 10px;border-radius:16px;background:rgba(17,22,29,.82);border:1px solid var(--line-soft);backdrop-filter:blur(6px)}
+  .joy-top{font-size:13px;font-weight:600;color:var(--text);display:flex;gap:6px;align-items:center}
+  .joy-pad{position:relative;width:132px;height:132px;border-radius:50%;background:radial-gradient(circle at 50% 50%,rgba(143,211,200,.10),rgba(143,211,200,.03) 70%);border:1.5px solid rgba(143,211,200,.45);touch-action:none;cursor:grab}
+  .joy-pad::before,.joy-pad::after{content:"";position:absolute;background:rgba(143,211,200,.18)}
+  .joy-pad::before{left:50%;top:12%;bottom:12%;width:1px}
+  .joy-pad::after{top:50%;left:12%;right:12%;height:1px}
+  .joy-knob{position:absolute;left:50%;top:50%;width:50px;height:50px;margin:-25px 0 0 -25px;border-radius:50%;background:#8fd3c8;box-shadow:0 4px 14px rgba(0,0,0,.4);transition:transform .12s ease-out}
+  .joy-pad.on .joy-knob{transition:none}
+  .joy-hint{font-size:11.5px;color:var(--muted)}
+  @media (max-width:640px){
+    .joy{left:10px;bottom:auto;top:132px;padding:8px 10px}
+    .joy-pad{width:112px;height:112px}
+  }
   @media (max-width:640px){
     .brand{top:calc(10px + env(safe-area-inset-top));left:12px;right:12px}
     .brand b{height:40px;display:flex;align-items:center;font-size:17px}
@@ -286,9 +300,14 @@
 </head>
 <body>
 <canvas id="c" tabindex="0" aria-label="3D view of the walker"></canvas>
+<div class="joy" id="joy" hidden data-new="joystick-2026-11-27">
+  <div class="joy-top"><span id="joyLabel">Move</span><span class="newtag" hidden>New</span></div>
+  <div class="joy-pad" id="joyPad" role="application" aria-label="Joystick: drag to move the selected joint"><div class="joy-knob" id="joyKnob"></div></div>
+  <div class="joy-hint">Push further to move faster</div>
+</div>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · jointed feet</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · joystick</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -366,7 +385,7 @@
         <input type="range" id="ankleZ" min="-0.6" max="0.6" step="0.01" value="0"></label>
       <button class="reset" id="alignKnee" title="Sets the ankle's place on the foot so the foot's middle stands under the knee">Line up knee over foot</button>
       <div class="row2" id="jointActs" hidden><button class="reset" id="jointFlip">Flip bend</button><button class="reset" id="jointDel">Remove joint</button></div>
-      <p class="note" style="margin:0">Drag a joint in the X, Y or Z view. Dragging a knee sets that leg's segment lengths and which way it bends. Add a hip segment, more knees or an ankle to any leg; drag an added knee along the leg, an ankle up or down, a hip segment in or out. The legs mount to the lower chassis; the body, with the cockpit, weapons, arms and sensors, sits on it at the waist and turns there.</p>
+      <p class="note" style="margin:0">Select a joint, then move it with the joystick that appears, or drag it in the X, Y or Z view. Dragging a knee sets that leg's segment lengths and which way it bends. Add a hip segment, more knees or an ankle to any leg; drag an added knee along the leg, an ankle up or down, a hip segment in or out. The legs mount to the lower chassis; the body, with the cockpit, weapons, arms and sensors, sits on it at the waist and turns there.</p>
       <div class="legend"><span><i style="background:#8fd3c8"></i>Hip</span><span><i style="background:#f2a541"></i>Knee</span><span><i style="background:#ffd36b"></i>Ankle</span><span><i style="background:#e6ebf1"></i>Foot</span><span><i style="background:#6fb7ff"></i>Waist</span><span><i style="background:#b89cff"></i>Cab</span></div>
       <div class="sel" id="tuneSel">Select a joint</div>
       <label class="tog">Mirror left and right <input type="checkbox" id="tuneSym" checked></label>
@@ -3125,6 +3144,38 @@ canvas.addEventListener('pointermove', e => {
 const endDrag = () => { if (!drag) return; if (drag.m) drag.m._footZ = null; drag = null; controls.enabled = !tween; TUNED[S.rig] = snapshot(); };
 canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
 
+/* ---------- joystick: move the selected joint or mount in the plane of the screen ---------- */
+const joy = document.getElementById('joy'), joyPad = document.getElementById('joyPad'), joyKnob = document.getElementById('joyKnob');
+const JOY_SPEED = 0.6;                                             // rig units a second at full push (speed grows with the push squared)
+let joyV = null;
+function joyAt(e) {
+  const r = joyPad.getBoundingClientRect(), R = r.width / 2;
+  let x = (e.clientX - r.left - R) / R, y = (e.clientY - r.top - R) / R; const m = Math.hypot(x, y); if (m > 1) { x /= m; y /= m; }
+  joyV = { x, y }; joyKnob.style.transform = `translate(${x * R * 0.62}px, ${y * R * 0.62}px)`;
+}
+joyPad.addEventListener('pointerdown', e => {
+  if (!selected) return; e.preventDefault(); try { joyPad.setPointerCapture(e.pointerId); } catch {}
+  undoStack.push(snapshot()); if (undoStack.length > 60) undoStack.shift();
+  joyPad.classList.add('on'); joyAt(e);
+  if (seenNew && !seenNew.has(joy.dataset.new)) { seenNew.add(joy.dataset.new); try { localStorage.setItem(NEW_KEY, JSON.stringify([...seenNew])); } catch {} }
+});
+joyPad.addEventListener('pointermove', e => { if (joyV) joyAt(e); });
+const joyEnd = () => { if (!joyV) return; joyV = null; joyPad.classList.remove('on'); joyKnob.style.transform = ''; if (selected?._footZ != null) selected._footZ = null; TUNED[S.rig] = snapshot(); };
+joyPad.addEventListener('pointerup', joyEnd); joyPad.addEventListener('pointercancel', joyEnd);
+const joyR = V(), joyU = V();
+function joyStep(dt) {
+  const show = S.tuning && !!selected;
+  if (joy.hidden === show) joy.hidden = !show;
+  if (show) { const lab = `Move: ${(selected.kind === 'mount' ? mountSel : tuneSel).querySelector('b')?.textContent || 'selected'}`; if (joyLabel.textContent !== lab) joyLabel.textContent = lab; }
+  if (!show || !joyV) return;
+  const k = Math.hypot(joyV.x, joyV.y); if (k < 0.08) return;
+  const sp = JOY_SPEED * S.sc * k * dt / k;                         // direction from the push, speed from its square
+  joyR.setFromMatrixColumn(cam.matrixWorld, 0); joyU.setFromMatrixColumn(cam.matrixWorld, 1);
+  const p = selected.mesh.position.clone().addScaledVector(joyR, joyV.x * sp * k).addScaledVector(joyU, -joyV.y * sp * k);
+  moveJoint(selected, p); showSel();
+}
+const joyLabel = document.getElementById('joyLabel');
+
 /* ---------- add and remove joints: a hip segment, more knees, an ankle ---------- */
 var jointScope = 'all';                                         // var: showSel can run before this line
 document.querySelectorAll('#jointScope button').forEach(b => b.addEventListener('click', () => {
@@ -3814,6 +3865,7 @@ function tick(now) {
   tweenCam(rdt);
   followHeight(rdt);
   step(dt);
+  joyStep(rdt);
   if (S.tuning) placeMarkers();
   showRefs();
   frameCamera();
