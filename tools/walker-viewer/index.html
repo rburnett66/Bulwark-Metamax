@@ -307,7 +307,7 @@
 </div>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · smooth cycle</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · concept feet</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -784,23 +784,32 @@ function mechSeg(w, d, plateW, plateD, y0, y1, upper) {
 const ANKLE_MECH = 0.2;                                         // default ankle height, rig units, for Armoured legs
 const ankleOf = L => L.ankle ?? (L.mech ? ANKLE_MECH : 0);       // any leg can have an ankle (Add a joint → Ankle)
 const FOOT_MECH = 0.8;                                          // default foot length for Armoured legs
-const FOOT_JOINT = 0.16;                                        // the foot's central joint: height above the ground (foot units)
+const FOOT_JOINT = 0.2;                                        // the foot's central joint: height above the ground (foot units)
 function mechFoot(L) {
-  // after the concept: no sole plate. A central joint under the knee, a large forward toe and a backward toe hinged at
-  // it (both sprung), and a link from the ankle hub down to the joint. The toes are as wide as the physics' foot block.
-  const FL = L.footLen ?? FOOT_MECH, ank = ankleOf(L), wf = clamp((L.blk?.foot?.w ?? 0.4) / 0.4, 0.7, 2.5);
-  const FT = 0.58 * FL, RT = 0.34 * FL, J = FOOT_JOINT;
-  mk(hubGeo(0.17, 0.27 * wf), M.joint, L.footG).position.y = J;                                  // the central joint
-  mk(hubGeo(0.09, 0.29 * wf), M.dark, L.footG).position.y = J;
+  // after the concept (second drawing): a central joint, a backward toe that is a wedge rising from the heel to the
+  // joint, and a forward toe in two chunky armoured blocks, the front one with a chamfered nose; each block about as
+  // tall as it is wide, dark soles, vents on the sides. Both toes are sprung at the joint; a link runs up to the ankle.
+  const FL = L.footLen ?? FOOT_MECH, wf = clamp((L.blk?.foot?.w ?? 0.4) / 0.4, 0.7, 2.5);
+  const FT = 0.58 * FL, RT = 0.34 * FL, J = FOOT_JOINT, H = 0.32;           // H: block height (foot units)
+  mk(hubGeo(0.18, 0.26 * wf), M.joint, L.footG).position.y = J;                                 // the central joint
+  mk(hubGeo(0.1, 0.28 * wf), M.dark, L.footG).position.y = J;
   const link = holder(L.footG, 0, J, 0); L.housing = link;                                     // to the ankle (pose)
-  mk(new RoundedBoxGeometry(0.24, 1, 0.22, 2, 0.03).translate(0, 0.5, 0), M.hull, link);
+  mk(new RoundedBoxGeometry(0.22, 1, 0.22, 2, 0.03).translate(0, 0.5, 0), M.hull, link);
   for (const heel of [false, true]) {
-    const base = holder(L.footG, 0, J, heel ? -0.07 : 0.07); base.rotation.y = heel ? Math.PI : 0;
-    const pivot = holder(base), len = heel ? RT : FT, w = (heel ? 0.21 : 0.25) * wf;   // long and slim, as drawn
-    // armour on top, a dark sole under it; the bottom sits on the ground when the toe is flat
-    mk(new RoundedBoxGeometry(w, 0.11, len * 0.92, 2, 0.035).translate(0, -J + 0.115, len * 0.54), M.olive, pivot);
-    mk(new RoundedBoxGeometry(w * 1.04, 0.06, len, 2, 0.02).translate(0, -J + 0.03, len / 2), M.dark, pivot);
-    mk(new RoundedBoxGeometry(w * 0.5, 0.06, len * 0.5, 2, 0.02).translate(0, -J + 0.19, len * 0.45), M.dark, pivot);   // a ridge
+    const base = holder(L.footG, 0, J, heel ? -0.08 : 0.08); base.rotation.y = heel ? Math.PI : 0;
+    const pivot = holder(base), len = heel ? RT : FT, w = (heel ? 0.24 : 0.27) * wf, y0 = -J;
+    if (heel) {                                                       // a wedge: tall at the joint, low at the heel
+      mk(sideExtrude([[0, y0 + 0.05], [len, y0 + 0.05], [len, y0 + 0.13], [len * 0.25, y0 + H], [0, y0 + H]], w), M.olive, pivot);
+    } else {                                                          // two blocks, the front one chamfered
+      const a = len * 0.48, g = 0.025;
+      mk(sideExtrude([[0, y0 + 0.05], [a - g, y0 + 0.05], [a - g, y0 + H], [0, y0 + H]], w), M.olive, pivot);
+      mk(sideExtrude([[a + g, y0 + 0.05], [len, y0 + 0.05], [len, y0 + 0.15], [len - 0.2 * len, y0 + H * 0.92], [a + g, y0 + H * 0.92]], w * 0.98), M.olive, pivot);
+      for (const sx of [-1, 1]) {                                     // vents on the sides
+        rbox(0.02, 0.07, 0.12, M.dark, pivot, sx * (w / 2 + 0.005), y0 + 0.16, a * 0.5, 0.01);
+        rbox(0.02, 0.06, 0.1, M.dark, pivot, sx * (w * 0.49 + 0.005), y0 + 0.14, a + (len - a) * 0.45, 0.01);
+      }
+    }
+    mk(new RoundedBoxGeometry(w * 1.02, 0.05, len * 0.97, 2, 0.015).translate(0, y0 + 0.025, len / 2), M.dark, pivot);   // sole
     L.toes.push({ base, pivot, a: heel ? Math.PI : 0, heel, side: 0, len, th: 0, w: 0 });
   }
 }
