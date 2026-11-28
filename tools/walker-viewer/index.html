@@ -288,7 +288,7 @@
 <canvas id="c" tabindex="0" aria-label="3D view of the walker"></canvas>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · lateral stability</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · jointed feet</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -758,26 +758,29 @@ function mechSeg(w, d, plateW, plateD, y0, y1, upper) {
   }
   return g;
 }
-// the armoured foot, after the concept: a long two-piece foot under a raised ankle. The ankle sits about 38% of the
-// way back from the toe tip's opposite end; a dark sole, an olive armoured upper, a wide toe plate in front and a heel
-// block behind (both on the curl joints), and an ankle housing rising to the ankle hub. Lengths are in foot units
-// (x and z scale with limb thickness, y with the walker), so the foot reads long and flat whatever the build.
+// the armoured foot, after the concept: a central joint with a large forward toe and a backward toe hinged at it, under a
+// raised ankle linked down to the joint. Lengths are in foot units (x and z scale with limb thickness, y with the
+// walker), so the foot reads long and flat whatever the build.
 const ANKLE_MECH = 0.2;                                         // default ankle height, rig units, for Armoured legs
 const ankleOf = L => L.ankle ?? (L.mech ? ANKLE_MECH : 0);       // any leg can have an ankle (Add a joint → Ankle)
 const FOOT_MECH = 0.8;                                          // default foot length for Armoured legs
+const FOOT_JOINT = 0.16;                                        // the foot's central joint: height above the ground (foot units)
 function mechFoot(L) {
-  const FL = L.footLen ?? FOOT_MECH, ank = ankleOf(L), rear = 0.38 * FL, front = 0.62 * FL;
-  const wf = clamp((L.blk?.foot?.w ?? 0.4) / 0.4, 0.7, 2.5);       // the foot is as wide as the physics' foot block
-  mk(new RoundedBoxGeometry(0.44 * wf, 0.08, rear + front * 0.72, 2, 0.02).translate(0, 0.04, (front * 0.72 - rear) / 2), M.dark, L.footG);
-  mk(new RoundedBoxGeometry(0.4 * wf, 0.16, FL * 0.52, 2, 0.04).translate(0, 0.16, FL * 0.06), M.olive, L.footG);
-  mk(new RoundedBoxGeometry(0.32, 0.12, FL * 0.3, 2, 0.04).translate(0, 0.28, -FL * 0.02), M.hull, L.footG);
-  const hh = Math.max(0.04, ank - 0.32);                         // ankle housing up to the hub
-  L.housing = mk(new RoundedBoxGeometry(0.26, hh, 0.24, 2, 0.03).translate(0, 0.32 + hh / 2, -0.02), M.joint, L.footG);   // follows the ankle fore and aft (pose)
-  for (const [z, heel] of [[front * 0.72, false], [-rear, true]]) {
-    const base = holder(L.footG, 0, 0.02, z); base.rotation.y = heel ? Math.PI : 0;
-    const pivot = holder(base), len = heel ? 0.14 * FL : 0.3 * FL;
-    const g = new RoundedBoxGeometry((heel ? 0.36 : 0.42) * wf, heel ? 0.17 : 0.15, len, 2, 0.03).translate(0, heel ? 0.08 : 0.07, len / 2);
-    mk(g, heel ? M.dark : M.olive, pivot);
+  // after the concept: no sole plate. A central joint under the knee, a large forward toe and a backward toe hinged at
+  // it (both sprung), and a link from the ankle hub down to the joint. The toes are as wide as the physics' foot block.
+  const FL = L.footLen ?? FOOT_MECH, ank = ankleOf(L), wf = clamp((L.blk?.foot?.w ?? 0.4) / 0.4, 0.7, 2.5);
+  const FT = 0.58 * FL, RT = 0.34 * FL, J = FOOT_JOINT;
+  mk(hubGeo(0.17, 0.27 * wf), M.joint, L.footG).position.y = J;                                  // the central joint
+  mk(hubGeo(0.09, 0.29 * wf), M.dark, L.footG).position.y = J;
+  const link = holder(L.footG, 0, J, 0); L.housing = link;                                     // to the ankle (pose)
+  mk(new RoundedBoxGeometry(0.24, 1, 0.22, 2, 0.03).translate(0, 0.5, 0), M.hull, link);
+  for (const heel of [false, true]) {
+    const base = holder(L.footG, 0, J, heel ? -0.07 : 0.07); base.rotation.y = heel ? Math.PI : 0;
+    const pivot = holder(base), len = heel ? RT : FT, w = (heel ? 0.21 : 0.25) * wf;   // long and slim, as drawn
+    // armour on top, a dark sole under it; the bottom sits on the ground when the toe is flat
+    mk(new RoundedBoxGeometry(w, 0.11, len * 0.92, 2, 0.035).translate(0, -J + 0.115, len * 0.54), M.olive, pivot);
+    mk(new RoundedBoxGeometry(w * 1.04, 0.06, len, 2, 0.02).translate(0, -J + 0.03, len / 2), M.dark, pivot);
+    mk(new RoundedBoxGeometry(w * 0.5, 0.06, len * 0.5, 2, 0.02).translate(0, -J + 0.19, len * 0.45), M.dark, pivot);   // a ridge
     L.toes.push({ base, pivot, a: heel ? Math.PI : 0, heel, side: 0, len, th: 0, w: 0 });
   }
 }
@@ -793,12 +796,12 @@ function springToes(L, footW, footY0, phi, fk, sc, dt, brace) {
   const lifted = footY0 > 0.03 * sc, c = 2 * Math.sqrt(TOE_K) * TOE_ZETA;
   for (const t of L.toes) {
     // on its toe (phi: the foot rolled heel-up), the front toe stays flat on the ground
-    const target = lifted ? (t.heel ? TOE_DROOP.heel : TOE_DROOP.front) : t.heel ? brace : brace - phi;
+    const target = lifted ? (t.heel ? TOE_DROOP.heel : TOE_DROOP.front) : brace;   // on its toe, the foot stands on the front toe's tip
     t.w += (TOE_K * (target - t.th) - c * t.w) * dt; t.th += t.w * dt;
     // the ground: the tip cannot go below it. The hinge's height (the foot pitched by phi) over the toe's length, both
     // in world units; the foot's pitch adds to the front toe's angle and takes from the rear toe's
-    const pz = t.base.position.z * fk, hinge = footW.y + 0.02 * sc * Math.cos(phi) - pz * Math.sin(phi);
-    const lim = Math.asin(clamp(hinge / Math.max(1e-6, t.len * fk), -1, 1)) + (t.heel ? phi : -phi);
+    const pz = t.base.position.z * fk, hinge = footW.y + FOOT_JOINT * sc * Math.cos(phi) - pz * Math.sin(phi);
+    const lim = Math.asin(clamp((hinge - FOOT_JOINT * sc) / Math.max(1e-6, t.len * fk), -1, 1)) + (t.heel ? phi : -phi);
     if (t.th > lim) { t.th = lim; if (t.w > 0) t.w = 0; }
     t.pivot.rotation.x = t.th;
   }
@@ -2302,7 +2305,7 @@ function pose(dt) {
     // the foot rolls back level. The ball of the foot stays where it was planted; physics keeps the planted point.
     let phi = 0;
     if (L.mech && OV.toes && stride > 0.01 && air === 0 && !S.tuning && !S.dead && (stance || L.phiEnd > 0)) {
-      const fk0 = sc * (0.55 + 0.45 * S.limb), zb = 0.62 * (L.footLen ?? FOOT_MECH) * 0.72 * fk0;   // ball: the front toe's hinge
+      const fk0 = sc * (0.55 + 0.45 * S.limb), zb = (0.07 + 0.58 * (L.footLen ?? FOOT_MECH)) * fk0;   // it rolls up onto the front toe's tip
       const ay = ank, azb = az - zb, by = tmp.y - ank, bz = tmp.z - az + zb, reach = TOE_OFF.reach * (L.up + L.lo) * sc;
       const ankAt = f => tA.set(tmp.x, by + ay * Math.cos(f) - azb * Math.sin(f), bz + ay * Math.sin(f) + azb * Math.cos(f));
       if (stance) {
@@ -2329,7 +2332,7 @@ function pose(dt) {
     if (phi > 0.001) { footW.copy(ankleW); footW.y += -ank * Math.cos(phi) + az * Math.sin(phi); footW.z += -ank * Math.sin(phi) - az * Math.cos(phi); }
     // the point the foot bears on: its middle, or on its toe the ball (the front toe's hinge)
     L.contact = L.contact || V(); L.contact.copy(footW);
-    if (phi > 0.001) { const zb = 0.62 * (L.footLen ?? FOOT_MECH) * 0.72 * sc * (0.55 + 0.45 * S.limb); L.contact.y -= zb * Math.sin(phi); L.contact.z += zb * Math.cos(phi) - zb; }
+    if (phi > 0.001) { const zb = (0.07 + 0.58 * (L.footLen ?? FOOT_MECH)) * sc * (0.55 + 0.45 * S.limb); L.contact.y -= zb * Math.sin(phi); L.contact.z += zb * Math.cos(phi) - zb; }
     {
       // how much of the load the leg carries through its structure: a bent knee or a foot set out from the hip
       // must be held by joint torque (arm = the larger of the two lever arms); a straight column passes it down
@@ -2355,7 +2358,10 @@ function pose(dt) {
     L.knee.position.copy(kneeW); L.knee.scale.setScalar(hk);
     if (L.ankleHub) { L.ankleHub.position.copy(ankleW); L.ankleHub.quaternion.copy(L.upper.quaternion); L.ankleHub.scale.setScalar(hk); L.ankleHub.visible = art; }
     L.footG.position.copy(footW); L.footG.scale.set(fk, sc, fk);
-    if (L.housing) L.housing.position.z = az / fk;
+    if (L.housing) {                                            // the link from the foot's central joint up to the ankle hub
+      tB.set(0, ank / sc - FOOT_JOINT, az / fk); const len = tB.length();
+      L.housing.quaternion.setFromUnitVectors(Y_AXIS, tB.normalize()); L.housing.scale.set(1, Math.max(0.01, len), 1);
+    }
     L.hipMesh.scale.setScalar(0.45 + 0.55 * S.limb);
     placeRam(L, R0, kneeW, K2, sc);
     if (!OV.toes) curl = 0;
