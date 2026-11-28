@@ -288,7 +288,7 @@
 <canvas id="c" tabindex="0" aria-label="3D view of the walker"></canvas>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · hard points</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · twin default</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -1046,7 +1046,7 @@ const FIT_HOME = { cannon: true, guns: true, laser: true, racks: true, pod: true
 let FIT = { ...FIT_HOME };
 const WEAPON_NEEDS = { turret: ['guns'], reload: ['guns', 'cannon'], cannon: ['cannon'], mg: ['mg'], laser: ['laser'], grenade: ['pod'], salvo: ['racks'] };
 const HP_NEEDS = { cannon: ['cannon'], salvo: ['missiles'], mg: ['gun', 'arm'] };       // hard-point modules that fire with each key
-const fittedFor = id => !WEAPON_NEEDS[id] || WEAPON_NEEDS[id].some(k => FIT[k]) || (HP_NEEDS[id] && typeof hpCarries === 'function' && hpCarries(...HP_NEEDS[id]));
+const fittedFor = id => !WEAPON_NEEDS[id] || WEAPON_NEEDS[id].some(k => FIT[k]) || !!(HP_NEEDS[id] && typeof hpCarries === 'function' && hpCarries(...HP_NEEDS[id]));
 function applyFit() {
   guns.forEach(g => g.slide.visible = FIT.guns);
   laser.visible = FIT.laser;
@@ -3766,6 +3766,9 @@ const hash = new URLSearchParams(location.hash.slice(1));
 setView(VIEWS[hash.get('view')] ? hash.get('view') : 'iso');
 tween.t = tween.dur; tweenCam(0);
 if (hash.has('events')) { OV.events = true; document.getElementById('ovEvents').checked = true; }
+// the default unit (owner, 2026-11-27): the twin-cannon cockpit biped. A link that names legs or another example
+// starts from the plain sample instead (#legs=4, #example=none); settings after this still apply on top
+if (!hash.get('legs') && !hash.get('example')) { twinCannonBiped(); S.sc = sizeFor(S.weight); undoStack.length = 0; }
 if (hash.get('legs')) setLegs(+hash.get('legs'));
 if (hash.get('weight')) { const v = hash.get('weight'); setWeight(WEIGHT_PRESETS[v] ?? +v, true); }
 if (hash.get('tons')) setWeight(+hash.get('tons') / TONS, true);
