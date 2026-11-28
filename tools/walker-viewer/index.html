@@ -131,6 +131,10 @@
   .tool{position:relative}
   .hplist{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;font-size:13.5px;margin-top:6px}
   .hplist select{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line-soft);border-radius:8px;padding:5px 8px}
+  .mini-btn{display:none;margin-left:auto;margin-right:8px;font:inherit;font-size:13px;color:var(--text);background:transparent;border:1px solid var(--line-soft);border-radius:8px;padding:5px 10px}
+  .picker{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:4px 16px 10px;font-size:13px;color:var(--muted)}
+  .picker button{font:inherit;font-size:13px;color:var(--text);background:var(--panel);border:1px solid var(--line-soft);border-radius:8px;padding:6px 10px;min-height:34px}
+  .picker button[aria-pressed="true"]{border-color:#8fd3c8;color:#8fd3c8}
   .newdot{position:absolute;top:7px;right:7px;width:9px;height:9px;border-radius:50%;background:var(--weap);box-shadow:0 0 0 3px rgba(242,165,65,.25)}
   .newtag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:6px;background:rgba(242,165,65,.18);color:var(--weap);font-size:11.5px;font-weight:600;vertical-align:1px}
   @keyframes newflash{0%,100%{box-shadow:0 0 0 6px rgba(242,165,65,0)}30%{box-shadow:0 0 0 6px rgba(242,165,65,.28),0 0 0 8px rgba(242,165,65,.7)}}
@@ -286,6 +290,10 @@
     .drawer{top:auto;left:8px;right:8px;width:auto;bottom:calc(8px + env(safe-area-inset-bottom));max-height:52vh;
       transform:translateY(calc(100% + 30px))}
     .drawer.open{transform:none}
+    .mini-btn{display:inline-block}
+    /* a smaller sheet while tuning a joint: just the header and the joint picker, so the walker has the screen */
+    #tune.mini{max-height:none}
+    #tune.mini > :not(header):not(.picker){display:none}
   }
   @media (prefers-reduced-motion:reduce){
     *{transition:none!important}
@@ -307,7 +315,7 @@
 </div>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · concept feet</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · phone tuning</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -370,7 +378,11 @@
 <div class="hint" id="hint"></div>
 
 <aside class="drawer" id="tune" aria-label="Build the rig">
-  <header><b>Build the rig</b><button class="done" id="tuneDone">Done</button></header>
+  <header><b>Build the rig</b><button class="mini-btn" id="tuneMini" aria-pressed="false" title="Shrink the panel to see more of the walker">Smaller</button><button class="done" id="tuneDone">Done</button></header>
+  <div class="picker" id="jointPick" data-new="joint-picker-2026-11-27" data-new-btn="tuneBtn" data-new-step="joints">
+    <span>Pick <span class="newtag" hidden>New</span></span>
+    <button data-pick="hip">Hip</button><button data-pick="knee">Knee</button><button data-pick="ankle">Ankle</button><button data-pick="foot">Foot</button><button data-pick="chassis">Waist</button>
+  </div>
   <details class="step" data-step="joints" open>
     <summary><span><span class="num">1</span>Joints</span></summary>
     <div class="body-in">
@@ -3063,7 +3075,7 @@ function placeMarkers() {
 const f2 = v => (v >= 0 ? ' ' : '') + v.toFixed(2);
 function showSel() {
   const mountSel = document.getElementById('mountSel');
-  syncAnkleZ();
+  syncAnkleZ(); syncPicker();
   const acts = document.getElementById('jointActs');
   acts.hidden = !(selected && ['coxa', 'xknee', 'ankle'].includes(selected.kind));
   document.getElementById('jointFlip').hidden = selected?.kind !== 'xknee';
@@ -3161,6 +3173,7 @@ canvas.addEventListener('pointerdown', e => {
     return;
   }
   selected = markers.find(m => m.mesh === hit.object); showSel();
+  if (innerWidth <= 640 && e.pointerType === 'touch') setTuneMini(true);   // on a phone, give the walker the screen while you move it
   if (view === 'iso') return;                                  // ISO selects; X, Y and Z drag
   e.stopImmediatePropagation(); e.preventDefault();
   undoStack.push(snapshot()); if (undoStack.length > 60) undoStack.shift();
@@ -3179,6 +3192,21 @@ canvas.addEventListener('pointermove', e => {
 });
 const endDrag = () => { if (!drag) return; if (drag.m) drag.m._footZ = null; drag = null; controls.enabled = !tween; TUNED[S.rig] = snapshot(); };
 canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
+
+/* ---------- joint picker: choose a joint without tapping its marker (small on a phone) ---------- */
+function pickJoint(kind) {
+  if (!S.tuning) return;
+  if (tuneStep !== 'joints') openStep('joints');
+  const leg = selected?.leg || LEGS[0];
+  const m = markers.find(x => x.kind === kind && (kind === 'chassis' || x.leg === leg)) || markers.find(x => x.kind === kind);
+  if (!m) { tuneSel.innerHTML = kind === 'ankle' ? 'This leg has no ankle: Add a joint → Ankle' : 'Nothing to pick'; return; }
+  selected = m; showSel(); syncPicker();
+  if (innerWidth <= 640) setTuneMini(true);                         // on a phone, give the walker the screen while you move it
+}
+function syncPicker() { document.querySelectorAll('#jointPick button').forEach(b => b.setAttribute('aria-pressed', selected?.kind === b.dataset.pick)); }
+document.querySelectorAll('#jointPick button').forEach(b => b.addEventListener('click', () => pickJoint(b.dataset.pick)));
+function setTuneMini(on) { tuneEl.classList.toggle('mini', on); const b = document.getElementById('tuneMini'); b.setAttribute('aria-pressed', on); b.textContent = on ? 'Bigger' : 'Smaller'; }
+document.getElementById('tuneMini').addEventListener('click', () => setTuneMini(!tuneEl.classList.contains('mini')));
 
 /* ---------- joystick: move the selected joint or mount in the plane of the screen ---------- */
 const joy = document.getElementById('joy'), joyPad = document.getElementById('joyPad'), joyKnob = document.getElementById('joyKnob');
@@ -3207,6 +3235,14 @@ function joyStep(dt) {
   const k = Math.hypot(joyV.x, joyV.y); if (k < 0.08) return;
   const sp = JOY_SPEED * S.sc * k * dt / k;                         // direction from the push, speed from its square
   joyR.setFromMatrixColumn(cam.matrixWorld, 0); joyU.setFromMatrixColumn(cam.matrixWorld, 1);
+  if (selected.kind === 'ankle') {
+    // the ankle stays where the leg puts it and the foot moves under it, so move the ankle's own settings instead of
+    // chasing its marker: up/down sets its height above the foot, back/forward its place along the foot
+    const dy = (joyR.y * joyV.x - joyU.y * joyV.y) * sp * k / S.sc, dz = (joyR.z * joyV.x - joyU.z * joyV.y) * sp * k / S.sc;
+    const o = document.getElementById('tuneSym').checked ? mirrorOf(selected.leg) : null;
+    for (const l of [selected.leg, o]) if (l && ankleOf(l) > 0) { l.ankle = clamp(ankleOf(l) + dy, 0.05, 1); l.ankleZ = clamp((l.ankleZ || 0) + dz, -ANKLE_Z_MAX, ANKLE_Z_MAX); }
+    syncAnkleZ(); showSel(); return;
+  }
   const p = selected.mesh.position.clone().addScaledVector(joyR, joyV.x * sp * k).addScaledVector(joyU, -joyV.y * sp * k);
   moveJoint(selected, p); showSel();
 }
@@ -3442,6 +3478,7 @@ document.getElementById('showArt').addEventListener('change', e => { if (S.conve
 function setTuning(on) {
   S.tuning = on;
   tuneBtn.setAttribute('aria-pressed', on); tuneEl.classList.toggle('open', on);
+  if (!on && typeof setTuneMini === 'function') setTuneMini(false);
   document.getElementById('hint').style.visibility = on ? 'hidden' : '';
   deck.classList.toggle('dim', on);
   if (on) {
