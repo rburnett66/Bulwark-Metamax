@@ -307,7 +307,7 @@
 </div>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · rigid</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · touch fix</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -2654,6 +2654,19 @@ const VIEWS = {
 let view = 'iso', half = VIEWS.iso.half, tween = null;
 cam.position.copy(VIEWS.iso.pos); cam.up.copy(VIEWS.iso.up); cam.lookAt(TARGET);
 const controls = new OrbitControls(cam, canvas);
+// iOS Safari can leave the orbit controls tracking a finger whose lift they never saw (a touch that started on a joint
+// marker or the joystick, or a system gesture); a two-finger move then reads that finger's missing position and
+// throws ("undefined is not an object (evaluating 'position.x')"). Forget such fingers and skip that one move.
+for (const name of ['_handleTouchStartRotate', '_handleTouchStartPan', '_handleTouchStartDolly', '_handleTouchMoveRotate', '_handleTouchMovePan', '_handleTouchMoveDolly']) {
+  const orig = controls[name]; if (typeof orig !== 'function') continue;
+  controls[name] = function (e) {
+    if ((name.includes('Dolly') || this._pointers.length >= 2) && !this._getSecondPointerPosition(e)) {
+      this._pointers = this._pointers.filter(id => id === e.pointerId || this._pointerPositions[id]);
+      return;
+    }
+    return orig.call(this, e);
+  };
+}
 controls.target.copy(TARGET);
 controls.enableDamping = true; controls.dampingFactor = 0.08;
 controls.minZoom = 0.35; controls.maxZoom = 5;
@@ -3167,11 +3180,11 @@ function joyAt(e) {
 joyPad.addEventListener('pointerdown', e => {
   if (!selected) return; e.preventDefault(); try { joyPad.setPointerCapture(e.pointerId); } catch {}
   undoStack.push(snapshot()); if (undoStack.length > 60) undoStack.shift();
-  joyPad.classList.add('on'); joyAt(e);
+  joyPad.classList.add('on'); joyAt(e); controls.enabled = false;
   if (seenNew && !seenNew.has(joy.dataset.new)) { seenNew.add(joy.dataset.new); try { localStorage.setItem(NEW_KEY, JSON.stringify([...seenNew])); } catch {} }
 });
 joyPad.addEventListener('pointermove', e => { if (joyV) joyAt(e); });
-const joyEnd = () => { if (!joyV) return; joyV = null; joyPad.classList.remove('on'); joyKnob.style.transform = ''; if (selected?._footZ != null) selected._footZ = null; TUNED[S.rig] = snapshot(); };
+const joyEnd = () => { if (!joyV) return; joyV = null; controls.enabled = !tween; joyPad.classList.remove('on'); joyKnob.style.transform = ''; if (selected?._footZ != null) selected._footZ = null; TUNED[S.rig] = snapshot(); };
 joyPad.addEventListener('pointerup', joyEnd); joyPad.addEventListener('pointercancel', joyEnd);
 const joyR = V(), joyU = V();
 function joyStep(dt) {
