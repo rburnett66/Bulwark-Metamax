@@ -315,7 +315,7 @@
 </div>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · phone tuning</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · smooth pace</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -796,29 +796,30 @@ function mechSeg(w, d, plateW, plateD, y0, y1, upper) {
 const ANKLE_MECH = 0.2;                                         // default ankle height, rig units, for Armoured legs
 const ankleOf = L => L.ankle ?? (L.mech ? ANKLE_MECH : 0);       // any leg can have an ankle (Add a joint → Ankle)
 const FOOT_MECH = 0.8;                                          // default foot length for Armoured legs
-const FOOT_JOINT = 0.2;                                        // the foot's central joint: height above the ground (foot units)
+const FOOT_JOINT = 0.2;
+const FRONT_TOE = 0.58 / 1.3;                                   // forward toe length, share of the foot (owner: 30% smaller than drawn first)                                        // the foot's central joint: height above the ground (foot units)
 function mechFoot(L) {
   // after the concept (second drawing): a central joint, a backward toe that is a wedge rising from the heel to the
   // joint, and a forward toe in two chunky armoured blocks, the front one with a chamfered nose; each block about as
   // tall as it is wide, dark soles, vents on the sides. Both toes are sprung at the joint; a link runs up to the ankle.
   const FL = L.footLen ?? FOOT_MECH, wf = clamp((L.blk?.foot?.w ?? 0.4) / 0.4, 0.7, 2.5);
-  const FT = 0.58 * FL, RT = 0.34 * FL, J = FOOT_JOINT, H = 0.32;           // H: block height (foot units)
+  const FT = FRONT_TOE * FL, RT = 0.34 * FL, J = FOOT_JOINT, H = 0.32;     // H: block height (foot units)
   mk(hubGeo(0.18, 0.26 * wf), M.joint, L.footG).position.y = J;                                 // the central joint
   mk(hubGeo(0.1, 0.28 * wf), M.dark, L.footG).position.y = J;
   const link = holder(L.footG, 0, J, 0); L.housing = link;                                     // to the ankle (pose)
   mk(new RoundedBoxGeometry(0.22, 1, 0.22, 2, 0.03).translate(0, 0.5, 0), M.hull, link);
   for (const heel of [false, true]) {
     const base = holder(L.footG, 0, J, heel ? -0.08 : 0.08); base.rotation.y = heel ? Math.PI : 0;
-    const pivot = holder(base), len = heel ? RT : FT, w = (heel ? 0.24 : 0.27) * wf, y0 = -J;
+    const pivot = holder(base), len = heel ? RT : FT, w = (heel ? 0.24 : 0.27 / 1.3) * wf, y0 = -J, Hf = heel ? H : H / 1.3;   // front toe 30% smaller (owner)
     if (heel) {                                                       // a wedge: tall at the joint, low at the heel
       mk(sideExtrude([[0, y0 + 0.05], [len, y0 + 0.05], [len, y0 + 0.13], [len * 0.25, y0 + H], [0, y0 + H]], w), M.olive, pivot);
     } else {                                                          // two blocks, the front one chamfered
       const a = len * 0.48, g = 0.025;
-      mk(sideExtrude([[0, y0 + 0.05], [a - g, y0 + 0.05], [a - g, y0 + H], [0, y0 + H]], w), M.olive, pivot);
-      mk(sideExtrude([[a + g, y0 + 0.05], [len, y0 + 0.05], [len, y0 + 0.15], [len - 0.2 * len, y0 + H * 0.92], [a + g, y0 + H * 0.92]], w * 0.98), M.olive, pivot);
+      mk(sideExtrude([[0, y0 + 0.05], [a - g, y0 + 0.05], [a - g, y0 + Hf], [0, y0 + Hf]], w), M.olive, pivot);
+      mk(sideExtrude([[a + g, y0 + 0.05], [len, y0 + 0.05], [len, y0 + 0.13], [len - 0.2 * len, y0 + Hf * 0.92], [a + g, y0 + Hf * 0.92]], w * 0.98), M.olive, pivot);
       for (const sx of [-1, 1]) {                                     // vents on the sides
-        rbox(0.02, 0.07, 0.12, M.dark, pivot, sx * (w / 2 + 0.005), y0 + 0.16, a * 0.5, 0.01);
-        rbox(0.02, 0.06, 0.1, M.dark, pivot, sx * (w * 0.49 + 0.005), y0 + 0.14, a + (len - a) * 0.45, 0.01);
+        rbox(0.02, 0.06, 0.1, M.dark, pivot, sx * (w / 2 + 0.005), y0 + 0.14, a * 0.5, 0.01);
+        rbox(0.02, 0.05, 0.08, M.dark, pivot, sx * (w * 0.49 + 0.005), y0 + 0.12, a + (len - a) * 0.45, 0.01);
       }
     }
     mk(new RoundedBoxGeometry(w * 1.02, 0.05, len * 0.97, 2, 0.015).translate(0, y0 + 0.025, len / 2), M.dark, pivot);   // sole
@@ -2354,7 +2355,7 @@ function pose(dt) {
     // the foot rolls back level. The ball of the foot stays where it was planted; physics keeps the planted point.
     let phi = 0;
     if (L.mech && OV.toes && stride > 0.01 && air === 0 && !S.tuning && !S.dead && (stance || L.phiEnd > 0)) {
-      const fk0 = sc * (0.55 + 0.45 * S.limb), zb = (0.07 + 0.58 * (L.footLen ?? FOOT_MECH)) * fk0;   // it rolls up onto the front toe's tip
+      const fk0 = sc * (0.55 + 0.45 * S.limb), zb = (0.08 + FRONT_TOE * (L.footLen ?? FOOT_MECH)) * fk0;   // it rolls up onto the front toe's tip
       const ay = ank, azb = az - zb, by = tmp.y - ank, bz = tmp.z - az + zb, reach = TOE_OFF.reach * (L.up + L.lo) * sc;
       const ankAt = f => tA.set(tmp.x, by + ay * Math.cos(f) - azb * Math.sin(f), bz + ay * Math.sin(f) + azb * Math.cos(f));
       if (stance) {
@@ -2384,7 +2385,7 @@ function pose(dt) {
     if (phi > 0.001) { footW.copy(ankleW); footW.y += -ank * Math.cos(phi) + az * Math.sin(phi); footW.z += -ank * Math.sin(phi) - az * Math.cos(phi); }
     // the point the foot bears on: its middle, or on its toe the ball (the front toe's hinge)
     L.contact = L.contact || V(); L.contact.copy(footW);
-    if (phi > 0.001) { const zb = (0.07 + 0.58 * (L.footLen ?? FOOT_MECH)) * sc * (0.55 + 0.45 * S.limb); L.contact.y -= zb * Math.sin(phi); L.contact.z += zb * Math.cos(phi) - zb; }
+    if (phi > 0.001) { const zb = (0.08 + FRONT_TOE * (L.footLen ?? FOOT_MECH)) * sc * (0.55 + 0.45 * S.limb); L.contact.y -= zb * Math.sin(phi); L.contact.z += zb * Math.cos(phi) - zb; }
     {
       // how much of the load the leg carries through its structure: a bent knee or a foot set out from the hip
       // must be held by joint torque (arm = the larger of the two lever arms); a straight column passes it down
@@ -2647,7 +2648,10 @@ function step(dt) {
   const tipping = S.sim && (Math.abs(PH.pitch) > CATCH_TILT || Math.abs(PH.roll) > CATCH_TILT);   // falling: step now, do not wait
   // a walker that can stand never stops between steps (owner: the stop-start read as "a weird delay"): an unsettled
   // body only slows the next lift-off, to RELIFT_MIN of the pace at worst
-  S.rate = S.overloaded && !swinging ? 0 : swinging || (tipping && canStand) ? 1 : !canStand ? 0 : RELIFT_MIN + (1 - RELIFT_MIN) * clamp(1.6 - off, 0, 1);
+  const rateT = S.overloaded && !swinging ? 0 : swinging || (tipping && canStand) ? 1 : !canStand ? 0 : RELIFT_MIN + (1 - RELIFT_MIN) * clamp(1.6 - off, 0, 1);
+  // eased, not switched: the target pace jumps between steps (a foot in the air or not) and a jump in pace is a jerk in
+  // every leg and in the ground's scroll (owner: "the walker jitters"); stopping (0) still applies at once
+  S.rate = rateT === 0 ? 0 : damp(S.rate, rateT, 10, dt);
   if (tipping && !S.tipLogged) { logEvent('off balance · catch step'); S.tipLogged = true; } else if (!tipping) S.tipLogged = false;
   S.phase = (S.phase + S.p.freq * S.rate * dt) % 1;
   if (S.body) {
@@ -2753,7 +2757,7 @@ function frameCamera() {
   const avail = Math.max(120, h - topUI - deckH);                     // the band the rig is framed in
   const top = Math.max(base * fullH / h, base * 0.8 * fullH / w, w <= 640 ? base * 0.75 * fullH / avail : 0);
   cam.left = -top * w / fullH; cam.right = top * w / fullH; cam.top = top; cam.bottom = -top;
-  const jx = (Math.random() - .5) * S.shake * 40, jy = (Math.random() - .5) * S.shake * 40;
+  const jx = Math.sin(S.time * 47) * S.shake * 20, jy = Math.sin(S.time * 61 + 1.3) * S.shake * 20;   // a smooth shudder, not per-frame noise
   cam.setViewOffset(w, fullH, jx, lift + jy, w, h);
   cam.updateProjectionMatrix();
 }
