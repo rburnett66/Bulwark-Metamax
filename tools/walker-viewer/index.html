@@ -129,6 +129,8 @@
   .tool[aria-pressed="true"]{color:var(--weap)}
   /* what's new: a dot on the button that leads to a new feature, a tag on the feature, and a flash when shown */
   .tool{position:relative}
+  .hplist{display:grid;grid-template-columns:1fr auto;gap:6px 10px;align-items:center;font-size:13.5px;margin-top:6px}
+  .hplist select{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line-soft);border-radius:8px;padding:5px 8px}
   .newdot{position:absolute;top:7px;right:7px;width:9px;height:9px;border-radius:50%;background:var(--weap);box-shadow:0 0 0 3px rgba(242,165,65,.25)}
   .newtag{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:6px;background:rgba(242,165,65,.18);color:var(--weap);font-size:11.5px;font-weight:600;vertical-align:1px}
   @keyframes newflash{0%,100%{box-shadow:0 0 0 6px rgba(242,165,65,0)}30%{box-shadow:0 0 0 6px rgba(242,165,65,.28),0 0 0 8px rgba(242,165,65,.7)}}
@@ -286,7 +288,7 @@
 <canvas id="c" tabindex="0" aria-label="3D view of the walker"></canvas>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · strong legs</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · hard points</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -364,8 +366,8 @@
         <input type="range" id="ankleZ" min="-0.6" max="0.6" step="0.01" value="0"></label>
       <button class="reset" id="alignKnee" title="Sets the ankle's place on the foot so the foot's middle stands under the knee">Line up knee over foot</button>
       <div class="row2" id="jointActs" hidden><button class="reset" id="jointFlip">Flip bend</button><button class="reset" id="jointDel">Remove joint</button></div>
-      <p class="note" style="margin:0">Drag a joint in the X, Y or Z view. Dragging a knee sets that leg's segment lengths and which way it bends. Add a hip segment, more knees or an ankle to any leg; drag an added knee along the leg, an ankle up or down, a hip segment in or out. The legs bolt to a leg subframe; the main body, with the cab, weapons and motor, sits on it at the main body mount.</p>
-      <div class="legend"><span><i style="background:#8fd3c8"></i>Hip</span><span><i style="background:#f2a541"></i>Knee</span><span><i style="background:#ffd36b"></i>Ankle</span><span><i style="background:#e6ebf1"></i>Foot</span><span><i style="background:#6fb7ff"></i>Main body</span><span><i style="background:#b89cff"></i>Turret</span></div>
+      <p class="note" style="margin:0">Drag a joint in the X, Y or Z view. Dragging a knee sets that leg's segment lengths and which way it bends. Add a hip segment, more knees or an ankle to any leg; drag an added knee along the leg, an ankle up or down, a hip segment in or out. The legs mount to the lower chassis; the body, with the cockpit, weapons, arms and sensors, sits on it at the waist and turns there.</p>
+      <div class="legend"><span><i style="background:#8fd3c8"></i>Hip</span><span><i style="background:#f2a541"></i>Knee</span><span><i style="background:#ffd36b"></i>Ankle</span><span><i style="background:#e6ebf1"></i>Foot</span><span><i style="background:#6fb7ff"></i>Waist</span><span><i style="background:#b89cff"></i>Cab</span></div>
       <div class="sel" id="tuneSel">Select a joint</div>
       <label class="tog">Mirror left and right <input type="checkbox" id="tuneSym" checked></label>
       <div class="field" id="kneeField">Knees bend
@@ -374,7 +376,7 @@
           <button data-knee="fwd" aria-pressed="false">Forward</button>
         </div>
       </div>
-      <div class="field">Main body mount
+      <div class="field">Waist (body on the lower chassis)
         <div class="seg" id="mountType">
           <button data-mt="rigid" aria-pressed="true">Rigid</button>
           <button data-mt="sprung" aria-pressed="false">Sprung</button>
@@ -427,9 +429,9 @@
       <div id="blkExtra" hidden>
         <div class="field">Carried by
           <div class="seg" id="blkOn">
-            <button data-on="body" aria-pressed="true">Main body</button>
-            <button data-on="turret" aria-pressed="false">Upper body</button>
-            <button data-on="frame" aria-pressed="false">Subframe</button>
+            <button data-on="body" aria-pressed="true">Body (hull)</button>
+            <button data-on="turret" aria-pressed="false">Body (cab)</button>
+            <button data-on="frame" aria-pressed="false">Lower chassis</button>
           </div>
         </div>
         <label class="tog">Mirror left and right <input type="checkbox" id="blkMirror"></label>
@@ -448,7 +450,11 @@
   <details class="step" data-step="mounts">
     <summary><span><span class="num">3</span>Mounts</span></summary>
     <div class="body-in">
-      <p class="note" style="margin:0">Weapons mount on the main body or the cab, never the leg subframe. Drag a mount in the X, Y or Z view to where the drawing has it. Untick what this walker does not carry; its key leaves the weapon row.</p>
+      <div class="field" data-new="hardpoints-2026-11-27" data-new-btn="tuneBtn" data-new-step="mounts"><div class="top"><span>Hard points on the body</span><span class="newtag" hidden>New</span></div>
+        <div id="hpList" class="hplist"></div>
+        <label class="tog">Sensor ball <input type="checkbox" id="sensorOn"></label>
+      </div>
+      <p class="note" style="margin:0">The walker is two structures: the lower chassis, where the legs mount, and the body above it, which turns at the waist and carries the cockpit, weapons, arms and sensors. Drag a hard point or mount in the X, Y or Z view to where the drawing has it. Untick a built-in weapon this walker does not carry; its key leaves the weapon row.</p>
       <div class="sel" id="mountSel">Select a mount</div>
       <div id="fitList"></div>
     </div>
@@ -1039,13 +1045,15 @@ const FIT_LABEL = { cannon: 'Main cannon', guns: 'Turret guns', laser: 'Laser', 
 const FIT_HOME = { cannon: true, guns: true, laser: true, racks: true, pod: true, mg: true, stack: true, jets: true };
 let FIT = { ...FIT_HOME };
 const WEAPON_NEEDS = { turret: ['guns'], reload: ['guns', 'cannon'], cannon: ['cannon'], mg: ['mg'], laser: ['laser'], grenade: ['pod'], salvo: ['racks'] };
-const fittedFor = id => !WEAPON_NEEDS[id] || WEAPON_NEEDS[id].some(k => FIT[k]);
+const HP_NEEDS = { cannon: ['cannon'], salvo: ['missiles'], mg: ['gun', 'arm'] };       // hard-point modules that fire with each key
+const fittedFor = id => !WEAPON_NEEDS[id] || WEAPON_NEEDS[id].some(k => FIT[k]) || (HP_NEEDS[id] && typeof hpCarries === 'function' && hpCarries(...HP_NEEDS[id]));
 function applyFit() {
   guns.forEach(g => g.slide.visible = FIT.guns);
   laser.visible = FIT.laser;
   racks.forEach(R => R.pivot.visible = FIT.racks);
   podPivot.visible = FIT.pod; mgMount.visible = FIT.mg; stack.visible = FIT.stack;
   jetNozzles.forEach(J => J.n.visible = FIT.jets);
+  breech.visible = S.look === 'art' && S.hullLook === 'cab' && FIT.cannon;
   // the cannon's own visibility (single or twin) is set each frame in pose()
 }
 function setMount(k, arr) {
@@ -1057,7 +1065,7 @@ function setMount(k, arr) {
 /* ---------- sizing blocks and parts: a block per segment between joints, then real parts ---------- */
 const BLK_HOME = { body: { shape: 'box', w: 1.5, h: 0.5, l: 2.2 }, turret: { shape: 'box', w: 0.96, h: 0.4, l: 1.0 }, frame: { shape: 'box', auto: true, w: 1.6, h: 0.16, l: 0.5 }, extra: [] };
 // what carries a free block: the chassis (hull), the upper body (cab, turns with it) or the leg subframe
-const CARRIER = { body: 'main body', turret: 'upper body', frame: 'leg subframe' };
+const CARRIER = { body: 'body (hull)', turret: 'body (cab)', frame: 'lower chassis' };
 const carrierOf = on => on === 'turret' ? turret : on === 'frame' ? frame : body;
 const partOf = on => on === 'turret' ? 'turret' : on === 'frame' ? 'frame' : 'body';
 let BLK = JSON.parse(JSON.stringify(BLK_HOME));
@@ -1172,6 +1180,7 @@ function applyLook() {
   twins.forEach(tw => tw.std.forEach(m => m.visible = !cab));
   racks.forEach(R => R.std.forEach(m => m.visible = !cab));
   placeBodyLook();
+  breech.visible = art && cab && FIT.cannon;                       // the cab look's breech belongs to the built-in cannon
   hipMeshes.forEach(m => m.visible = art);
   LEGS.forEach(L => { L.upper.visible = L.lower.visible = L.knee.visible = L.footG.visible = art; for (const k in L.bm) L.bm[k].visible = !art; });
   if (bodyBlk) bodyBlk.visible = !art;
@@ -1189,7 +1198,7 @@ function partList() {
   const bw = BLK.body, tw = BLK.turret;
   add('Hull', 'body', bw.w * bw.h * bw.l * (bw.shape === 'cyl' ? Math.PI / 4 : 1), body.getWorldPosition(V()));
   add('Turret', 'turret', tw.w * tw.h * tw.l * (tw.shape === 'cyl' ? Math.PI / 4 : 1), turret.localToWorld(V(0, tw.h / 2, 0)));
-  add('Leg subframe', 'frame', FRAME_SIZE.x * FRAME_SIZE.y * FRAME_SIZE.z * ((BLK.frame?.shape) === 'cyl' ? Math.PI / 4 : 1), frame.localToWorld(FRAME_CENTRE.clone()));
+  add('Lower chassis', 'frame', FRAME_SIZE.x * FRAME_SIZE.y * FRAME_SIZE.z * ((BLK.frame?.shape) === 'cyl' ? Math.PI / 4 : 1), frame.localToWorld(FRAME_CENTRE.clone()));
   (BLK.extra || []).forEach((e, i) => {                          // the designer's own blocks count toward the hull or upper body
     const part = partOf(e.on), vol = e.w * e.h * e.l * (e.shape === 'cyl' ? Math.PI / 4 : 1), par = carrierOf(e.on);
     add(`Block ${i + 1}`, part, vol, par.localToWorld(V(e.x, e.y, e.z)));
@@ -1225,6 +1234,110 @@ const cannonFlash = makeFlash(cannonMuzzle, 0.42, 30);
 const mgFlash = makeFlash(mgMuzzle, 0.12, 4);
 const podFlash = makeFlash(podMuzzle, 0.18, 8);
 twins.forEach(t => t.flash = makeFlash(t.muzzle, 0.32, 22));
+
+/* ---------- hard points (owner, 2026-11-27): the body carries everything above the lower chassis. Eight hard points:
+   two lower sides, two upper sides, two on top and two on the front; each takes a cannon, missiles, a gun or an arm,
+   and the front two can take a cockpit. Each sits on the body (which turns at the waist) and can be dragged in Mounts.
+   Left is +x (the walker faces +z). Modules on a side slot hang outboard of it. ---------- */
+const HP_SLOTS = [
+  { id: 'lowL',   label: 'Lower left',  pos: [0.86, -0.1, 0.15],  side: 1 },
+  { id: 'lowR',   label: 'Lower right', pos: [-0.86, -0.1, 0.15], side: -1 },
+  { id: 'upL',    label: 'Upper left',  pos: [0.72, 0.5, -0.1],   side: 1 },
+  { id: 'upR',    label: 'Upper right', pos: [-0.72, 0.5, -0.1],  side: -1 },
+  { id: 'topL',   label: 'Top left',    pos: [0.32, 0.98, -0.35], side: 0 },
+  { id: 'topR',   label: 'Top right',   pos: [-0.32, 0.98, -0.35], side: 0 },
+  { id: 'frontL', label: 'Front left',  pos: [0.38, 0.0, 1.02],   side: 0, front: true },
+  { id: 'frontR', label: 'Front right', pos: [-0.38, 0.0, 1.02],  side: 0, front: true },
+];
+const HP_TYPES = { none: 'Empty', cannon: 'Cannon', missiles: 'Missiles', gun: 'Gun', arm: 'Arm', cockpit: 'Cockpit' };
+const HP = {};                                                     // id → { slot, node, type, mod }
+for (const sl of HP_SLOTS) {
+  const node = holder(body, ...sl.pos);
+  HP[sl.id] = { slot: sl, node, type: 'none', mod: null };
+  MOUNTS['hp_' + sl.id] = { label: `${sl.label} hard point`, node };
+  MOUNT_HOME['hp_' + sl.id] = sl.pos.slice();
+}
+function hpModule(type, side) {
+  const out = new THREE.Group(); out.position.x = side ? 0.16 * side : 0;   // outboard of a side slot
+  const g = holder(out), m = { root: out, pivot: g, type, muzzles: [], tubes: [], slides: [], flashes: [], spin: null, arm: null };
+  if (type === 'cannon') {                                         // two barrels stacked in an olive breech housing
+    rbox(0.32, 0.52, 0.86, M.olive, g, 0, 0, -0.38, 0.04);
+    rbox(0.34, 0.12, 0.5, M.hull, g, 0, 0.3, -0.5, 0.03);
+    for (const y of [0.13, -0.12]) {
+      const sl_ = holder(g, 0, y, 0);
+      mk(barrelGeo(0.058, 1.08), M.dark, sl_).position.z = 0.04;
+      for (const z of [0.32, 0.72]) mk(barrelGeo(0.075, 0.06), M.joint, sl_).position.z = z;
+      mk(barrelGeo(0.082, 0.16), M.joint, sl_).position.z = 1.06;
+      const mz = holder(sl_, 0, 0, 1.22);
+      m.slides.push({ g: sl_, shotT: 9 }); m.muzzles.push(mz); m.flashes.push(makeFlash(mz, 0.32, 22));
+    }
+  } else if (type === 'missiles') {                                // two stacked pods, 2 × 5 tubes each, facing forward
+    for (const y of [-0.115, 0.12]) {
+      rbox(0.42, 0.22, 0.78, M.olive, g, 0, y, 0, 0.03);
+      rbox(0.44, 0.05, 0.8, M.hull, g, 0, y - 0.075, 0, 0.015);
+      for (let i = 0; i < 10; i++) {
+        const x = -0.16 + 0.08 * (i % 5), yy = y + (i < 5 ? 0.05 : -0.04);
+        mk(barrelGeo(0.032, 0.02, 12), M.dark, g).position.set(x, yy, 0.39);
+        m.tubes.push(holder(g, x, yy, 0.4));
+      }
+    }
+  } else if (type === 'gun') {                                     // a rotary gun in a small housing
+    rbox(0.24, 0.24, 0.42, M.hull, g, 0, 0, -0.05, 0.04);
+    m.spin = holder(g, 0, 0, 0.16);
+    for (let i = 0; i < 3; i++) { const a = i * Math.PI * 2 / 3; mk(barrelGeo(0.022, 0.62, 10), M.dark, m.spin).position.set(Math.cos(a) * 0.04, Math.sin(a) * 0.04, 0); }
+    const mz = holder(g, 0, 0, 0.8); m.muzzles.push(mz); m.flashes.push(makeFlash(mz, 0.14, 5));
+  } else if (type === 'arm') {                                     // shoulder, upper arm, elbow, forearm, a gun in the hand
+    mk(hubGeo(0.16, 0.26), M.joint, g);
+    const upper = holder(g); rbox(0.22, 0.62, 0.26, M.hull, upper, 0, -0.33, 0, 0.05); rbox(0.24, 0.4, 0.06, M.olive, upper, 0, -0.3, 0.15, 0.02);
+    const elbow = holder(upper, 0, -0.64, 0); mk(hubGeo(0.12, 0.24), M.joint, elbow);
+    const fore = holder(elbow); rbox(0.2, 0.2, 0.62, M.hull, fore, 0, 0, 0.3, 0.05); rbox(0.22, 0.06, 0.5, M.olive, fore, 0, 0.12, 0.3, 0.02);
+    mk(barrelGeo(0.04, 0.42), M.dark, fore).position.set(0, -0.04, 0.6);
+    const mz = holder(fore, 0, -0.04, 1.04); m.muzzles.push(mz); m.flashes.push(makeFlash(mz, 0.14, 5));
+    m.arm = { upper, elbow };
+  } else if (type === 'cockpit') {                                 // a cockpit pod: sloped nose, windows
+    mk(sideExtrude([[-0.3, -0.2], [0.34, -0.2], [0.34, -0.06], [0.1, 0.24], [-0.3, 0.24]], 0.56), M.hull, g);
+    for (const sx of [-1, 1]) { const w = mk(sideExtrude([[-0.02, 0.02], [0.2, 0.02], [0.1, 0.14], [-0.02, 0.14]], 0.02, 0), M.glass, g); w.position.x = 0.285 * sx; }
+    mk(sideExtrude([[0.14, 0.16], [0.26, 0.04], [0.29, 0.06], [0.17, 0.18]], 0.4, 0), M.glass, g);
+  }
+  return m;
+}
+function setHardpoint(id, type) {
+  const h = HP[id]; if (!h) return;
+  if (type === 'cockpit' && !h.slot.front) type = 'none';
+  if (h.type === type && (type === 'none' || h.mod)) return;
+  if (h.mod) { h.mod.flashes.forEach(f => flashes.splice(flashes.indexOf(f), 1)); dropPart(h.mod.root); h.mod = null; }
+  h.type = HP_TYPES[type] ? type : 'none';
+  if (h.type !== 'none') { h.mod = hpModule(h.type, h.slot.side); h.node.add(h.mod.root); }
+}
+const hpOf = type => Object.values(HP).filter(h => h.type === type && h.mod);
+const hpCarries = (...types) => types.some(t => hpOf(t).length);
+function hpConfig() { return Object.fromEntries(Object.entries(HP).map(([k, h]) => [k, h.type])); }
+function setHardpoints(cfg = {}) { for (const k in HP) setHardpoint(k, cfg[k] || 'none'); showHardpoints?.(); }
+// the sensor ball: a dodecahedral shell on a mast that houses the sensors; it weighs nothing (not in the part list)
+M.shell = new THREE.MeshStandardMaterial({ color: 0x5b605c, metalness: 0.5, roughness: 0.5, flatShading: true });
+const sensorMast = holder(body, -0.42, 0.72, -0.55);
+mk(new THREE.CylinderGeometry(0.022, 0.032, 0.5, 10).translate(0, 0.25, 0), M.dark, sensorMast);
+const sensorBall = mk(new THREE.DodecahedronGeometry(0.17), M.shell, sensorMast); sensorBall.position.y = 0.62;
+mk(new THREE.SphereGeometry(0.04, 12, 8), M.sensor, sensorBall).position.z = 0.15;
+sensorMast.visible = false;
+MOUNTS.sensorBall = { label: 'Sensor ball', node: sensorMast }; MOUNT_HOME.sensorBall = sensorMast.position.toArray();
+function setSensorBall(on) { S.sensorBall = !!on; sensorMast.visible = S.sensorBall; const c = document.getElementById('sensorOn'); if (c) c.checked = S.sensorBall; }
+// every frame: aim pitch, recoil, missile pods elevating, gun spin, arms swinging with the walk
+function poseHardpoints(dt, rk) {
+  const walk = S.p.stride > 0.05 ? 1 : 0, sw = Math.sin(2 * Math.PI * S.phase);
+  if (S.sensorBall) { sensorMast.rotation.z = 0.05 * walk * Math.sin(4 * Math.PI * S.phase); sensorBall.rotation.y += dt * 0.6; }   // a little sway; it scans
+  for (const h of Object.values(HP)) {
+    const m = h.mod; if (!m) continue;
+    if (m.type === 'missiles') m.pivot.rotation.x = -0.55 * rk;
+    else if (m.type !== 'cockpit' && m.type !== 'arm') m.pivot.rotation.x = -S.pitch;
+    for (const sl_ of m.slides) { sl_.shotT += dt; const x = sl_.shotT; sl_.g.position.z = -0.3 * (x < 0.04 ? x / 0.04 : Math.exp(-(x - 0.04) * 3.2)); }
+    if (m.spin && S.weap.mg) m.spin.rotation.z += dt * 32;
+    if (m.arm) {                                                   // arms swing against the legs and raise to aim; the forearm points ahead
+      m.arm.upper.rotation.x = 0.25 * walk * sw * (h.slot.side >= 0 ? 1 : -1) - 0.25 - S.pitch * 0.5;
+      m.arm.elbow.rotation.x = -0.35 - 0.12 * walk * sw * (h.slot.side >= 0 ? 1 : -1) - S.pitch * 0.5;
+    }
+  }
+}
 const laserLight = new THREE.PointLight(0xff5a40, 0, 5, 2); laserMuzzle.add(laserLight);
 const boomLight = new THREE.PointLight(0xffa040, 0, 10, 2); scene.add(boomLight);
 
@@ -1291,7 +1404,7 @@ function spawnMissile(tube, i) {
   tube.getWorldPosition(m.position); tube.getWorldQuaternion(wq);
   m.scale.setScalar(sc); scene.add(m);
   const p0 = m.position.clone(), dir = V(0, 0, 1).applyQuaternion(wq);
-  const aim = V(0, 0, 1).applyAxisAngle(Y_AXIS, turret.rotation.y);           // where the upper body faces
+  const aim = V(0, 0, 1).applyAxisAngle(Y_AXIS, S.yaw);                      // where the body faces
   const range = (16 + 8 * Math.random()) * Math.sqrt(sc);
   const p2 = V(p0.x + aim.x * range + rnd(2.2 * sc), 0.05, p0.z + aim.z * range + rnd(2.2 * sc));
   const p1 = p0.clone().addScaledVector(dir, 3.5 * sc); p1.y += 3 * sc;
@@ -1437,7 +1550,11 @@ const LOOP = {
 };
 const BODY_ONESHOT = { warmup: 2.4, jump: 1.3, die: 2.2, deploy: 1.9, undeploy: 1.3 };
 const WEAPON = { turret: 1.0, reload: 1.7, cannon: 1.4, mg: 1.25, laser: 1.5, grenade: 1.5, salvo: 2.7 };
-const weaponDur = k => k === 'cannon' && S.twin ? 1.75 : WEAPON[k];
+const weaponDur = k => {
+  const base = k === 'cannon' && S.twin ? 1.75 : WEAPON[k];
+  if (k === 'cannon' && typeof hpOf === 'function') { const n = hpOf('cannon').length * 2; if (n) return Math.max(FIT.cannon ? base : 0, 0.12 + n * 0.38 + 0.6); }
+  return base;
+};
 // recoil per shot is S.recoil N·s per kg of walker: a shell sized with the walker keeps this constant across sizes.
 // A 60 t tank firing a 120 mm gun is about 0.55; the default 0.15 is a lighter, faster-firing gun for a legged hull.
 const RECOIL_STROKE = 0.12;         // seconds the recoil mechanism spreads that impulse over
@@ -1520,7 +1637,7 @@ function snapshot() {
   return { legs: LEGS.map(L => ({ n: L.n, hip: L.hip.toArray(), rest: L.rest.toArray(), up: L.up, lo: L.lo, ankle: ankleOf(L), ankleZ: L.ankleZ || 0, foot: L.footLen, coxa: L.coxa || 0, xk: L.xk.map(j => ({ ...j })), hint: L.hint.toArray(), blk: JSON.parse(JSON.stringify(L.blk)) })),
            turret: turret.position.toArray(), blk: JSON.parse(JSON.stringify(BLK)),
            mounts: Object.fromEntries(Object.entries(MOUNTS).map(([k, m]) => [k, m.node.position.toArray()])), fit: { ...FIT },
-           chassis: { mount: CH.mount.toArray(), type: CH.type, hz: CH.hz }, ride: RIDE.k };
+           chassis: { mount: CH.mount.toArray(), type: CH.type, hz: CH.hz }, ride: RIDE.k, hp: hpConfig(), sensor: !!S.sensorBall };
 }
 function applySnap(sn) {
   sn.legs.forEach(d => {
@@ -1540,6 +1657,7 @@ function applySnap(sn) {
   if (!BLK.frame) BLK.frame = { ...BLK_HOME.frame };
   setChassis(sn.chassis || CH_HOME);
   setRide(sn.ride ?? 1);
+  setHardpoints(sn.hp || {}); setSensorBall(sn.sensor);
 }
 buildLegs(4);
 
@@ -1616,6 +1734,32 @@ const lerpHit = { kick: 0 };
 function updWeapons(dt) {
   for (const [k, a] of Object.entries(S.weap)) {
     a.t += dt;
+    // hard points: cannons fire barrel by barrel, pods ripple their tubes, guns and arm guns chatter
+    if (k === 'cannon') {
+      const bs = hpOf('cannon').flatMap(h => h.mod.slides.map((sl_, i) => ({ sl_, mz: h.mod.muzzles[i], fl: h.mod.flashes[i], id: h.slot.label })));
+      a.hp ??= 0;
+      while (a.hp < bs.length && a.t >= 0.12 + a.hp * 0.38) {
+        const b = bs[a.hp]; b.sl_.shotT = 0; a.shotAt = a.t; fire(b.fl, 0.08);
+        spawnTracer(b.mz, 0xffe2a8, 55); spawnSmoke(b.mz, 5); recoilKick(b.mz);
+        S.shake = Math.max(S.shake, Math.min(0.4, 0.22 * Math.sqrt(S.sc)));
+        logEvent(`fire · ${b.id} cannon · recoil`); a.hp++;
+      }
+      if (!FIT.cannon) { if (a.t >= a.dur) delete S.weap[k]; continue; }
+    } else if (k === 'salvo') {
+      const tubes = hpOf('missiles').map(h => h.mod.tubes), n = tubes.reduce((x, t) => x + t.length, 0);
+      a.hp ??= 0;
+      while (a.hp < n && a.t >= 0.42 + a.hp * 0.09) {
+        const pod = tubes[a.hp % tubes.length], tube = pod[Math.floor(a.hp / tubes.length) % pod.length];
+        spawnMissile(tube, a.hp); a.hp++;
+        if (a.hp === n) logEvent(`salvo · ${n} away from the hard points`);
+      }
+      if (!FIT.racks) { if (a.t >= a.dur) delete S.weap[k]; continue; }
+    } else if (k === 'mg') {
+      const ms = [...hpOf('gun'), ...hpOf('arm')].flatMap(h => h.mod.muzzles.map((mz, i) => ({ mz, fl: h.mod.flashes[i] })));
+      a.hp ??= 0;
+      while (ms.length && a.t >= 0.05 + a.hp * 0.065 && a.t < 1.1) { const g = ms[a.hp % ms.length]; fire(g.fl, 0.035); spawnTracer(g.mz, 0xffd27f, 48, 0.06); a.hp++; }
+      if (!FIT.mg) { if (a.t >= a.dur) delete S.weap[k]; continue; }
+    }
     if (k === 'turret') {
       while (a.shots < 6 && a.t >= a.shots * 0.14) {
         const g = guns[a.shots % 2]; g.rec = 1; fire(g.flash, 0.05);
@@ -1748,7 +1892,7 @@ const PH = { y: 0, vy: 0, roll: 0, wr: 0, pitch: 0, wp: 0, sx: 0, vsx: 0, sz: 0,
 function recoilKick(muz) {
   if (!S.sim) return;
   muz.getWorldPosition(tmp);
-  const m = S.weight * TONS * 1000, F = S.recoil * m / RECOIL_STROKE, yaw = turret.rotation.y;
+  const m = S.weight * TONS * 1000, F = S.recoil * m / RECOIL_STROKE, yaw = S.yaw;
   PH.kicks.push({ fx: -F * Math.sin(yaw), fz: -F * Math.cos(yaw), h: tmp.y * M_PER_UNIT, t: RECOIL_STROKE });
 }
 // where the upper body's mass sits, in hull coordinates: on the turret pivot, half its height up, a little forward
@@ -1760,7 +1904,9 @@ let TILT_FB = 0;                    // share of the tip (H·tilt) the balance co
 let CATCH_TILT = 0.12;           // radians of tilt past which a walker takes a catch step
 function upperPoint(out) {
   const uh = S.look === 'art' ? 0.42 : BLK.turret.h, y = S.yaw;
-  return out.set(turret.position.x + Math.sin(y) * UPPER_FWD, turret.position.y + uh / 2, turret.position.z + Math.cos(y) * UPPER_FWD);
+  // the whole body turns at the waist, so the upper mass point turns with it about the waist (the body's origin)
+  const px = turret.position.x, pz = turret.position.z + UPPER_FWD;
+  return out.set(px * Math.cos(y) + pz * Math.sin(y), turret.position.y + uh / 2, -px * Math.sin(y) + pz * Math.cos(y));
 }
 const comL = V();
 /* ---------- chassis mount: rigid, or sprung on the subframe ----------
@@ -1791,7 +1937,7 @@ function chassisMount(dt, sc) {
     if (Math.abs(CH.r) > t) { CH.r = Math.sign(CH.r) * t; CH.vr = 0; }
   } else if (!(dt === 0 && CH.type === 'sprung')) { Object.assign(CH, { y: 0, vy: 0, p: 0, vp: 0, r: 0, vr: 0, last: null }); }
   body.position.set(CH.mount.x, CH.mount.y + CH.y, CH.mount.z);
-  body.rotation.set(CH.p, 0, CH.r);
+  body.rotation.set(CH.p, S.yaw, CH.r, 'YXZ');                    // the whole body turns at the waist over the lower chassis
 }
 /* ---------- subframe art: a cross-member joining the hips and a spine under the chassis mount ---------- */
 const frameArt = new THREE.Group(); frame.add(frameArt);
@@ -1805,11 +1951,13 @@ function placeFrameArt() {
   const auto = BLK.frame?.auto !== false, f = BLK.frame || {};
   const w = auto ? x1 - x0 + 0.22 : f.w, l = auto ? Math.max(0.36, z1 - z0 + 0.3) : f.l, h = auto ? 0.16 : f.h;
   FRAME_SIZE.set(w, h, l); FRAME_CENTRE.set((x0 + x1) / 2, y, (z0 + z1) / 2);
-  frameBeam.scale.set(w, h, l); frameBeam.position.copy(FRAME_CENTRE);
+  const ha = auto ? Math.max(h, 0.3) : h;                         // the lower chassis reads as a housing the hips mount into
+  frameBeam.scale.set(w, ha, l); frameBeam.position.copy(FRAME_CENTRE); frameBeam.material = S.hullLook === 'cab' ? M.hull : M.dark;
   // a post from the subframe up to the chassis mount, shown when the chassis sits clear of the subframe
   const top = CH.mount.y + CH.y - BLK.body.h / 2, gap = top - (y + h / 2);
   framePost.visible = gap > 0.03 && S.look !== 'blocks';
-  if (framePost.visible) { framePost.scale.set(0.22, gap, 0.22); framePost.position.set(CH.mount.x, y + h / 2 + gap / 2, CH.mount.z); }
+  if (framePost.visible) { framePost.scale.set(0.5, gap, 0.5);   // the waist: the body turns on it
+    framePost.position.set(CH.mount.x, y + h / 2 + gap / 2, CH.mount.z); }
   frameArt.visible = S.look === 'art';
   if (frameBlk || S.look !== 'art') placeFrameBlock();
 }
@@ -2278,7 +2426,7 @@ function pose(dt) {
     S.yawV += clamp(vT - S.yawV, -aMax * dt, aMax * dt); S.yaw += S.yawV * dt;
   } else { S.yaw = damp(S.yaw, yawT, 5 / Math.sqrt(wt), dt); S.yawV = 0; }
   S.pitch = damp(S.pitch, pitchT, 6, dt);
-  turret.rotation.y = S.yaw;
+  body.rotation.y = S.yaw; turret.rotation.y = 0;                   // the waist: everything above the lower chassis turns together
   mantlet.rotation.x = -S.pitch;
   hatchPivot.rotation.x = -1.1 * rb;
 
@@ -2297,9 +2445,10 @@ function pose(dt) {
   const sv = S.weap.salvo; let rk = 0;
   if (sv) { const u = sv.t / sv.dur; rk = smooth(u / 0.13) * (1 - smooth((u - 0.8) / 0.2)); }
   racks.forEach(R => R.pivot.rotation.x = -0.55 * rk);
+  poseHardpoints(dt, rk);
 
   // machine gun
-  mgMount.rotation.y = clamp(S.yaw * 0.4, -0.4, 0.4);
+  mgMount.rotation.y = 0;                                           // it turns with the body
   if (S.weap.mg) mgSpin.rotation.z += dt * 32;
 
   // laser: charge, beam, fade
@@ -2830,7 +2979,7 @@ function buildMarkers() {
     });
     add('chassis', null); add('turret', null);
   }
-  if (tuneStep === 'mounts') for (const k in MOUNTS) if (k === 'guns' ? FIT.cannon || FIT.guns || FIT.laser : FIT[k]) add('mount', null, k);
+  if (tuneStep === 'mounts') for (const k in MOUNTS) if (k.startsWith('hp_') ? HP[k.slice(3)].type !== 'none' : k === 'sensorBall' ? S.sensorBall : k === 'guns' ? FIT.cannon || FIT.guns || FIT.laser : FIT[k]) add('mount', null, k);
   showSel();
 }
 function placeMarkers() {
@@ -2859,7 +3008,7 @@ function showSel() {
   if (!selected) { tuneSel.innerHTML = 'Select a joint'; mountSel.innerHTML = 'Select a mount'; return; }
   const m = selected, L = m.leg;
   if (m.kind === 'mount') {
-    const M_ = MOUNTS[m.key], p = M_.node.position, M_P = M_.node.parent === turret ? 'cab (upper body)' : 'main body';
+    const M_ = MOUNTS[m.key], p = M_.node.position, M_P = M_.node.parent === turret ? 'body (cab)' : 'body';
     mountSel.innerHTML = `<b>${M_.label}</b>${M_.note ? ` · ${M_.note}` : ''}<br>on the ${M_P} · x ${f2(p.x)} · y ${f2(p.y)} · z ${f2(p.z)}`; return;
   }
   if (m.kind === 'hip') tuneSel.innerHTML = `<b>${L.n} hip</b><br>x ${f2(L.hip.x)} · y ${f2(L.hip.y)} · z ${f2(L.hip.z)}`;
@@ -2869,7 +3018,7 @@ function showSel() {
   if (m.kind === 'ankle') { const z = L.ankleZ || 0; tuneSel.innerHTML = `<b>${L.n} ankle</b><br>${ankleOf(L).toFixed(2)} above the foot · ${Math.abs(z) < 0.005 ? 'centred over it' : `${Math.abs(z).toFixed(2)} ${z > 0 ? 'forward' : 'back'}`}`; }
   if (m.kind === 'foot') tuneSel.innerHTML = `<b>${L.n} foot</b><br>x ${f2(L.rest.x)} · z ${f2(L.rest.z)}`;
   if (m.kind === 'turret') { const t = turret.position; tuneSel.innerHTML = `<b>Turret pivot</b><br>x ${f2(t.x)} · y ${f2(t.y)} · z ${f2(t.z)}`; }
-  if (m.kind === 'chassis') { const t = CH.mount; tuneSel.innerHTML = `<b>Main body mount</b> · ${CH.type}<br>on the leg subframe · x ${f2(t.x)} · y ${f2(t.y)} · z ${f2(t.z)}`; }
+  if (m.kind === 'chassis') { const t = CH.mount; tuneSel.innerHTML = `<b>Waist</b> · ${CH.type}<br>the body on the lower chassis · x ${f2(t.x)} · y ${f2(t.y)} · z ${f2(t.z)}`; }
 }
 const mirrorOf = L => LEGS.find(o => o !== L && o.sz === L.sz && o.sx === -L.sx);
 const kH = V(), kF = V(), kA = V(), kD = V();
@@ -3090,7 +3239,7 @@ function showBlockSel() {
   if (!blkSel || !spec) { blkSel = null; selEl.innerHTML = 'Select a block, or add one'; shapeEl.innerHTML = ''; fieldsEl.innerHTML = ''; exEl.hidden = true; scopeEl.hidden = true; return; }
   const isEx = blkSel.kind === 'extra';
   exEl.hidden = !isEx; scopeEl.hidden = blkSel.kind !== 'seg' && blkSel.kind !== 'foot';
-  const name = isEx ? `Block ${BLK.extra.indexOf(spec) + 1}` : blkSel.kind === 'body' ? 'Main body' : blkSel.kind === 'turret' ? 'Upper body' : blkSel.kind === 'frame' ? 'Leg subframe' : `${blkSel.leg} ${PART_LABEL[blkSel.part]}`;
+  const name = isEx ? `Block ${BLK.extra.indexOf(spec) + 1}` : blkSel.kind === 'body' ? 'Body (hull)' : blkSel.kind === 'turret' ? 'Body (cab)' : blkSel.kind === 'frame' ? 'Lower chassis' : `${blkSel.leg} ${PART_LABEL[blkSel.part]}`;
   selEl.innerHTML = `<b>${name}</b><br>${SHAPE_NAME[spec.shape]}${isEx ? `<span id="exPos"></span>` : ''}`;
   if (isEx) {
     showExtraPos(spec);
@@ -3116,7 +3265,7 @@ function showBlockSel() {
 }
 function showExtraPos(e) {
   const el = document.getElementById('exPos'); if (!el) return;
-  el.textContent = ` on the ${CARRIER[e.on] || 'main body'}${e.mirror ? ', mirrored' : ''} · x ${f2(e.x)} · y ${f2(e.y)} · z ${f2(e.z)}`;
+  el.textContent = ` on the ${CARRIER[e.on] || 'body'}${e.mirror ? ', mirrored' : ''} · x ${f2(e.x)} · y ${f2(e.y)} · z ${f2(e.z)}`;
 }
 // free blocks: add, carry, mirror, duplicate, delete
 let exSeq = 1;
@@ -3156,6 +3305,19 @@ document.getElementById('blkMirror').addEventListener('change', ev => {
 document.getElementById('blkSee').addEventListener('change', ev => {     // see-through, to trace the drawing behind
   for (const m of [blockMat, blockSelMat]) { m.transparent = ev.target.checked; m.opacity = ev.target.checked ? 0.5 : 1; m.depthWrite = !ev.target.checked; m.needsUpdate = true; }
 });
+// hard points: what each one carries
+function showHardpoints() {
+  const el = document.getElementById('hpList'); if (!el) return;
+  el.innerHTML = HP_SLOTS.map(sl => `<label for="hp_${sl.id}">${sl.label}</label><select id="hp_${sl.id}" data-hp="${sl.id}">` +
+    Object.entries(HP_TYPES).filter(([t]) => t !== 'cockpit' || sl.front).map(([t, l]) => `<option value="${t}" ${HP[sl.id].type === t ? 'selected' : ''}>${l}</option>`).join('') + '</select>').join('');
+  el.querySelectorAll('select').forEach(sel => sel.addEventListener('change', () => {
+    undoStack.push(snapshot()); setHardpoint(sel.dataset.hp, sel.value);
+    for (const id in S.weap) if (!fittedFor(id)) delete S.weap[id];
+    TUNED[S.rig] = snapshot(); if (S.tuning) buildMarkers();
+  }));
+}
+showHardpoints();
+document.getElementById('sensorOn').addEventListener('change', e => { undoStack.push(snapshot()); setSensorBall(e.target.checked); TUNED[S.rig] = snapshot(); if (S.tuning) buildMarkers(); });
 // mounts: what the walker carries
 function showFit() {
   const el = document.getElementById('fitList');
@@ -3172,7 +3334,7 @@ function showParts() {
   if (!S.converted) { note.textContent = 'Make parts from the blocks first.'; list.innerHTML = ''; return; }
   note.textContent = 'These parts are the vehicle now. Each is one node with its pivot at its joint; mass and center of mass come from their volumes, and they export as the rig and its hit boxes.';
   const rows = partList(), group = {};
-  rows.forEach(r => { const k = r.part === 'body' ? 'Main body' : r.part === 'turret' ? 'Upper body' : r.part === 'frame' ? 'Leg subframe' : PART_LABEL[r.part]; (group[k] ||= { n: 0, share: 0 }); group[k].n++; group[k].share += r.share; });
+  rows.forEach(r => { const k = r.part === 'body' ? 'Body (hull)' : r.part === 'turret' ? 'Body (cab)' : r.part === 'frame' ? 'Lower chassis' : PART_LABEL[r.part]; (group[k] ||= { n: 0, share: 0 }); group[k].n++; group[k].share += r.share; });
   list.innerHTML = '<table class="plist">' + Object.entries(group).map(([k, g]) =>
     `<tr><td>${k[0].toUpperCase() + k.slice(1)}${g.n > 1 ? ` × ${g.n}` : ''}</td><td>${Math.round(g.share * 100)}% of mass</td></tr>`).join('') + '</table>';
 }
@@ -3298,7 +3460,7 @@ function resetUnit() {
   for (const k in MOUNT_HOME) setMount(k, MOUNT_HOME[k]); FIT = { ...FIT_HOME }; applyFit();
   setChassis(CH_HOME); setRide(1); turret.position.copy(TURRET_HOME);
   S.legStyle = 'spider'; document.querySelectorAll('#legLook button').forEach(b => b.setAttribute('aria-pressed', b.dataset.look === 'spider'));
-  S.kneeFwd = false; setUpper(0.3); setTwin(false); setRods(false); setHullLook('std');
+  S.kneeFwd = false; setUpper(0.3); setTwin(false); setRods(false); setHullLook('std'); setHardpoints({}); setSensorBall(false);
   if (!S.sizeFollows) { const c = document.getElementById('sizeFollows'); c.checked = true; c.dispatchEvent(new Event('change')); }
   S.jets = true; document.getElementById('jetsOn').checked = true;
   setStrength(2.3); S.legSpeed = 0.35; document.getElementById('legSpeed').value = 0.35; S.recoil = 0.15; document.getElementById('recoil').value = 0.15;
@@ -3585,13 +3747,14 @@ function twinCannonBiped() {
   settleStand();
   setChassis({ mount: [0, 0, 0.04], type: 'rigid', hz: 1.6 });       // the chassis sits on the hip subframe, a little forward
   S.jets = false; document.getElementById('jetsOn').checked = false;
-  setUpper(0.45); setTwin(true); setRods(true);
-  FIT = { cannon: true, guns: false, laser: false, racks: true, pod: false, mg: false, stack: false, jets: false }; applyFit(); showFit();
+  setUpper(0.45); setTwin(false); setRods(true);
+  // the weapons are on the body's hard points: the twin cannon on the lower right, missile pods on top, a sensor ball
+  FIT = { cannon: false, guns: false, laser: false, racks: false, pod: false, mg: false, stack: false, jets: false }; applyFit(); showFit();
+  setHardpoints({ lowR: 'cannon', topL: 'missiles', topR: 'missiles' }); setSensorBall(true);
   // the Cockpit body: the cab on the front of the hull, the cannons stacked on its right flank, pods on the shoulders
   setHullLook('cab');
   S.alignKnees = true; S.alignN = 0;                                // the knee over the foot's middle, once it stands
   turret.position.set(0, 0.22, TWIN.cabZ);                          // the waist: the whole upper body turns on it
-  setMount('guns', [-0.86, -0.3, 0.1]);   // on the walker's right flank (−x), as drawn setMount('racks', [0.32, 0.29, -0.65]);
   TUNED[2] = snapshot();
   if (S.tuning) buildMarkers();
   strengthNote(); refreshRigLabel(); showHeight();
