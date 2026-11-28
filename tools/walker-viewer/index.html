@@ -315,7 +315,7 @@
 </div>
 
 <div class="brand">
-  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · foot drag</span></b>
+  <b>Walker viewer <span class="build" title="Build stamp: if this is older than the one you were told about, your browser has an old copy">build 27 Nov · strides</span></b>
   <div class="rig">
     <div class="legs" role="group" aria-label="Legs">
       <button data-legs="2" aria-pressed="false" title="Two legs, reverse knees">2</button>
@@ -583,8 +583,10 @@
   <details>
     <summary>Movement</summary>
     <div class="body-in">
-      <label class="field"><div class="top">Stride <output id="strideOut">100%</output></div>
-        <input type="range" id="stride" min="0.5" max="1.5" step="0.05" value="1"></label>
+      <div class="field" data-new="strides-2026-11-27" data-new-btn="adv"><div class="top"><span>Walk stride <span class="newtag" hidden>New</span></span><output id="strideOut">100%</output></div>
+        <input type="range" id="stride" min="0.5" max="2" step="0.05" value="1"></div>
+      <label class="field"><div class="top">Run stride <output id="runStrideOut">100%</output></div>
+        <input type="range" id="runStride" min="0.5" max="2" step="0.05" value="1"></label>
       <label class="field"><div class="top">Step height <output id="liftOut">100%</output></div>
         <input type="range" id="lift" min="0.3" max="1.8" step="0.05" value="1"></label>
     </div>
@@ -1613,7 +1615,7 @@ const S = {
   p: { ...LOOP.idle },
   weap: {}, speed: 1, paused: false,
   aim: 'center', yaw: 0, pitch: 0, cursorYaw: 0,
-  strideScale: 1, liftScale: 1, shake: 0,
+  strideScale: 1, walkStride: 1, runStride: 1, liftScale: 1, shake: 0,
   weight: 1, sizeFollows: true, sc: 1, scrollW: 0, thud: 0, braced: false, tuning: false, rate: 1, strength: 2.3, gw: 0, sim: true, overloaded: false, amble: false, oneAtATime: false, limb: 1, legSpeed: 0.35, jets: true, jetTW: 1.8, jetBurn: 1.2, jetForward: 6, jet: 0, stance: 0, stanceAuto: true, geomAvg: 1, look: 'art', converted: false,
   kneeFwd: false, legStyle: 'spider', hullLook: 'std', rigid: false, upper: 0.3, twin: false, rods: false, heightM: 6, yawV: 0, recoil: 0.15,
 };
@@ -2190,7 +2192,7 @@ function swingY(s, hw) {                                          // light: a sm
   return light + (heavy - light) * hw;
 }
 function pose(dt) {
-  const strideBase = S.p.stride * S.strideScale * (RIGS[S.rig]?.stride ?? 1);
+  const strideBase = S.p.stride * (RIGS[S.rig]?.stride ?? 1);   // walk / run stride settings are in the gait's stride
   const sr = clamp(S.p.stride / 0.6, 0, 1);
   const wt = S.weight, sc = S.sc, give = Math.pow(wt, -0.8);   // heavier: less give in every reaction
   const hw = heavyOf(wt);
@@ -2629,7 +2631,8 @@ function step(dt) {
   const g = {
     ...tgt,
     freq: tgt.freq / Math.sqrt(S.sc) * (S.amble ? 1.35 : 1),   // Froude scaling: a pendulum twice as long swings √2 slower
-    stride: tgt.stride * (1 - 0.2 * hw) * (S.amble ? 1.15 : 1),
+    // walk and run strides are set separately (owner: the run should lengthen the stride, not just quicken the walk)
+    stride: tgt.stride * (1 - 0.2 * hw) * (S.amble ? 1.15 : 1) * (running && !S.amble ? S.runStride : tgt.stride ? S.walkStride : 1),
     lift: tgt.lift * Math.pow(w, -0.35),                      // heavies barely clear the ground
     duty: clamp(tgt.duty + 0.06 * (w - 1), 0.4, running && !S.amble ? RUN_DUTY_MAX : 0.78) * (1 - S.gw) + heavyDuty * S.gw,   // one leg at a time keeps the rest down
     height: (tgt.height - 0.04 * clamp(w - 1, -0.5, 3) + PILLAR_RAISE * S.stance) * legK() * RIDE.k,
@@ -2963,7 +2966,12 @@ const bindRange = (id, outId, fmt, set) => {
   el.addEventListener('input', () => { set(+el.value); out.textContent = fmt(+el.value); });
 };
 bindRange('speed', 'speedOut', v => v.toFixed(2) + '×', v => S.speed = v);
-bindRange('stride', 'strideOut', v => Math.round(v * 100) + '%', v => S.strideScale = v);
+function setStrides(walk, run) {
+  if (walk != null) { S.walkStride = clamp(walk, 0.5, 2); document.getElementById('stride').value = S.walkStride; document.getElementById('strideOut').textContent = Math.round(S.walkStride * 100) + '%'; }
+  if (run != null) { S.runStride = clamp(run, 0.5, 2); document.getElementById('runStride').value = S.runStride; document.getElementById('runStrideOut').textContent = Math.round(S.runStride * 100) + '%'; }
+}
+bindRange('stride', 'strideOut', v => Math.round(v * 100) + '%', v => { S.walkStride = v; if (TUNED[S.rig]) TUNED[S.rig] = snapshot(); });
+bindRange('runStride', 'runStrideOut', v => Math.round(v * 100) + '%', v => { S.runStride = v; if (TUNED[S.rig]) TUNED[S.rig] = snapshot(); });
 bindRange('lift', 'liftOut', v => Math.round(v * 100) + '%', v => S.liftScale = v);
 document.querySelectorAll('#aim button').forEach(b => b.addEventListener('click', () => {
   S.aim = b.dataset.aim;
@@ -3539,7 +3547,7 @@ function captureRig(withRefs = true) {
   return { schema: 'mm-model-forge/walker-rig@1', legs: S.rig, weight: S.weight, joints: snapshot(), madeParts: S.converted,
     body: { legLook: S.legStyle, bodyLook: S.hullLook, kneesForward: S.kneeFwd, upperShare: S.upper, cannon: S.twin ? 'twin' : 'single', kneeRams: S.rods,
             heightM: S.sizeFollows ? null : S.heightM, limbs: S.limb, stance: S.stance, stanceAuto: S.stanceAuto, tons: Math.round(S.weight * TONS),
-            jets: S.jets, strength: S.strength, legSpeed: S.legSpeed, recoil: S.recoil, rigid: !!S.rigid },
+            jets: S.jets, strength: S.strength, legSpeed: S.legSpeed, recoil: S.recoil, rigid: !!S.rigid, walkStride: S.walkStride, runStride: S.runStride },
     parts: S.converted ? partList().map(r => ({ name: r.name, part: r.part, massShare: +r.share.toFixed(4) })) : [],
     references: withRefs ? Object.fromEntries(Object.entries(REF).filter(([, R]) => R.mesh && R.src).map(([k, R]) => [k, refProps(R)])) : {} };
 }
@@ -3561,6 +3569,7 @@ async function applyRig(data, { refs = true } = {}) {
   else if (!S.sizeFollows) { const c = document.getElementById('sizeFollows'); c.checked = true; c.dispatchEvent(new Event('change')); }
   if (bd.jets != null) { S.jets = bd.jets; document.getElementById('jetsOn').checked = bd.jets; }
   if (bd.strength) setStrength(bd.strength);
+  setStrides(bd.walkStride ?? 1, bd.runStride ?? 1);
   setRigid(!!bd.rigid);
   if (bd.legSpeed) { S.legSpeed = bd.legSpeed; document.getElementById('legSpeed').value = bd.legSpeed; }
   if (bd.recoil != null) { S.recoil = bd.recoil; document.getElementById('recoil').value = bd.recoil; }
@@ -3601,7 +3610,7 @@ function resetUnit() {
   for (const k in MOUNT_HOME) setMount(k, MOUNT_HOME[k]); FIT = { ...FIT_HOME }; applyFit();
   setChassis(CH_HOME); setRide(1); turret.position.copy(TURRET_HOME);
   S.legStyle = 'spider'; document.querySelectorAll('#legLook button').forEach(b => b.setAttribute('aria-pressed', b.dataset.look === 'spider'));
-  S.kneeFwd = false; setUpper(0.3); setTwin(false); setRods(false); setHullLook('std'); setHardpoints({}); setSensorBall(false); setRigid(false);
+  S.kneeFwd = false; setUpper(0.3); setTwin(false); setRods(false); setHullLook('std'); setHardpoints({}); setSensorBall(false); setRigid(false); setStrides(1, 1);
   if (!S.sizeFollows) { const c = document.getElementById('sizeFollows'); c.checked = true; c.dispatchEvent(new Event('change')); }
   S.jets = true; document.getElementById('jetsOn').checked = true;
   setStrength(2.3); S.legSpeed = 0.35; document.getElementById('legSpeed').value = 0.35; S.recoil = 0.15; document.getElementById('recoil').value = 0.15;
@@ -3890,7 +3899,7 @@ function twinCannonBiped() {
   setChassis({ mount: [0, 0, 0.04], type: 'rigid', hz: 1.6 });       // the chassis sits on the hip subframe, a little forward
   S.jets = false; document.getElementById('jetsOn').checked = false;
   setUpper(0.45); setTwin(false); setRods(true);
-  setStrength(TWIN.strength); setRigid(true);                      // rigid: no side-to-side bobble (lateral shift 0.86 m → 0.22 m walking)                                        // walks and runs with margin to spare (each leg lifts ~7.9× its share)
+  setStrength(TWIN.strength); setRigid(true); setStrides(1, 1.5);   // the run lengthens its stride half again (owner)                      // rigid: no side-to-side bobble (lateral shift 0.86 m → 0.22 m walking)                                        // walks and runs with margin to spare (each leg lifts ~7.9× its share)
   // the weapons are on the body's hard points: the twin cannon on the lower right, missile pods on top, a sensor ball
   FIT = { cannon: false, guns: false, laser: false, racks: false, pod: false, mg: false, stack: false, jets: false }; applyFit(); showFit();
   setHardpoints({ lowR: 'cannon', topL: 'missiles', topR: 'missiles' }); setSensorBall(true);
